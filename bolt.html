@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bolt Test Companion</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>  <!-- EmailJS library -->
+  <style>
+    body { font-family: sans-serif; text-align: center; padding: 20px; }
+    input, button { font-size: 18px; margin: 10px; padding: 10px; }
+    #qrcode, #scanner { border: 1px dashed #ccc; margin: 20px auto; width: 300px; height: 300px; }
+    #scanner { position: relative; overflow: hidden; }
+    #video { width: 100%; height: 100%; }
+    .hidden { display: none; }
+    #error { color: red; }
+  </style>
+</head>
+<body>
+  <h1>Bolt Test App</h1>
+  <p><strong>Step 1:</strong> Enter amount in sats and description.</p>
+  <input type="number" id="amount" placeholder="Amount (sats)" value="10000">
+  <input type="text" id="desc" placeholder="Description" value="Coffee">
+  <button onclick="createInvoice()">Create Invoice</button>
+  <p id="error"></p>
+
+  <div id="qrcode"></div>
+
+  <p><strong>Step 2:</strong> Scan signed QR from Bolt.</p>
+  <button onclick="startScan()">Start Camera Scan</button>
+  <div id="scanner">
+    <video id="video" autoplay></video>
+  </div>
+  <p id="result"></p>
+
+  <script>
+    (function() {
+      emailjs.init("YOUR_USER_ID_HERE");  // Replace with your EmailJS user ID (get from emailjs.com dashboard)
+    })();
+
+    let stream = null;
+
+    async function createInvoice() {
+      const sats = document.getElementById('amount').value;
+      const desc = document.getElementById('desc').value;
+      if (!sats || sats <= 0) {
+        document.getElementById('error').textContent = 'Enter a valid amount!';
+        return;
+      }
+      // Fake invoice - in real app, use lnd or breez SDK
+      const fakeInvoice = `lnbc${sats}u1p3example...${desc.replace(' ', 'x')}`;
+      document.getElementById('qrcode').innerHTML = '';
+      document.getElementById('error').textContent = '';
+      try {
+        new QRCode(document.getElementById('qrcode'), {
+          text: fakeInvoice,
+          width: 300,
+          height: 300,
+          colorDark: "#000",
+          colorLight: "#fff"
+        });
+      } catch (err) {
+        document.getElementById('error').textContent = 'QR generation failed: ' + err.message;
+      }
+    }
+
+    async function startScan() {
+      const video = document.getElementById('video');
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = 300;
+      canvas.height = 300;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+        video.srcObject = stream;
+        scanLoop(video, ctx, canvas);
+      } catch(err) {
+        alert('Camera failed: ' + err.message);
+      }
+    }
+
+    function scanLoop(video, ctx, canvas) {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+        if (code) {
+          document.getElementById('result').textContent = 'Scanned: ' + code.data;
+          sendEmail(code.data);  // Send scanned data to email
+          stopScan();
+          return;
+        }
+      }
+      requestAnimationFrame(() => scanLoop(video, ctx, canvas));
+    }
+
+    function sendEmail(scannedData) {
+      emailjs.send("YOUR_SERVICE_ID_HERE", "YOUR_TEMPLATE_ID_HERE", {  // Replace with your EmailJS service and template IDs
+        to_email: "joshcoverley@icloud.com",
+        message: scannedData
+      })
+      .then(function(response) {
+        document.getElementById('result').textContent += ' - Sent to email!';
+      }, function(error) {
+        document.getElementById('result').textContent += ' - Email failed: ' + error.text;
+      });
+    }
+
+    function stopScan() {
+      if (stream) stream.getTracks().forEach(track => track.stop());
+    }
+
+    window.onunload = stopScan; // Clean up camera
+  </script>
+</body>
+</html>
