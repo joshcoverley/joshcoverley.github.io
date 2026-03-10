@@ -1,119 +1,1124 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bolt Test Companion</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
-  <script src="https://cdn.emailjs.com/dist/email.min.js"></script>  <!-- EmailJS library -->
-  <style>
-    body { font-family: sans-serif; text-align: center; padding: 20px; }
-    input, button { font-size: 18px; margin: 10px; padding: 10px; }
-    #qrcode, #scanner { border: 1px dashed #ccc; margin: 20px auto; width: 300px; height: 300px; }
-    #scanner { position: relative; overflow: hidden; }
-    #video { width: 100%; height: 100%; }
-    .hidden { display: none; }
-    #error { color: red; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CIPHER — Favilla KEY</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --amb:  #ffb300;
+  --amb2: rgba(255,179,0,0.65);
+  --grn:  #00e87a;
+  --red:  #ff3322;
+  --purp: #b06fff;
+  --blu:  #00aaff;
+}
+*{ margin:0; padding:0; box-sizing:border-box; }
+body {
+  background:#050402; min-height:100vh;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:16px; font-family:'Share Tech Mono',monospace; overflow:hidden; position:relative;
+}
+body::before {
+  content:''; position:fixed; inset:0;
+  background:radial-gradient(ellipse at 15% 50%,rgba(255,130,0,0.05) 0%,transparent 50%),
+             radial-gradient(ellipse at 85% 50%,rgba(0,160,255,0.025) 0%,transparent 50%);
+  pointer-events:none;
+}
+.hdr { display:flex; flex-direction:column; align-items:center; gap:3px; }
+.hdr-brand { font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:6px; color:rgba(255,179,0,0.28); }
+.hdr-title {
+  font-family:'Orbitron',sans-serif; font-size:30px; font-weight:900;
+  letter-spacing:16px; color:var(--amb);
+  text-shadow:0 0 18px rgba(255,179,0,0.55),0 0 45px rgba(255,179,0,0.18);
+  animation:hpulse 3s ease-in-out infinite;
+}
+@keyframes hpulse{0%,100%{text-shadow:0 0 18px rgba(255,179,0,0.55),0 0 45px rgba(255,179,0,0.18);}50%{text-shadow:0 0 28px rgba(255,200,60,0.9),0 0 60px rgba(255,179,0,0.35);}}
+.hdr-sub { font-size:7px; letter-spacing:5px; color:rgba(255,179,0,0.2); }
+.layout { display:flex; gap:28px; align-items:flex-start; }
+
+/* ── SHELL ── */
+.shell {
+  width:292px; height:292px;
+  background:linear-gradient(155deg,#191205 0%,#0c0a03 45%,#060507 100%);
+  border-radius:28px; border:1.5px solid #281e04;
+  display:flex; align-items:center; justify-content:center;
+  position:relative; flex-shrink:0;
+  box-shadow:0 0 0 1px #010100,0 35px 110px rgba(0,0,0,0.96),inset 0 1px 0 rgba(255,179,0,0.055);
+}
+.shell::before{ content:''; position:absolute; inset:7px; border-radius:22px; border:1px solid rgba(255,179,0,0.025); pointer-events:none; }
+.shell-engrave { position:absolute; bottom:9px; left:50%; transform:translateX(-50%); font-family:'Orbitron',sans-serif; font-size:6px; letter-spacing:4px; color:rgba(255,179,0,0.055); white-space:nowrap; }
+.sbtn { position:absolute; right:-6px; width:5px; background:linear-gradient(to right,#191205,#231a07); border-radius:0 3px 3px 0; border:1px solid #281e04; border-left:none; cursor:pointer; transition:all 0.07s; z-index:20; }
+.sbtn:hover { background:linear-gradient(to right,#281e08,#352809); border-color:rgba(255,179,0,0.18); }
+.sbtn:active { transform:translateX(1px); background:linear-gradient(to right,#3a2a0c,#4a3510); }
+.sbtn.up{top:48px;height:26px;} .sbtn.sel{top:84px;height:44px;} .sbtn.dn{top:138px;height:26px;} .sbtn.bck{top:174px;height:22px;}
+.kill-sw { position:absolute; left:-8px; top:78px; width:7px; height:38px; border-radius:3px 0 0 3px; border:1.5px solid rgba(0,232,122,0.28); border-right:none; background:linear-gradient(to left,#0a1908,#03100a); box-shadow:-3px 0 10px rgba(0,232,122,0.18); }
+
+/* ── LCD ── */
+.lcd { width:240px; height:240px; background:#000; border-radius:3px; overflow:hidden; position:relative; box-shadow:inset 0 0 45px rgba(0,0,0,0.99); }
+.lcd::after { content:''; position:absolute; inset:0; z-index:600; pointer-events:none; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.055) 2px,rgba(0,0,0,0.055) 3px); }
+.lcd::before { content:''; position:absolute; inset:0; z-index:599; pointer-events:none; background:radial-gradient(ellipse at 50% 50%,transparent 48%,rgba(0,0,0,0.6) 100%); }
+.lcd-edge { position:absolute; left:0; top:0; bottom:0; width:3px; z-index:598; background:var(--grn); box-shadow:0 0 10px rgba(0,232,122,0.65); border-radius:2px 0 0 2px; }
+#gc { position:absolute; top:0; left:0; width:240px; height:240px; z-index:10; }
+
+/* ── HUD ── */
+.hud { position:absolute; top:0; left:0; right:0; height:18px; background:rgba(0,0,0,0.9); border-bottom:1px solid rgba(255,179,0,0.08); display:none; align-items:center; justify-content:space-between; padding:0 7px; z-index:50; }
+.hud-score { font-family:'Orbitron',sans-serif; font-size:9px; font-weight:700; color:var(--amb); letter-spacing:1px; }
+.hud-lv { font-size:7px; color:rgba(255,179,0,0.38); letter-spacing:1px; }
+.hud-lives { display:flex; gap:3px; align-items:center; }
+.hud-pip { width:6px; height:6px; clip-path:polygon(50% 0%,100% 100%,0% 100%); }
+.hud-pip.a { background:var(--amb); } .hud-pip.d { background:rgba(255,179,0,0.12); }
+.ol-bar { position:absolute; bottom:0; left:0; right:0; height:3px; z-index:50; background:rgba(255,179,0,0.06); display:none; }
+.ol-fill { height:100%; background:linear-gradient(to right,rgba(255,179,0,0.5),rgba(255,230,60,0.95)); width:0%; transition:width 0.18s ease; }
+
+/* ── OVERLAY SCREENS ── */
+.osc { position:absolute; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; background:#000; opacity:0; pointer-events:none; transition:opacity 0.2s ease; }
+.osc.vis { opacity:1; pointer-events:all; }
+
+/* TITLE */
+.t-logo { font-family:'Orbitron',sans-serif; font-size:30px; font-weight:900; letter-spacing:8px; color:var(--amb); text-shadow:0 0 14px rgba(255,179,0,0.65),0 0 35px rgba(255,179,0,0.25); animation:lpulse 2.8s ease-in-out infinite; }
+@keyframes lpulse{0%,100%{text-shadow:0 0 14px rgba(255,179,0,0.65),0 0 35px rgba(255,179,0,0.25);}50%{text-shadow:0 0 24px rgba(255,210,60,1),0 0 55px rgba(255,179,0,0.45);}}
+.t-sub { font-size:7px; letter-spacing:3px; color:rgba(255,179,0,0.28); margin-top:3px; }
+.t-desc { font-size:7px; color:rgba(255,179,0,0.2); letter-spacing:1px; line-height:2; text-align:center; padding:0 18px; margin-top:10px; }
+.t-overload { font-size:7px; color:rgba(255,220,60,0.5); letter-spacing:1px; margin-top:6px; text-align:center; border:1px solid rgba(255,200,0,0.12); border-radius:2px; padding:5px 14px; line-height:1.8; }
+.t-start { margin-top:12px; font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px; color:var(--amb); border:1px solid rgba(255,179,0,0.3); padding:5px 16px; border-radius:2px; animation:blink 1.1s step-end infinite; }
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.15}}
+.t-hi { font-size:7px; color:rgba(255,179,0,0.28); letter-spacing:2px; margin-top:8px; }
+
+/* ATH / GAME OVER */
+.go-ath-banner { font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:4px; color:#ffe040; text-shadow:0 0 10px rgba(255,220,60,0.8); background:rgba(255,200,0,0.07); border:1px solid rgba(255,200,0,0.25); padding:3px 10px; border-radius:2px; display:none; }
+.go-lost { font-family:'Orbitron',sans-serif; font-size:13px; font-weight:900; letter-spacing:5px; color:var(--red); text-shadow:0 0 12px rgba(255,51,34,0.6); }
+.go-hash-lbl { font-size:6px; letter-spacing:4px; color:rgba(255,179,0,0.3); margin-top:8px; }
+.go-hash { font-family:'Orbitron',sans-serif; font-size:22px; font-weight:700; color:var(--amb); margin-top:2px; letter-spacing:2px; text-shadow:0 0 10px rgba(255,179,0,0.45); }
+.go-hash-unit { font-size:8px; color:rgba(255,179,0,0.4); letter-spacing:3px; }
+.go-ath-lbl { font-size:7px; color:rgba(0,232,122,0.5); letter-spacing:2px; margin-top:3px; }
+.go-stats { font-size:6.5px; color:rgba(255,200,60,0.38); letter-spacing:1px; margin-top:5px; text-align:center; line-height:1.9; }
+.go-unlock { margin-top:6px; padding:3px 10px; border:1px solid rgba(255,179,0,0.22); border-radius:2px; background:rgba(255,179,0,0.04); font-size:7px; color:var(--amb2); letter-spacing:2px; }
+
+/* action buttons on game over */
+.go-actions { display:flex; flex-direction:column; gap:5px; margin-top:8px; width:160px; }
+.go-btn { padding:5px 10px; border-radius:2px; font-family:'Share Tech Mono',monospace; font-size:7px; letter-spacing:2px; cursor:pointer; text-align:center; transition:all 0.12s; }
+.go-btn-primary { border:1px solid rgba(255,179,0,0.35); color:rgba(255,179,0,0.8); background:rgba(255,179,0,0.04); }
+.go-btn-primary:hover { background:rgba(255,179,0,0.1); border-color:rgba(255,179,0,0.6); }
+.go-btn-nostr { border:1px solid rgba(255,220,40,0.35); color:rgba(255,220,40,0.8); background:rgba(255,200,0,0.03); }
+.go-btn-nostr:hover { background:rgba(255,200,0,0.1); }
+.go-btn-dim { border:1px solid rgba(255,179,0,0.1); color:rgba(255,179,0,0.28); background:transparent; }
+.go-btn-dim:hover { border-color:rgba(255,179,0,0.25); color:rgba(255,179,0,0.5); }
+
+/* ── POOL SCREEN ── */
+.pool-hd { font-family:'Orbitron',sans-serif; font-size:11px; font-weight:700; letter-spacing:4px; color:var(--amb); }
+.pool-sub { font-size:6px; letter-spacing:3px; color:rgba(255,179,0,0.28); margin-top:2px; }
+.pool-hash-display { margin-top:8px; text-align:center; }
+.pool-hash-val { font-family:'Orbitron',sans-serif; font-size:16px; font-weight:700; color:#ffe040; letter-spacing:2px; text-shadow:0 0 8px rgba(255,220,60,0.5); }
+.pool-hash-sub { font-size:6px; letter-spacing:3px; color:rgba(255,200,60,0.35); margin-top:1px; }
+.pool-tickets { font-size:7px; color:rgba(255,179,0,0.45); letter-spacing:2px; margin-top:3px; }
+.pool-opts { display:flex; flex-direction:column; gap:5px; margin-top:10px; width:170px; }
+.pool-opt { padding:7px 10px; border-radius:3px; cursor:pointer; transition:all 0.12s; border:1px solid rgba(255,179,0,0.1); background:rgba(255,179,0,0.02); }
+.pool-opt:hover { border-color:rgba(255,179,0,0.3); background:rgba(255,179,0,0.06); }
+.pool-opt.selected { border-color:rgba(255,179,0,0.5); background:rgba(255,179,0,0.08); }
+.pool-opt-name { font-family:'Orbitron',sans-serif; font-size:8px; font-weight:700; color:var(--amb); letter-spacing:2px; }
+.pool-opt-desc { font-size:6px; color:rgba(255,179,0,0.3); letter-spacing:1px; margin-top:2px; }
+.pool-opt-tag { font-size:6px; float:right; padding:1px 5px; border-radius:2px; margin-top:-14px; }
+.pool-opt-tag.solo { background:rgba(255,51,34,0.1); border:1px solid rgba(255,51,34,0.25); color:rgba(255,51,34,0.65); }
+.pool-opt-tag.join { background:rgba(0,170,255,0.1); border:1px solid rgba(0,170,255,0.25); color:rgba(0,170,255,0.65); }
+.pool-opt-tag.create { background:rgba(0,232,122,0.1); border:1px solid rgba(0,232,122,0.25); color:rgba(0,232,122,0.65); }
+.pool-hint { font-size:6px; color:rgba(255,179,0,0.18); letter-spacing:2px; margin-top:10px; animation:blink 1.1s step-end infinite; }
+
+/* ── POOL JOIN/CREATE ── */
+.pj-hd { font-family:'Orbitron',sans-serif; font-size:9px; letter-spacing:3px; color:var(--amb); }
+.pj-list { display:flex; flex-direction:column; gap:4px; margin-top:8px; width:180px; }
+.pj-row { padding:6px 9px; border:1px solid rgba(255,179,0,0.1); border-radius:2px; cursor:pointer; transition:all 0.1s; }
+.pj-row:hover,.pj-row.sel { border-color:rgba(255,179,0,0.35); background:rgba(255,179,0,0.05); }
+.pj-name { font-family:'Orbitron',sans-serif; font-size:8px; color:var(--amb); letter-spacing:2px; }
+.pj-meta { font-size:6px; color:rgba(255,179,0,0.3); letter-spacing:1px; margin-top:2px; }
+.pj-bar-wrap { height:2px; background:rgba(255,179,0,0.07); border-radius:1px; margin-top:4px; overflow:hidden; }
+.pj-bar { height:100%; background:linear-gradient(to right,rgba(0,170,255,0.5),rgba(0,232,122,0.7)); }
+.pj-confirm { margin-top:9px; font-size:7px; color:var(--amb); letter-spacing:2px; cursor:pointer; border:1px solid rgba(255,179,0,0.28); padding:4px 14px; border-radius:2px; }
+.pj-confirm:hover { background:rgba(255,179,0,0.08); }
+.pj-back { font-size:6px; color:rgba(255,179,0,0.22); letter-spacing:2px; margin-top:6px; cursor:pointer; }
+
+/* ── NOSTR POST SCREEN ── */
+.np-hd { font-family:'Orbitron',sans-serif; font-size:9px; font-weight:700; letter-spacing:3px; color:#ffe040; }
+.np-sub { font-size:6px; letter-spacing:3px; color:rgba(255,200,60,0.3); margin-top:2px; }
+.np-note { margin:8px 8px 0; padding:7px 8px; border:1px solid rgba(255,200,40,0.15); border-radius:2px; background:rgba(255,200,0,0.02); font-size:6.2px; color:rgba(255,200,40,0.55); line-height:1.75; width:210px; }
+.np-addr { margin:5px 8px 0; padding:5px 8px; border:1px solid rgba(0,232,122,0.12); border-radius:2px; background:rgba(0,232,122,0.02); font-size:5.5px; color:rgba(0,232,122,0.45); letter-spacing:0.5px; line-height:1.6; width:210px; }
+.np-pool-tag { margin:4px 8px 0; padding:4px 8px; border-radius:2px; font-size:6px; letter-spacing:2px; width:210px; text-align:center; }
+.np-pool-tag.solo { border:1px solid rgba(255,51,34,0.2); color:rgba(255,51,34,0.5); }
+.np-pool-tag.pool { border:1px solid rgba(0,170,255,0.2); color:rgba(0,170,255,0.5); }
+.np-signing { font-size:7px; color:rgba(255,179,0,0.25); letter-spacing:2px; margin-top:7px; }
+.np-progress { width:160px; height:2px; background:rgba(255,179,0,0.08); border-radius:1px; margin-top:5px; overflow:hidden; }
+.np-prog-fill { height:100%; background:linear-gradient(to right,rgba(255,179,0,0.4),rgba(255,220,60,0.9)); width:0%; transition:width 1.8s ease; }
+.np-done { font-size:8px; color:var(--grn); letter-spacing:2px; margin-top:6px; opacity:0; transition:opacity 0.3s; }
+.np-tickets { font-size:7px; color:rgba(255,220,60,0.6); letter-spacing:2px; margin-top:4px; opacity:0; transition:opacity 0.3s 0.4s; }
+.np-back { margin-top:8px; padding:4px 12px; border:1px solid rgba(255,220,40,0.2); border-radius:2px; font-size:7px; letter-spacing:2px; color:rgba(255,200,40,0.55); cursor:pointer; }
+.np-back:hover { background:rgba(255,200,0,0.06); }
+
+/* UNLOCK */
+.ul-bg { position:absolute; inset:0; background:radial-gradient(ellipse at 50% 38%,rgba(255,179,0,0.1) 0%,transparent 65%); }
+.ul-badge { font-family:'Orbitron',sans-serif; font-size:8px; letter-spacing:4px; color:rgba(255,179,0,0.35); }
+.ul-icon { font-size:34px; margin:7px 0 4px; }
+.ul-name { font-family:'Orbitron',sans-serif; font-size:19px; font-weight:900; letter-spacing:6px; color:var(--amb); text-shadow:0 0 14px rgba(255,179,0,0.65); }
+.ul-desc { font-size:7px; color:rgba(255,179,0,0.3); letter-spacing:2px; margin-top:5px; text-align:center; padding:0 18px; line-height:1.8; }
+.ul-cont { font-size:7px; color:rgba(255,179,0,0.22); letter-spacing:2px; margin-top:13px; animation:blink 1.1s step-end infinite; }
+
+/* RIGHT PANEL */
+.rp { display:flex; flex-direction:column; gap:7px; width:210px; }
+.rp-sect { font-family:'Orbitron',sans-serif; font-size:7px; letter-spacing:3px; color:rgba(255,179,0,0.2); border-bottom:1px solid rgba(255,179,0,0.06); padding-bottom:5px; }
+.hash-card { padding:10px 11px; border:1px solid rgba(255,200,40,0.15); border-radius:3px; background:rgba(255,200,0,0.02); }
+.hash-lbl { font-size:6px; letter-spacing:3px; color:rgba(255,200,40,0.35); }
+.hash-val { font-family:'Orbitron',sans-serif; font-size:21px; font-weight:700; color:#ffe040; letter-spacing:2px; text-shadow:0 0 8px rgba(255,220,60,0.35); }
+.hash-ath { font-size:7px; color:rgba(0,232,122,0.5); letter-spacing:2px; margin-top:2px; }
+.hash-tickets { font-size:6px; color:rgba(255,200,60,0.35); letter-spacing:1px; margin-top:3px; }
+.pool-status-card { padding:8px 11px; border:1px solid rgba(0,170,255,0.1); border-radius:3px; background:rgba(0,170,255,0.015); }
+.ps-lbl { font-size:6px; letter-spacing:3px; color:rgba(0,170,255,0.3); margin-bottom:4px; }
+.ps-name { font-family:'Orbitron',sans-serif; font-size:10px; font-weight:700; color:rgba(0,170,255,0.75); letter-spacing:2px; }
+.ps-meta { font-size:6px; color:rgba(0,170,255,0.3); letter-spacing:1px; margin-top:3px; line-height:1.7; }
+.ps-share-bar { height:3px; background:rgba(0,170,255,0.08); border-radius:2px; margin-top:5px; overflow:hidden; }
+.ps-share-fill { height:100%; background:linear-gradient(to right,rgba(0,170,255,0.4),rgba(0,232,122,0.7)); transition:width 0.4s ease; }
+.mult-card { padding:8px 11px; border:1px solid rgba(255,220,60,0.1); border-radius:3px; background:rgba(255,200,0,0.015); }
+.mult-lbl { font-size:6px; letter-spacing:3px; color:rgba(255,200,60,0.3); margin-bottom:4px; }
+.mult-val { font-family:'Orbitron',sans-serif; font-size:17px; font-weight:700; color:rgba(255,210,60,0.8); letter-spacing:2px; }
+.mult-desc { font-size:6px; color:rgba(255,179,0,0.25); letter-spacing:1px; margin-top:2px; }
+.ent-card { padding:8px 11px; border:1px solid rgba(255,179,0,0.07); border-radius:3px; background:rgba(255,179,0,0.01); }
+.ent-lbl { font-size:6px; letter-spacing:3px; color:rgba(255,179,0,0.24); margin-bottom:5px; }
+.ent-outer { height:4px; background:rgba(255,179,0,0.07); border-radius:2px; overflow:hidden; }
+.ent-inner { height:100%; border-radius:2px; background:linear-gradient(to right,rgba(255,179,0,0.5),rgba(255,215,0,0.9)); transition:width 0.28s ease; }
+.ent-num { font-family:'Orbitron',sans-serif; font-size:10px; font-weight:600; color:rgba(255,179,0,0.45); margin-top:4px; letter-spacing:2px; }
+.ul-list { display:flex; flex-direction:column; gap:4px; }
+.ul-row { display:flex; align-items:center; gap:7px; padding:5px 9px; border-radius:3px; border:1px solid rgba(255,179,0,0.05); transition:all 0.2s; }
+.ul-row.done { border-color:rgba(255,179,0,0.18); background:rgba(255,179,0,0.035); }
+.ul-row.nxt  { border-color:rgba(255,179,0,0.1); }
+.ul-rico { font-size:11px; flex-shrink:0; }
+.ul-inf { flex:1; }
+.ul-nm { font-family:'Rajdhani',sans-serif; font-size:11px; font-weight:600; color:#c8a840; }
+.ul-row.locked .ul-nm { color:rgba(255,179,0,0.22); }
+.ul-pts { font-size:6px; letter-spacing:2px; color:rgba(255,179,0,0.22); margin-top:1px; }
+.ul-tag { font-size:6px; padding:1px 5px; border-radius:2px; }
+.ul-tag.y { background:rgba(255,179,0,0.09); border:1px solid rgba(255,179,0,0.22); color:var(--amb2); }
+.ul-tag.n { background:rgba(255,255,255,0.015); border:1px solid rgba(255,255,255,0.04); color:rgba(255,255,255,0.08); }
+.ctrl-card { padding:7px 11px; border:1px solid rgba(255,179,0,0.06); border-radius:3px; }
+.cr { display:flex; align-items:center; gap:7px; padding:2.5px 0; border-bottom:1px solid rgba(255,179,0,0.03); }
+.cr:last-child { border:none; }
+.ck { font-family:'Orbitron',sans-serif; font-size:7px; padding:1px 5px; min-width:28px; text-align:center; background:rgba(255,179,0,0.06); border:1px solid rgba(255,179,0,0.14); border-radius:2px; color:rgba(255,179,0,0.55); flex-shrink:0; }
+.cd { font-size:7px; color:rgba(255,179,0,0.22); letter-spacing:1px; }
+.legend { display:flex; gap:8px; flex-wrap:wrap; padding:6px 9px; border:1px solid rgba(255,179,0,0.05); border-radius:3px; }
+.lg { display:flex; align-items:center; gap:4px; }
+.lgd { width:7px; height:7px; border-radius:1px; flex-shrink:0; }
+.lgt { font-size:6px; letter-spacing:0.5px; color:rgba(255,179,0,0.25); }
+</style>
 </head>
 <body>
-  <h1>Bolt Test App</h1>
-  <p><strong>Step 1:</strong> Enter amount in sats and description.</p>
-  <input type="number" id="amount" placeholder="Amount (sats)" value="10000">
-  <input type="text" id="desc" placeholder="Description" value="Coffee">
-  <button onclick="createInvoice()">Create Invoice</button>
-  <p id="error"></p>
 
-  <div id="qrcode"></div>
+<div class="hdr">
+  <div class="hdr-brand">FAVILLA KEY · BUILT-IN EXCLUSIVE</div>
+  <div class="hdr-title">CIPHER</div>
+  <div class="hdr-sub">MINE HASH · JOIN THE DRAW · WIN SATS</div>
+</div>
 
-  <p><strong>Step 2:</strong> Scan signed QR from Bolt.</p>
-  <button onclick="startScan()">Start Camera Scan</button>
-  <div id="scanner">
-    <video id="video" autoplay></video>
+<div class="layout">
+  <div class="shell">
+    <div class="shell-engrave">FAVILLA KEY · SOVEREIGN HARDWARE</div>
+    <div class="kill-sw"></div>
+    <div class="sbtn up"  onclick="btn('up')"></div>
+    <div class="sbtn sel" onclick="btn('sel')"></div>
+    <div class="sbtn dn"  onclick="btn('dn')"></div>
+    <div class="sbtn bck" onclick="btn('bck')"></div>
+
+    <div class="lcd">
+      <div class="lcd-edge"></div>
+      <canvas id="gc" width="240" height="240"></canvas>
+
+      <div class="hud" id="hud">
+        <div class="hud-score" id="hud-sc">000000</div>
+        <div class="hud-lv"   id="hud-lv">START</div>
+        <div class="hud-lives" id="hud-lv2"></div>
+      </div>
+      <div class="ol-bar" id="ol-bar"><div class="ol-fill" id="ol-fill"></div></div>
+
+      <!-- ── TITLE ── -->
+      <div class="osc vis" id="sc-title">
+        <div class="t-logo">CIPHER</div>
+        <div class="t-sub">HASH MINER</div>
+        <div class="t-desc">MINE HASH · SET YOUR ATH<br>ENTER THE DRAW · WIN SATS</div>
+        <div class="t-overload">⚡ OVERLOAD: grow to 10 keys to<br>SHRINK · SPEED UP · 2× HASH RATE</div>
+        <div class="t-start">● START MINING</div>
+        <div class="t-hi" id="t-hi">ATH · 000000 H</div>
+      </div>
+
+      <!-- ── GAME OVER / NEW ATH ── -->
+      <div class="osc" id="sc-over">
+        <div class="go-ath-banner" id="go-ath-banner">⚡ NEW ALL-TIME HASH RECORD</div>
+        <div class="go-lost" id="go-lost-txt">SIGNAL LOST</div>
+        <div class="go-hash-lbl">HASH MINED</div>
+        <div class="go-hash" id="go-sc">000000</div>
+        <div class="go-hash-unit">H</div>
+        <div class="go-ath-lbl" id="go-ath-lbl">ATH · 000000 H</div>
+        <div class="go-stats" id="go-stats"></div>
+        <div class="go-unlock" id="go-ul" style="display:none"></div>
+        <div class="go-actions">
+          <div class="go-btn go-btn-nostr" id="go-btn-submit" onclick="gotoPool()">⚡ SUBMIT HASH TO DRAW</div>
+          <div class="go-btn go-btn-primary" onclick="startGame()">● MINE AGAIN</div>
+          <div class="go-btn go-btn-dim" onclick="toTitle()">← MENU</div>
+        </div>
+      </div>
+
+      <!-- ── POOL SELECTOR ── -->
+      <div class="osc" id="sc-pool">
+        <div class="pool-hd">HASH POOL</div>
+        <div class="pool-sub">ENTER YOUR HASH INTO THE DRAW</div>
+        <div class="pool-hash-display">
+          <div class="pool-hash-val" id="pool-hash-val">000000 H</div>
+          <div class="pool-hash-sub">YOUR HASH THIS ROUND</div>
+          <div class="pool-tickets" id="pool-tickets">= 0 DRAW TICKETS</div>
+        </div>
+        <div class="pool-opts">
+          <div class="pool-opt" id="popt-solo" onclick="selectPool('solo')">
+            <div class="pool-opt-tag solo">SOLO</div>
+            <div class="pool-opt-name">SOLO MINE</div>
+            <div class="pool-opt-desc">Enter alone · win all sats if drawn</div>
+          </div>
+          <div class="pool-opt" id="popt-join" onclick="selectPool('join')">
+            <div class="pool-opt-tag join">JOIN</div>
+            <div class="pool-opt-name">JOIN POOL</div>
+            <div class="pool-opt-desc">Add hash to existing pool</div>
+          </div>
+          <div class="pool-opt" id="popt-create" onclick="selectPool('create')">
+            <div class="pool-opt-tag create">NEW</div>
+            <div class="pool-opt-name">CREATE POOL</div>
+            <div class="pool-opt-desc">Start a new pool, share invite tag</div>
+          </div>
+        </div>
+        <div class="pool-hint">▲▼ SELECT  ● CONFIRM  ← BACK</div>
+      </div>
+
+      <!-- ── JOIN POOL ── -->
+      <div class="osc" id="sc-pool-join">
+        <div class="pj-hd">JOIN POOL</div>
+        <div class="pj-list" id="pj-list"></div>
+        <div class="pj-confirm" onclick="confirmJoin()">● JOIN SELECTED</div>
+        <div class="pj-back" onclick="backToPool()">← BACK</div>
+      </div>
+
+      <!-- ── CREATE POOL ── -->
+      <div class="osc" id="sc-pool-create">
+        <div class="pj-hd">CREATE POOL</div>
+        <div style="margin-top:8px;font-size:7px;color:rgba(255,179,0,0.3);letter-spacing:1px;text-align:center;padding:0 20px;line-height:1.9;">
+          A new pool will be created and<br>broadcast via NOSTR.<br>Share the pool tag so others can join.
+        </div>
+        <div style="margin-top:10px;padding:8px 12px;border:1px solid rgba(255,179,0,0.12);border-radius:2px;width:180px;">
+          <div style="font-size:6px;letter-spacing:3px;color:rgba(255,179,0,0.3);">YOUR POOL TAG</div>
+          <div style="font-family:'Orbitron',sans-serif;font-size:11px;color:var(--amb);margin-top:4px;letter-spacing:3px;" id="new-pool-tag">POOL-????</div>
+          <div style="font-size:6px;color:rgba(255,179,0,0.2);margin-top:3px;letter-spacing:1px;">share on NOSTR to invite miners</div>
+        </div>
+        <div class="pj-confirm" onclick="confirmCreate()">● CREATE &amp; SUBMIT HASH</div>
+        <div class="pj-back" onclick="backToPool()">← BACK</div>
+      </div>
+
+      <!-- ── NOSTR SUBMIT ── -->
+      <div class="osc" id="sc-nostr">
+        <div class="np-hd">SUBMITTING HASH</div>
+        <div class="np-sub">SIGNING WITH DEVICE KEY</div>
+        <div class="np-note" id="np-note"></div>
+        <div class="np-addr" id="np-addr"></div>
+        <div class="np-pool-tag" id="np-pool-tag"></div>
+        <div class="np-signing" id="np-signing-txt">SIGNING WITH SLOT 1 NOSTR KEY...</div>
+        <div class="np-progress"><div class="np-prog-fill" id="np-prog"></div></div>
+        <div class="np-done" id="np-done">✓ HASH SUBMITTED TO DRAW</div>
+        <div class="np-tickets" id="np-tickets-done"></div>
+        <div class="np-back" onclick="closeNostr()">← BACK TO MENU</div>
+      </div>
+
+      <!-- ── UNLOCK ── -->
+      <div class="osc" id="sc-unlock">
+        <div class="ul-bg"></div>
+        <div class="ul-badge">THEME UNLOCKED</div>
+        <div class="ul-icon" id="ul-icon">🔑</div>
+        <div class="ul-name" id="ul-name">PHOSPHOR</div>
+        <div class="ul-desc" id="ul-desc">Classic green CRT.</div>
+        <div class="ul-cont">● CONTINUE</div>
+      </div>
+
+      <div id="ol-flash" style="position:absolute;inset:0;z-index:80;background:rgba(255,230,60,0);pointer-events:none;transition:background 0.06s ease;"></div>
+    </div>
   </div>
-  <p id="result"></p>
 
-  <script>
-    (function() {
-      emailjs.init("YOUR_USER_ID_HERE");  // Replace with your EmailJS user ID (get from emailjs.com dashboard)
-    })();
+  <!-- ── RIGHT PANEL ── -->
+  <div class="rp">
+    <div class="rp-sect">── HASH MINING ───────────────</div>
+    <div class="hash-card">
+      <div class="hash-lbl">HASH MINED</div>
+      <div class="hash-val" id="rp-sc">000000 H</div>
+      <div class="hash-ath" id="rp-hi">ATH · 000000 H</div>
+      <div class="hash-tickets" id="rp-tickets">0 tickets in next draw</div>
+    </div>
 
-    let stream = null;
+    <div class="pool-status-card" id="pool-status-card">
+      <div class="ps-lbl">ACTIVE POOL</div>
+      <div class="ps-name" id="ps-name">NO POOL</div>
+      <div class="ps-meta" id="ps-meta">submit your ATH to enter a draw</div>
+      <div class="ps-share-bar"><div class="ps-share-fill" id="ps-share-fill" style="width:0%"></div></div>
+    </div>
 
-    async function createInvoice() {
-      const sats = document.getElementById('amount').value;
-      const desc = document.getElementById('desc').value;
-      if (!sats || sats <= 0) {
-        document.getElementById('error').textContent = 'Enter a valid amount!';
-        return;
-      }
-      // Fake invoice - in real app, use lnd or breez SDK
-      const fakeInvoice = `lnbc${sats}u1p3example...${desc.replace(' ', 'x')}`;
-      document.getElementById('qrcode').innerHTML = '';
-      document.getElementById('error').textContent = '';
-      try {
-        new QRCode(document.getElementById('qrcode'), {
-          text: fakeInvoice,
-          width: 300,
-          height: 300,
-          colorDark: "#000",
-          colorLight: "#fff"
-        });
-      } catch (err) {
-        document.getElementById('error').textContent = 'QR generation failed: ' + err.message;
-      }
+    <div class="mult-card">
+      <div class="mult-lbl">HASH RATE MULTIPLIER</div>
+      <div class="mult-val" id="rp-mult">×1</div>
+      <div class="mult-desc" id="rp-mult-desc">collect 10 keys to OVERLOAD</div>
+    </div>
+
+    <div class="ent-card">
+      <div class="ent-lbl">ENTROPY HARVESTED</div>
+      <div class="ent-outer"><div class="ent-inner" id="rp-ent" style="width:0%"></div></div>
+      <div class="ent-num" id="rp-bits">0 bits</div>
+    </div>
+
+    <div class="rp-sect" style="margin-top:4px;">── UNLOCK TREE ───────────────</div>
+    <div class="ul-list" id="ul-list"></div>
+
+    <div class="rp-sect" style="margin-top:4px;">── CONTROLS ──────────────────</div>
+    <div class="ctrl-card">
+      <div class="cr"><div class="ck">▲</div><div class="cd">MOVE UP / NAVIGATE</div></div>
+      <div class="cr"><div class="ck">▼</div><div class="cd">MOVE DOWN / NAVIGATE</div></div>
+      <div class="cr"><div class="ck">●</div><div class="cd">TURN RIGHT / CONFIRM</div></div>
+      <div class="cr"><div class="ck">←</div><div class="cd">TURN LEFT / BACK</div></div>
+    </div>
+
+    <div class="rp-sect" style="margin-top:4px;">── LEGEND ─────────────────────</div>
+    <div class="legend">
+      <div class="lg"><div class="lgd" style="background:#ffb300"></div><span class="lgt">SIGNAL (YOU)</span></div>
+      <div class="lg"><div class="lgd" style="background:#00e87a;box-shadow:0 0 4px #00e87a"></div><span class="lgt">KEY FRAGMENT</span></div>
+      <div class="lg"><div class="lgd" style="background:#ff3322;box-shadow:0 0 4px #ff3322"></div><span class="lgt">HOSTILE NODE</span></div>
+      <div class="lg"><div class="lgd" style="background:#ffe040;box-shadow:0 0 6px #ffe040"></div><span class="lgt">⚡ OVERLOAD</span></div>
+      <div class="lg"><div class="lgd" style="background:#b06fff;box-shadow:0 0 4px #b06fff"></div><span class="lgt">SHIELD</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// CIPHER — HASH MINER
+//
+// Score = HASH (H). Every key = hash mined.
+// ATH (all-time hash record) = your draw entry.
+//
+// DRAW SYSTEM:
+//   Hash → draw tickets (1 ticket per 100 H)
+//   More tickets = higher chance but still random
+//   Pools: join/create to split prize by hash share
+//   Solo: full prize if your ticket drawn
+//
+// NOSTR POST (on ATH submission):
+//   kind:1 note containing:
+//   - ATH hash score
+//   - BTC address (from device HD wallet)
+//   - Pool tag or SOLO
+//   - Signed by device NOSTR key
+//
+// Draw seed = future Bitcoin block hash (provably fair)
+// ══════════════════════════════════════════════════
+
+const CV  = document.getElementById('gc');
+const CTX = CV.getContext('2d');
+// Canvas 240px. HUD 18px. Game area = 222px.
+// 12 rows × 18px = 216px — fits with 6px buffer.
+const GRID = 12, CS = 18, GY = 18, GH = 216;
+
+const OVERLOAD_SIZE = 10;
+const MIN_SIZE      = 3;
+const BASE_TICK     = 240;
+const MIN_TICK      = 48;
+const TICK_BOOST    = 22;
+const TICKETS_PER_HASH = 100; // 1 ticket per 100 H mined
+
+// Simulated pools (in real device, fetched from NOSTR relay)
+const DEMO_POOLS = [
+  { tag:'POOL-A7F2', members:4, totalHash:48200, drawBlock:888000 },
+  { tag:'POOL-B3C8', members:2, totalHash:21500, drawBlock:888000 },
+  { tag:'POOL-D91E', members:7, totalHash:103400, drawBlock:888000 },
+];
+
+// Simulated BTC address (real device: derived from BIP-32 HD wallet, slot 1)
+const BTC_ADDR = 'bc1qfavilla' + Math.random().toString(36).slice(2,10) + 'k3ysign';
+// Simulated npub (real device: NOSTR key slot 1)
+const NPUB = 'npub1favilla' + Math.random().toString(36).slice(2,14);
+
+const UNLOCKS = [
+  {id:'phosphor', score:3000,   name:'PHOSPHOR', icon:'💚', desc:'Classic green-on-black CRT aesthetic.'},
+  {id:'phantom',  score:8000,   name:'PHANTOM',  icon:'👻', desc:'Deep purple ghost key mark.'},
+  {id:'blood',    score:20000,  name:'BLOOD',    icon:'🔴', desc:'Red on near-black. High contrast.'},
+  {id:'gold',     score:50000,  name:'GOLD',     icon:'✨', desc:'Full amber maximum warmth.'},
+  {id:'void',     score:100000, name:'VOID',     icon:'⬛', desc:'Near-invisible minimalist UI.'},
+  {id:'founder',  score:250000, name:'FOUNDER',  icon:'🏆', desc:'Permanent FOUNDER mark on boot screen.'},
+];
+
+const S = {
+  phase:'title', score:0, hi:0, lives:3,
+  entropy:0, unlocked:new Set(), pendingUnlock:null,
+  lastScore:0, lastEntropy:0, lastOverloads:0,
+  // snake
+  snake:[], dir:{x:1,y:0}, nd:{x:1,y:0},
+  // pickups
+  keys:[], overloadPick:[], shields:[],
+  // enemies
+  hostiles:[], particles:[],
+  flash:0, shielded:false, shieldT:0,
+  overloads:0, ptMult:1,
+  tickRate:BASE_TICK, lastTick:0, afr:null,
+  // pool/draw state
+  selectedPool: null,     // null=none, 'solo', or pool tag string
+  selectedPoolIdx: 0,     // cursor in join list
+  poolMode: 'solo',       // 'solo'|'join'|'create'
+  submittedATH: false,    // has user submitted this ATH round
+  poolChoice: null,       // pool chosen after game over
+};
+
+// ── HELPERS ──────────────────────────────────────
+const rng = n => Math.floor(Math.random()*n);
+const fmt = n => String(n).padStart(6,'0');
+const tickets = h => Math.floor(h / TICKETS_PER_HASH);
+
+function freeCell() {
+  const occ = new Set();
+  S.snake.forEach(s        => occ.add(`${s.x},${s.y}`));
+  S.keys.forEach(k         => occ.add(`${k.x},${k.y}`));
+  S.overloadPick.forEach(o => occ.add(`${o.x},${o.y}`));
+  S.shields.forEach(k      => occ.add(`${k.x},${k.y}`));
+  S.hostiles.forEach(h     => occ.add(`${h.x},${h.y}`));
+  const free = [];
+  for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++)
+    if(!occ.has(`${x},${y}`)) free.push({x,y});
+  if(!free.length) return null;
+  return free[rng(free.length)];
+}
+
+function addParticles(wx,wy,col,n,speed=2.5) {
+  const px=wx*CS+CS/2, py=GY+wy*CS+CS/2;
+  for(let i=0;i<n;i++) {
+    const a=(Math.PI*2*i/n)+Math.random()*0.8;
+    const sp=speed*0.6+Math.random()*speed;
+    S.particles.push({x:px,y:py,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp,life:1,dec:0.03+Math.random()*0.04,col,r:1.2+Math.random()*2});
+  }
+}
+
+// ── SPAWN ─────────────────────────────────────────
+function ensureKey() {
+  if(S.keys.length > 0) return;
+  const p = freeCell();
+  if(p) S.keys.push({...p, t:0});
+}
+
+function checkSpawnOverload() {
+  if(S.overloadPick.length > 0) return;
+  if(S.snake.length < OVERLOAD_SIZE) return;
+  const p = freeCell();
+  if(p) S.overloadPick.push({...p, t:0});
+}
+
+function maybeShield() {
+  if(S.shields.length > 0) return;
+  if(Math.random() < 0.09) { const p = freeCell(); if(p) S.shields.push({...p, t:0}); }
+}
+
+function spawnHostiles() {
+  const want = Math.min(1 + Math.floor(S.overloads/2), 3);
+  while(S.hostiles.length < want) {
+    const p = freeCell(); if(!p) break;
+    S.hostiles.push({...p, mt:0});
+  }
+}
+
+// ── INIT ──────────────────────────────────────────
+function initGame() {
+  S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
+  S.dir={x:1,y:0}; S.nd={x:1,y:0};
+  S.keys=[]; S.overloadPick=[]; S.shields=[]; S.hostiles=[];
+  S.particles=[]; S.flash=0;
+  S.score=0; S.lives=3; S.overloads=0; S.ptMult=1;
+  S.entropy=0; S.shielded=false; S.shieldT=0;
+  S.tickRate=BASE_TICK; S.lastTick=0;
+  ensureKey(); spawnHostiles();
+  updateUI(); buildUnlockList();
+}
+
+// ── HOSTILE AI ────────────────────────────────────
+function moveHostiles(ts) {
+  const hd=S.snake[0];
+  const hSpd=Math.max(100,260-S.overloads*28);
+  S.hostiles.forEach(h=>{
+    if(ts-h.mt<hSpd) return;
+    h.mt=ts;
+    if(Math.random()<0.65) {
+      const dx=hd.x-h.x, dy=hd.y-h.y;
+      if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
+      else h.y+=dy>0?1:-1;
+    } else {
+      const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+      const d=dirs[rng(4)]; h.x+=d.x; h.y+=d.y;
     }
+    h.x=(h.x+GRID)%GRID; h.y=(h.y+GRID)%GRID;
+  });
+}
 
-    async function startScan() {
-      const video = document.getElementById('video');
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = 300;
-      canvas.height = 300;
+// ── TICK ──────────────────────────────────────────
+function tick(ts) {
+  if(ts-S.lastTick<S.tickRate) return;
+  S.lastTick=ts;
+  S.dir={...S.nd};
 
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-        video.srcObject = stream;
-        scanLoop(video, ctx, canvas);
-      } catch(err) {
-        alert('Camera failed: ' + err.message);
-      }
+  const hd=S.snake[0];
+  const nx=(hd.x+S.dir.x+GRID)%GRID;
+  const ny=(hd.y+S.dir.y+GRID)%GRID;
+
+  if(S.snake.slice(1).some(s=>s.x===nx&&s.y===ny)) { die(nx,ny); return; }
+
+  let grow=false, pts=0;
+  let didOverload=false;
+
+  // key fragment
+  const ki=S.keys.findIndex(k=>k.x===nx&&k.y===ny);
+  if(ki>=0) {
+    S.keys.splice(ki,1);
+    pts=Math.round(100*S.ptMult);
+    grow=true;
+    S.entropy=Math.min(256,S.entropy+12);
+    addParticles(nx,ny,'#00e87a',8);
+    S.flash=4;
+    maybeShield();
+  }
+
+  // overload pickup
+  const oi=S.overloadPick.findIndex(o=>o.x===nx&&o.y===ny);
+  if(oi>=0) {
+    S.overloadPick.splice(oi,1);
+    S.overloads++;
+    S.ptMult*=2;
+    S.tickRate=Math.max(MIN_TICK,S.tickRate-TICK_BOOST);
+    S.hostiles=[]; S.shields=[];
+    pts=Math.round(1000*S.ptMult);
+    S.entropy=Math.min(256,S.entropy+32);
+    addParticles(nx,ny,'#ffffff',32,4);
+    addParticles(nx,ny,'#ffee40',20,3);
+    addParticles(nx,ny,'#ffb300',16,2);
+    S.flash=14;
+    const fl=document.getElementById('ol-flash');
+    fl.style.background='rgba(255,230,60,0.22)';
+    setTimeout(()=>fl.style.background='rgba(255,230,60,0)',350);
+    grow=false; didOverload=true;
+  }
+
+  // shield
+  const si=S.shields.findIndex(k=>k.x===nx&&k.y===ny);
+  if(si>=0) {
+    S.shields.splice(si,1);
+    S.shielded=true; S.shieldT=180;
+    addParticles(nx,ny,'#b06fff',10);
+  }
+
+  S.snake.unshift({x:nx,y:ny});
+  if(!grow) S.snake.pop();
+
+  if(didOverload) {
+    S.snake=S.snake.slice(0,MIN_SIZE);
+    spawnHostiles();
+  }
+
+  if(S.hostiles.some(h=>h.x===nx&&h.y===ny)) {
+    if(S.shielded) { S.shielded=false; addParticles(nx,ny,'#b06fff',18); }
+    else {
+      ensureKey(); checkSpawnOverload();
+      die(nx,ny); return;
     }
+  }
 
-    function scanLoop(video, ctx, canvas) {
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-        if (code) {
-          document.getElementById('result').textContent = 'Scanned: ' + code.data;
-          sendEmail(code.data);  // Send scanned data to email
-          stopScan();
-          return;
-        }
-      }
-      requestAnimationFrame(() => scanLoop(video, ctx, canvas));
+  ensureKey();
+  checkSpawnOverload();
+
+  if(pts) {
+    S.score+=pts;
+    if(S.score>S.hi) S.hi=S.score;
+    updateUI(); checkUnlocks();
+  }
+  if(S.shielded&&--S.shieldT<=0) S.shielded=false;
+}
+
+function die(x,y) {
+  addParticles(x,y,'#ff3322',24,3.5);
+  S.lives--;
+  updateUI();
+  if(S.lives<=0) {
+    S.lastScore=S.score; S.lastEntropy=S.entropy; S.lastOverloads=S.overloads;
+    if(S.score>S.hi) S.hi=S.score;
+    const isATH = S.score>0 && S.score>=S.hi;
+    S.phase='dead';
+    showOsc('sc-over');
+    document.getElementById('go-sc').textContent=S.score.toLocaleString();
+    document.getElementById('go-ath-lbl').textContent='ATH · '+S.hi.toLocaleString()+' H';
+    document.getElementById('t-hi').textContent='ATH · '+fmt(S.hi)+' H';
+    // ATH banner
+    const banner=document.getElementById('go-ath-banner');
+    banner.style.display=isATH?'block':'none';
+    document.getElementById('go-lost-txt').style.marginTop=isATH?'6px':'0';
+    // highlight submit button on ATH
+    const submitBtn=document.getElementById('go-btn-submit');
+    if(isATH) {
+      submitBtn.style.borderColor='rgba(255,220,40,0.6)';
+      submitBtn.style.color='rgba(255,220,40,1)';
+      submitBtn.style.background='rgba(255,200,0,0.08)';
+      submitBtn.textContent='⚡ SUBMIT NEW ATH TO DRAW';
+    } else {
+      submitBtn.style.borderColor='rgba(255,220,40,0.25)';
+      submitBtn.style.color='rgba(255,220,40,0.5)';
+      submitBtn.style.background='transparent';
+      submitBtn.textContent='⚡ SUBMIT HASH TO DRAW';
     }
+    document.getElementById('go-stats').textContent=
+      'OVERLOADS: '+S.lastOverloads+'  ·  ×'+Math.round(S.ptMult)+' HASH RATE\n'+
+      tickets(S.score)+' TICKETS  ·  '+S.lastEntropy+' BITS ENTROPY';
+    const uEl=document.getElementById('go-ul');
+    if(S.pendingUnlock){uEl.style.display='block';uEl.textContent=S.pendingUnlock.icon+' UNLOCKED: '+S.pendingUnlock.name;}
+    else uEl.style.display='none';
+    updateUI(); buildUnlockList();
+    return;
+  }
+  S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
+  S.dir={x:1,y:0}; S.nd={x:1,y:0};
+  S.overloadPick=[]; S.keys=[]; S.shields=[];
+  S.hostiles=[]; S.shielded=false; S.shieldT=0;
+  ensureKey(); spawnHostiles();
+}
 
-    function sendEmail(scannedData) {
-      emailjs.send("YOUR_SERVICE_ID_HERE", "YOUR_TEMPLATE_ID_HERE", {  // Replace with your EmailJS service and template IDs
-        to_email: "joshcoverley@icloud.com",
-        message: scannedData
-      })
-      .then(function(response) {
-        document.getElementById('result').textContent += ' - Sent to email!';
-      }, function(error) {
-        document.getElementById('result').textContent += ' - Email failed: ' + error.text;
-      });
+function checkUnlocks() {
+  for(const u of UNLOCKS) {
+    if(!S.unlocked.has(u.id)&&S.score>=u.score) {
+      S.unlocked.add(u.id); S.pendingUnlock=u;
+      document.getElementById('ul-icon').textContent=u.icon;
+      document.getElementById('ul-name').textContent=u.name;
+      document.getElementById('ul-desc').textContent=u.desc;
+      S.phase='unlock'; showOsc('sc-unlock'); buildUnlockList(); break;
     }
+  }
+}
 
-    function stopScan() {
-      if (stream) stream.getTracks().forEach(track => track.stop());
+// ── POOL / DRAW FLOW ─────────────────────────────
+
+function gotoPool() {
+  S.phase='pool';
+  document.getElementById('pool-hash-val').textContent=S.lastScore.toLocaleString()+' H';
+  document.getElementById('pool-tickets').textContent='= '+tickets(S.lastScore)+' DRAW TICKETS';
+  // pre-select solo
+  selectPool('solo');
+  showOsc('sc-pool');
+}
+
+function selectPool(mode) {
+  S.poolMode=mode;
+  ['solo','join','create'].forEach(m=>{
+    document.getElementById('popt-'+m).classList.toggle('selected',m===mode);
+  });
+}
+
+function confirmPoolChoice() {
+  if(S.poolMode==='solo') {
+    S.poolChoice={type:'solo'};
+    showNostr();
+  } else if(S.poolMode==='join') {
+    buildPoolJoinList();
+    S.phase='pool-join';
+    showOsc('sc-pool-join');
+  } else {
+    // create pool — generate tag
+    const tag='POOL-'+Math.random().toString(36).toUpperCase().slice(2,6);
+    document.getElementById('new-pool-tag').textContent=tag;
+    S._newPoolTag=tag;
+    S.phase='pool-create';
+    showOsc('sc-pool-create');
+  }
+}
+
+function buildPoolJoinList() {
+  const list=document.getElementById('pj-list'); list.innerHTML='';
+  DEMO_POOLS.forEach((p,i)=>{
+    const myShare=tickets(S.lastScore)/(tickets(p.totalHash)+tickets(S.lastScore));
+    const div=document.createElement('div');
+    div.className='pj-row'+(i===S.selectedPoolIdx?' sel':'');
+    div.onclick=()=>{ S.selectedPoolIdx=i; buildPoolJoinList(); };
+    div.innerHTML=`
+      <div class="pj-name">${p.tag}</div>
+      <div class="pj-meta">${p.members} miners · ${p.totalHash.toLocaleString()} H total · draw at block ${p.drawBlock.toLocaleString()}</div>
+      <div class="pj-bar-wrap"><div class="pj-bar" style="width:${Math.round(myShare*100)}%"></div></div>
+      <div style="font-size:6px;color:rgba(0,232,122,0.45);letter-spacing:1px;margin-top:2px;">your share: ${Math.round(myShare*100)}% of pool prize</div>
+    `;
+    list.appendChild(div);
+  });
+}
+
+function confirmJoin() {
+  const pool=DEMO_POOLS[S.selectedPoolIdx];
+  S.poolChoice={type:'join', pool};
+  showNostr();
+}
+
+function confirmCreate() {
+  S.poolChoice={type:'create', tag:S._newPoolTag};
+  showNostr();
+}
+
+function backToPool() {
+  S.phase='pool'; showOsc('sc-pool');
+}
+
+function showNostr() {
+  S.phase='nostr';
+  const h=S.lastScore; const t=tickets(h);
+  const pc=S.poolChoice;
+  const isATH=h>=S.hi;
+
+  // compose note
+  let poolLine='';
+  if(pc.type==='solo') poolLine='pool: SOLO MINE';
+  else if(pc.type==='join') poolLine=`pool: ${pc.pool.tag} (${pc.pool.members} miners)`;
+  else poolLine=`pool: ${pc.tag} [NEW POOL — join with this tag]`;
+
+  const note =
+    `🔑 CIPHER HASH SUBMISSION\n`+
+    (isATH?`⚡ NEW ALL-TIME HASH RECORD\n`:'')+
+    `hash: ${h.toLocaleString()} H | tickets: ${t}\n`+
+    `${poolLine}\n`+
+    `btc: ${BTC_ADDR}\n`+
+    `draw block: #888000 | seed: next block hash\n`+
+    `#FavillaKEY #CipherMiner #NOSTR`;
+
+  document.getElementById('np-note').textContent=note;
+  document.getElementById('np-addr').textContent=
+    `BTC ADDRESS (slot 1)\n${BTC_ADDR}\n\nNOSTR PUBKEY\n${NPUB}`;
+
+  const ptEl=document.getElementById('np-pool-tag');
+  if(pc.type==='solo') { ptEl.className='np-pool-tag solo'; ptEl.textContent='SOLO MINE · FULL PRIZE IF DRAWN'; }
+  else if(pc.type==='join') { ptEl.className='np-pool-tag pool'; ptEl.textContent=`POOL: ${pc.pool.tag} · PRIZE SPLIT BY HASH SHARE`; }
+  else { ptEl.className='np-pool-tag pool'; ptEl.textContent=`NEW POOL: ${pc.tag} · PRIZE SPLIT BY HASH SHARE`; }
+
+  document.getElementById('np-done').style.opacity='0';
+  document.getElementById('np-tickets-done').style.opacity='0';
+  document.getElementById('np-signing-txt').textContent='SIGNING WITH SLOT 1 NOSTR KEY...';
+  const prog=document.getElementById('np-prog');
+  prog.style.transition='none'; prog.style.width='0%';
+
+  showOsc('sc-nostr');
+
+  // animate signing
+  requestAnimationFrame(()=>{
+    prog.style.transition='width 1.8s ease';
+    prog.style.width='100%';
+  });
+  setTimeout(()=>{
+    document.getElementById('np-signing-txt').textContent='BROADCASTING TO NOSTR RELAYS...';
+  },900);
+  setTimeout(()=>{
+    document.getElementById('np-done').style.opacity='1';
+    document.getElementById('np-tickets-done').style.opacity='1';
+    document.getElementById('np-tickets-done').textContent=
+      t+' TICKETS ENTERED INTO DRAW AT BLOCK #888000';
+    // update pool status panel
+    updatePoolStatus(pc);
+  },2100);
+}
+
+function updatePoolStatus(pc) {
+  const name=document.getElementById('ps-name');
+  const meta=document.getElementById('ps-meta');
+  const bar=document.getElementById('ps-share-fill');
+  if(pc.type==='solo') {
+    S.selectedPool='SOLO'; name.textContent='SOLO MINE';
+    meta.textContent='next draw: block #888,000 · '+tickets(S.lastScore)+' tickets';
+    bar.style.width='100%';
+  } else if(pc.type==='join') {
+    S.selectedPool=pc.pool.tag; name.textContent=pc.pool.tag;
+    const total=pc.pool.totalHash+S.lastScore;
+    const share=Math.round((S.lastScore/total)*100);
+    meta.textContent=`${pc.pool.members+1} miners · your share: ${share}% · next draw: #888,000`;
+    bar.style.width=share+'%';
+  } else {
+    S.selectedPool=pc.tag; name.textContent=pc.tag+' [NEW]';
+    meta.textContent='1 miner · 100% share · awaiting others';
+    bar.style.width='100%';
+  }
+  document.getElementById('rp-tickets').textContent=tickets(S.hi)+' tickets in next draw';
+}
+
+function closeNostr() {
+  S.phase='title'; showOsc('sc-title');
+}
+function toTitle() {
+  S.phase='title'; showOsc('sc-title');
+}
+
+// ── DRAW ──────────────────────────────────────────
+function draw() {
+  CTX.clearRect(0,0,240,240);
+  CTX.fillStyle='#010100';
+  CTX.fillRect(0,GY,GRID*CS,GH);
+
+  CTX.save();
+  CTX.beginPath(); CTX.rect(0,GY,GRID*CS,GH); CTX.clip();
+
+  // grid lines
+  CTX.strokeStyle='rgba(255,179,0,0.028)'; CTX.lineWidth=0.5;
+  for(let x=0;x<=GRID;x++){CTX.beginPath();CTX.moveTo(x*CS,GY);CTX.lineTo(x*CS,GY+GH);CTX.stroke();}
+  for(let y=0;y<=GRID;y++){CTX.beginPath();CTX.moveTo(0,GY+y*CS);CTX.lineTo(GRID*CS,GY+y*CS);CTX.stroke();}
+
+  // overload bar
+  if(S.snake.length>0) {
+    const pct=Math.min(1,(S.snake.length-MIN_SIZE)/(OVERLOAD_SIZE-MIN_SIZE));
+    document.getElementById('ol-fill').style.width=(pct*100)+'%';
+  }
+
+  // particles
+  CTX.save();
+  S.particles=S.particles.filter(p=>{
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.life-=p.dec;
+    if(p.life<=0) return false;
+    CTX.globalAlpha=Math.max(0,p.life);
+    CTX.fillStyle=p.col;
+    CTX.beginPath(); CTX.arc(p.x,p.y,p.r,0,Math.PI*2); CTX.fill();
+    return true;
+  });
+  CTX.restore();
+
+  // shields
+  S.shields.forEach(s=>{
+    s.t=(s.t||0)+0.07;
+    const a=0.6+Math.sin(s.t)*0.3;
+    CTX.save(); CTX.shadowColor='#b06fff'; CTX.shadowBlur=9;
+    CTX.fillStyle=`rgba(176,111,255,${a})`;
+    const cx=s.x*CS+CS/2, cy=GY+s.y*CS+CS/2;
+    CTX.beginPath();
+    for(let i=0;i<6;i++){const ang=(i*Math.PI/3)-Math.PI/6;i===0?CTX.moveTo(cx+5*Math.cos(ang),cy+5*Math.sin(ang)):CTX.lineTo(cx+5*Math.cos(ang),cy+5*Math.sin(ang));}
+    CTX.closePath(); CTX.fill(); CTX.restore();
+  });
+
+  // overload pickup
+  S.overloadPick.forEach(o=>{
+    o.t=(o.t||0)+0.12;
+    const a=0.75+Math.sin(o.t)*0.22;
+    const sc=0.9+Math.sin(o.t*1.3)*0.08;
+    CTX.save();
+    CTX.shadowColor='#ffe040'; CTX.shadowBlur=16+Math.sin(o.t)*6;
+    CTX.strokeStyle=`rgba(255,220,40,${a*0.4})`; CTX.lineWidth=1.5;
+    CTX.beginPath(); CTX.arc(o.x*CS+CS/2,GY+o.y*CS+CS/2,8*sc,0,Math.PI*2); CTX.stroke();
+    CTX.fillStyle=`rgba(255,240,80,${a})`;
+    CTX.beginPath(); CTX.arc(o.x*CS+CS/2,GY+o.y*CS+CS/2,5*sc,0,Math.PI*2); CTX.fill();
+    CTX.font=`${Math.round(10*sc)}px monospace`; CTX.textAlign='center'; CTX.fillStyle=`rgba(20,10,0,${a})`;
+    CTX.fillText('⚡',o.x*CS+CS/2,GY+o.y*CS+CS/2+3.5);
+    CTX.restore();
+  });
+
+  // keys
+  S.keys.forEach(k=>{
+    k.t=(k.t||0)+0.055;
+    const a=0.65+Math.sin(k.t)*0.28;
+    CTX.save();
+    CTX.shadowColor='#00e87a'; CTX.shadowBlur=13;
+    CTX.strokeStyle=`rgba(0,232,122,${a})`; CTX.lineWidth=1.5;
+    CTX.strokeRect(k.x*CS+3,GY+k.y*CS+3,CS-6,CS-6);
+    CTX.fillStyle=`rgba(0,232,122,${a*0.12})`;
+    CTX.fillRect(k.x*CS+3,GY+k.y*CS+3,CS-6,CS-6);
+    CTX.fillStyle=`rgba(0,232,122,${a})`;
+    CTX.font='8px monospace'; CTX.textAlign='center';
+    CTX.fillText('⚿',k.x*CS+CS/2,GY+k.y*CS+CS/2+3);
+    CTX.restore();
+  });
+
+  // hostiles
+  S.hostiles.forEach(h=>{
+    CTX.save(); CTX.shadowColor='#ff3322'; CTX.shadowBlur=11;
+    CTX.strokeStyle='rgba(255,51,34,0.9)'; CTX.lineWidth=2;
+    const m=3;
+    CTX.beginPath(); CTX.moveTo(h.x*CS+m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+CS-m,GY+h.y*CS+CS-m); CTX.stroke();
+    CTX.beginPath(); CTX.moveTo(h.x*CS+CS-m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+m,GY+h.y*CS+CS-m); CTX.stroke();
+    CTX.fillStyle='rgba(255,51,34,0.3)';
+    CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,3,0,Math.PI*2); CTX.fill();
+    CTX.restore();
+  });
+
+  // snake
+  S.snake.forEach((seg,i)=>{
+    const isHd=i===0;
+    const t=1-(i/Math.max(S.snake.length,1));
+    CTX.save();
+    if(isHd) {
+      const col=S.shielded?'#c090ff':'#ffb300';
+      const fc=S.flash>0?'#ffe575':col;
+      CTX.shadowColor=fc; CTX.shadowBlur=S.flash>0?22:9;
+      CTX.fillStyle=fc+'ee';
+      CTX.fillRect(seg.x*CS+1,GY+seg.y*CS+1,CS-2,CS-2);
+      CTX.fillStyle='rgba(255,240,180,0.85)';
+      CTX.fillRect(seg.x*CS+CS/2-1.5+S.dir.x*4,GY+seg.y*CS+CS/2-1.5+S.dir.y*4,3,3);
+      if(S.flash>0) S.flash--;
+    } else {
+      CTX.fillStyle=S.shielded?`rgba(180,140,255,${t*0.68})`:`rgba(255,179,0,${t*0.65})`;
+      CTX.fillRect(seg.x*CS+2,GY+seg.y*CS+2,CS-4,CS-4);
     }
+    CTX.restore();
+  });
 
-    window.onunload = stopScan; // Clean up camera
-  </script>
+  if(S.shielded&&S.snake.length) {
+    const h=S.snake[0];
+    CTX.save(); CTX.strokeStyle='rgba(176,111,255,0.4)'; CTX.lineWidth=1.5;
+    CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,CS,0,Math.PI*2); CTX.stroke();
+    CTX.restore();
+  }
+
+  CTX.restore(); // release clip
+
+  if(S.ptMult>1) {
+    CTX.font='bold 8px Orbitron,monospace'; CTX.textAlign='right';
+    CTX.fillStyle='rgba(255,220,60,0.2)';
+    CTX.fillText('×'+Math.round(S.ptMult)+' H',214,236);
+  }
+}
+
+// ── LOOP ──────────────────────────────────────────
+function loop(ts) {
+  S.afr=requestAnimationFrame(loop);
+  if(S.phase==='playing') { moveHostiles(ts); tick(ts); draw(); }
+  else {
+    CTX.clearRect(0,0,240,240);
+    CTX.fillStyle='#010100'; CTX.fillRect(0,0,240,240);
+    CTX.save();
+    S.particles=S.particles.filter(p=>{
+      p.x+=p.vx; p.y+=p.vy; p.vy+=0.07; p.life-=p.dec;
+      if(p.life<=0) return false;
+      CTX.globalAlpha=Math.max(0,p.life);
+      CTX.fillStyle=p.col;
+      CTX.beginPath(); CTX.arc(p.x,p.y,p.r,0,Math.PI*2); CTX.fill();
+      return true;
+    });
+    CTX.restore();
+  }
+}
+
+// ── UI ────────────────────────────────────────────
+function updateUI() {
+  const h=S.score;
+  document.getElementById('hud-sc').textContent=fmt(h);
+  document.getElementById('rp-sc').textContent=fmt(h)+' H';
+  document.getElementById('rp-hi').textContent='ATH · '+fmt(S.hi)+' H';
+  document.getElementById('rp-tickets').textContent=tickets(S.hi)+' tickets in next draw';
+  const ep=Math.min(100,(S.entropy/256)*100);
+  document.getElementById('rp-ent').style.width=ep+'%';
+  document.getElementById('rp-bits').textContent=S.entropy+' bits';
+  document.getElementById('rp-mult').textContent='×'+Math.round(S.ptMult);
+  const keysToOL=Math.max(0,OVERLOAD_SIZE-S.snake.length);
+  document.getElementById('rp-mult-desc').textContent=
+    keysToOL>0 ? keysToOL+' keys to OVERLOAD' : '⚡ OVERLOAD READY!';
+  document.getElementById('hud-lv').textContent=
+    S.overloads>0 ? '×'+Math.round(S.ptMult)+' OL'+S.overloads : 'MINE';
+  const lv=document.getElementById('hud-lv2'); lv.innerHTML='';
+  for(let i=0;i<3;i++){const d=document.createElement('div');d.className='hud-pip '+(i<S.lives?'a':'d');lv.appendChild(d);}
+}
+
+function buildUnlockList() {
+  const el=document.getElementById('ul-list'); el.innerHTML='';
+  const next=UNLOCKS.find(u=>!S.unlocked.has(u.id));
+  UNLOCKS.forEach(u=>{
+    const done=S.unlocked.has(u.id), isNxt=!done&&u===next;
+    const div=document.createElement('div');
+    div.className='ul-row '+(done?'done':isNxt?'nxt':'locked');
+    div.innerHTML=`<div class="ul-rico">${u.icon}</div><div class="ul-inf"><div class="ul-nm">${u.name}</div><div class="ul-pts">${u.score.toLocaleString()} H</div></div><div class="ul-tag ${done?'y':'n'}">${done?'ON':'LOCK'}</div>`;
+    el.appendChild(div);
+  });
+}
+
+// ── SCREENS ───────────────────────────────────────
+function showOsc(id) {
+  document.querySelectorAll('.osc').forEach(e=>{e.classList.remove('vis');e.style.pointerEvents='none';});
+  if(id){const el=document.getElementById(id);el.classList.add('vis');el.style.pointerEvents='all';}
+  const ig=S.phase==='playing';
+  document.getElementById('hud').style.display=ig?'flex':'none';
+  document.getElementById('ol-bar').style.display=ig?'block':'none';
+}
+
+function startGame() {
+  S.phase='playing'; S.pendingUnlock=null;
+  initGame(); showOsc(null);
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('ol-bar').style.display='block';
+}
+
+// ── INPUT ─────────────────────────────────────────
+function btn(b) {
+  S.entropy=Math.min(256,S.entropy+2); updateUI();
+
+  if(S.phase==='title') {
+    if(b==='sel') startGame();
+    return;
+  }
+  if(S.phase==='unlock') {
+    if(b==='sel'||b==='bck') {
+      S.phase='playing'; S.pendingUnlock=null;
+      showOsc(null);
+      document.getElementById('hud').style.display='flex';
+      document.getElementById('ol-bar').style.display='block';
+    }
+    return;
+  }
+  if(S.phase==='dead') {
+    if(b==='sel') startGame();
+    if(b==='bck') toTitle();
+    return;
+  }
+  if(S.phase==='pool') {
+    const modes=['solo','join','create'];
+    if(b==='up')  { const i=modes.indexOf(S.poolMode); selectPool(modes[Math.max(0,i-1)]); }
+    if(b==='dn')  { const i=modes.indexOf(S.poolMode); selectPool(modes[Math.min(2,i+1)]); }
+    if(b==='sel') confirmPoolChoice();
+    if(b==='bck') { S.phase='dead'; showOsc('sc-over'); }
+    return;
+  }
+  if(S.phase==='pool-join') {
+    if(b==='up')  { S.selectedPoolIdx=Math.max(0,S.selectedPoolIdx-1); buildPoolJoinList(); }
+    if(b==='dn')  { S.selectedPoolIdx=Math.min(DEMO_POOLS.length-1,S.selectedPoolIdx+1); buildPoolJoinList(); }
+    if(b==='sel') confirmJoin();
+    if(b==='bck') backToPool();
+    return;
+  }
+  if(S.phase==='pool-create') {
+    if(b==='sel') confirmCreate();
+    if(b==='bck') backToPool();
+    return;
+  }
+  if(S.phase==='nostr') {
+    if(b==='bck') closeNostr();
+    return;
+  }
+  if(S.phase==='playing') {
+    const d=S.dir;
+    if(b==='up'  &&d.y===0) S.nd={x:0,y:-1};
+    if(b==='dn'  &&d.y===0) S.nd={x:0,y:1};
+    if(b==='sel') {
+      if(d.x===1)       S.nd={x:0,y:1};
+      else if(d.x===-1) S.nd={x:0,y:-1};
+      else if(d.y===1)  S.nd={x:-1,y:0};
+      else              S.nd={x:1,y:0};
+    }
+    if(b==='bck') {
+      if(d.x===1)       S.nd={x:0,y:-1};
+      else if(d.x===-1) S.nd={x:0,y:1};
+      else if(d.y===1)  S.nd={x:1,y:0};
+      else              S.nd={x:-1,y:0};
+    }
+  }
+}
+
+const KMAP={'ArrowUp':'up','ArrowDown':'dn','ArrowLeft':'bck','ArrowRight':'sel','w':'up','s':'dn','a':'bck','d':'sel',' ':'sel','Enter':'sel','Escape':'bck'};
+document.addEventListener('keydown',e=>{
+  const b=KMAP[e.key]; if(!b) return;
+  e.preventDefault(); btn(b);
+});
+
+buildUnlockList();
+showOsc('sc-title');
+requestAnimationFrame(loop);
+</script>
 </body>
-
 </html>
