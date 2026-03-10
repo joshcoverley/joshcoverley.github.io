@@ -214,6 +214,9 @@ body::before {
   <div class="hdr-brand">FAVILLA KEY · BUILT-IN EXCLUSIVE</div>
   <div class="hdr-title">CIPHER</div>
   <div class="hdr-sub">MINE HASH · JOIN THE DRAW · WIN SATS</div>
+  <div style="margin-top:6px;">
+    <span id="mute-btn" onclick="toggleMute()" style="font-family:'Share Tech Mono',monospace;font-size:7px;letter-spacing:3px;color:rgba(255,179,0,0.28);cursor:pointer;padding:3px 10px;border:1px solid rgba(255,179,0,0.1);border-radius:2px;user-select:none;" title="toggle sound">♪ SOUND ON</span>
+  </div>
 </div>
 
 <div class="layout">
@@ -388,8 +391,9 @@ body::before {
       <div class="lg"><div class="lgd" style="background:#ffb300"></div><span class="lgt">SIGNAL (YOU)</span></div>
       <div class="lg"><div class="lgd" style="background:#00e87a;box-shadow:0 0 4px #00e87a"></div><span class="lgt">KEY FRAGMENT</span></div>
       <div class="lg"><div class="lgd" style="background:#fffde0"></div><span class="lgt">₿ SATOSHI (RARE)</span></div>
-      <div class="lg"><div class="lgd" style="background:#ffe040;box-shadow:0 0 6px #ffe040"></div><span class="lgt">⚡ OVERLOAD</span></div>
-      <div class="lg"><div class="lgd" style="background:#b06fff;box-shadow:0 0 4px #b06fff"></div><span class="lgt">SHIELD (kill 1 bot)</span></div>
+      <div class="lg"><div class="lgd" style="background:#ffe040;box-shadow:0 0 6px #ffe040"></div><span class="lgt">⚡ OVERLOAD (kill window)</span></div>
+      <div class="lg"><div class="lgd" style="background:#b06fff;box-shadow:0 0 4px #b06fff"></div><span class="lgt">▣ SHIELD (stack ×3)</span></div>
+      <div class="lg"><div class="lgd" style="background:#00aaff;box-shadow:0 0 4px #00aaff"></div><span class="lgt">⊛ INTERCEPT→LOCKDOWN→BROADCAST</span></div>
       <div class="lg"><div class="lgd" style="background:#ff4422;box-shadow:0 0 4px #ff4422"></div><span class="lgt">HOSTILE BOT</span></div>
       <div class="lg"><div class="lgd" style="background:rgba(200,0,60,0.5)"></div><span class="lgt">CENTRAL.BANK TRAIL</span></div>
     </div>
@@ -427,10 +431,33 @@ const GRID = 12, CS = 18, GY = 18, GH = 216;
 
 const OVERLOAD_SIZE = 10;
 const MIN_SIZE      = 3;
-const BASE_TICK     = 240;
-const MIN_TICK      = 48;
-const TICK_BOOST    = 22;
-const TICKETS_PER_HASH = 100; // 1 ticket per 100 H mined
+const BASE_TICK     = 260;
+const MIN_TICK      = 55;
+const TICKETS_PER_HASH  = 100;
+const BOT_RESPAWN_TICKS = 50;
+const MAX_SHIELDS       = 3;
+const SHIELD_TTL        = 180;
+const COMBO_WINDOW      = 14;   // ticks between keys to maintain combo
+const HEAT_TRAIL_LEN    = 22;   // positions to remember for heat trail
+const NEAR_MISS_DIST    = 1;    // grid cells — bot within this = near-miss flash
+
+// Non-linear speed table — small gains early, larger gains late
+// Index = overload count. Value = tickRate at that overload.
+const TICK_TABLE = [
+  260,  // OL0  — crawl
+  245,  // OL1  — barely faster
+  228,  // OL2  — noticeable
+  210,  // OL3  — getting twitchy
+  190,  // OL4
+  168,  // OL5
+  145,  // OL6
+  122,  // OL7
+  100,  // OL8
+   82,  // OL9
+   68,  // OL10
+   58,  // OL11
+   55,  // OL12+ — hard cap
+];
 
 // Simulated pools (in real device, fetched from NOSTR relay)
 const DEMO_POOLS = [
@@ -460,21 +487,88 @@ const S = {
   // snake
   snake:[], dir:{x:1,y:0}, nd:{x:1,y:0},
   // pickups
-  keys:[], overloadPick:[], shields:[], satoshi:[],
+  keys:[], overloadPick:[], shields:[], satoshi:[], broadcasts:[],
   // enemies
   hostiles:[], trailCells:[], particles:[],
-  flash:0, shielded:false, shieldT:0,
-  hotTicks:0,       // post-overload kill window
+  flash:0,
+  shieldStack:0, shieldTTL:0,
+  hotTicks:0,
   overloads:0, ptMult:1,
   tickRate:BASE_TICK, lastTick:0, afr:null,
+  botRespawnTimer:0,
   satoshiMsg:'', satoshiMsgT:0,
+  broadcastAnim:null,
+  // ── BLUE CHAIN STATE ──
+  blueStage:0,         // 0=none, 1=INTERCEPT active, 2=LOCKDOWN active
+  blueTimer:0,         // ticks remaining to collect next stage
+  blueSpeedBoost:0,    // how many tick-rate reductions applied by blue chain
+  // ── NEW FEATURE STATE ──
+  combo:0,              // current key-collect streak
+  comboTimer:0,         // ticks since last key — reset resets combo
+  comboMult:1,          // current combo multiplier
+  heatTrail:[],         // [{x,y,age}] — last HEAT_TRAIL_LEN snake positions
+  nearMissCells:[],     // [{x,y,t}] — cells to flash amber for near-miss
+  athAnimating:false,   // true while ATH score counts up on game-over
+  athDisplayed:0,       // current displayed value during count-up
+  athTarget:0,          // target value for count-up
+  muted:false,          // audio toggle
   // pool/draw state
-  selectedPool: null,
-  selectedPoolIdx: 0,
-  poolMode: 'solo',
-  submittedATH: false,
-  poolChoice: null,
+  selectedPool:null, selectedPoolIdx:0,
+  poolMode:'solo', submittedATH:false, poolChoice:null,
+  _pendingDeath:null,
 };
+
+// ── WEB AUDIO ENGINE ─────────────────────────────
+// Piezo-style tones mimicking the physical device buzzer.
+// All sounds are short synthetic blips — no music, no samples.
+const AC = (()=>{try{return new(window.AudioContext||window.webkitAudioContext)();}catch(e){return null;}})();
+
+function beep(freq, dur=0.06, type='square', vol=0.18, freqEnd=null) {
+  if(!AC || S.muted) return;
+  try {
+    const g = AC.createGain();
+    const o = AC.createOscillator();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, AC.currentTime);
+    if(freqEnd) o.frequency.linearRampToValueAtTime(freqEnd, AC.currentTime+dur);
+    g.gain.setValueAtTime(vol, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime+dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime+dur);
+  } catch(e){}
+}
+
+function sfxKey(combo) {
+  // ascending pitch per combo level
+  const base = 440 + combo*55;
+  beep(base, 0.055, 'square', 0.14);
+  if(combo>0) setTimeout(()=>beep(base*1.25, 0.04, 'square', 0.09), 55);
+}
+function sfxOverload() {
+  // descending sweep → silence → sharp rise
+  beep(880, 0.12, 'sawtooth', 0.2, 220);
+  setTimeout(()=>beep(1200, 0.08, 'square', 0.22, 1800), 200);
+}
+function sfxDeath() {
+  beep(320, 0.08, 'sawtooth', 0.22, 80);
+  setTimeout(()=>beep(120, 0.18, 'sawtooth', 0.15, 60), 80);
+}
+function sfxShield() { beep(660, 0.07, 'triangle', 0.12, 880); }
+function sfxBroadcast() {
+  beep(200, 0.05, 'square', 0.18, 800);
+  setTimeout(()=>beep(800, 0.1, 'square', 0.15, 200), 60);
+}
+function sfxNearMiss() { beep(180, 0.04, 'square', 0.07); }
+function sfxSatoshi()  { beep(1047, 0.18, 'sine', 0.22); }
+function sfxComboBreak(){ beep(220, 0.08, 'sawtooth', 0.12, 110); }
+
+function toggleMute() {
+  S.muted=!S.muted;
+  const btn=document.getElementById('mute-btn');
+  btn.textContent=S.muted?'♪ MUTED':'♪ SOUND ON';
+  btn.style.color=S.muted?'rgba(255,50,50,0.4)':'rgba(255,179,0,0.28)';
+  if(!S.muted && AC && AC.state==='suspended') AC.resume();
+}
 
 // ── HELPERS ──────────────────────────────────────
 const rng = n => Math.floor(Math.random()*n);
@@ -488,6 +582,7 @@ function freeCell() {
   S.overloadPick.forEach(o => occ.add(`${o.x},${o.y}`));
   S.shields.forEach(k      => occ.add(`${k.x},${k.y}`));
   S.satoshi.forEach(k      => occ.add(`${k.x},${k.y}`));
+  S.broadcasts.forEach(b   => occ.add(`${b.x},${b.y}`));
   S.hostiles.forEach(h     => occ.add(`${h.x},${h.y}`));
   const free = [];
   for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++)
@@ -519,47 +614,213 @@ function checkSpawnOverload() {
   if(p) S.overloadPick.push({...p, t:0});
 }
 
+// Shields stack up to MAX_SHIELDS — one pickup per key collect, 7% chance
 function maybeShield() {
-  if(S.shields.length > 0) return;
-  if(Math.random() < 0.09) { const p = freeCell(); if(p) S.shields.push({...p, t:0}); }
+  if(S.shieldStack >= MAX_SHIELDS) return;
+  if(S.shields.length > 0) return;          // only one pickup on board at a time
+  if(Math.random() < 0.07) {
+    const p = freeCell();
+    if(p) S.shields.push({...p, t:0});
+  }
+}
+
+// ── BLUE CHAIN SYSTEM ────────────────────────────
+// Stage 0: no active chain — pickup spawns normally (4% per key, bots present)
+// Stage 1 INTERCEPT: bots at 0.4× speed, snake +1 speed tier, 8s window for stage 2
+// Stage 2 LOCKDOWN:  bots frozen, snake +1 speed tier again, 6s window for stage 3
+// Stage 3 BROADCAST: screen wipe, all bots destroyed
+// If timer expires mid-chain: chain resets, bot speeds restored, no reward
+
+// Approximate ticks for window (ticks = ms / tickRate, so we use real ms timer)
+const BLUE_WINDOW_1 = 8000; // ms to find stage 2 after collecting stage 1
+const BLUE_WINDOW_2 = 6000; // ms to find stage 3 after collecting stage 2
+const BLUE_SPEED_BOOST = 30; // ms reduction to tickRate per stage (raw ms off current rate)
+
+function maybeBroadcast() {
+  if(S.broadcasts.length > 0) return;
+  if(S.blueStage > 0) return;          // chain already active — next pickup spawns automatically
+  if(S.hostiles.length === 0) return;
+  if(Math.random() < 0.04) {
+    const p = freeCell();
+    if(p) S.broadcasts.push({...p, t:0, stage:1});
+  }
+}
+
+function spawnNextBlueStage(stage) {
+  const p = freeCell();
+  if(p) S.broadcasts.push({...p, t:0, stage});
+}
+
+function collectBlue(stage, wx, wy) {
+  addParticles(wx, wy, '#00aaff', 16, 3);
+  addParticles(wx, wy, '#ffffff', 8, 2);
+
+  if(stage === 1) {
+    // INTERCEPT — slow bots, speed up snake, start window for stage 2
+    S.blueStage = 1;
+    S.blueTimer = performance.now() + BLUE_WINDOW_1;
+    S.tickRate = Math.max(MIN_TICK, S.tickRate - BLUE_SPEED_BOOST);
+    S.blueSpeedBoost++;
+    // mark all bots as slowed
+    S.hostiles.forEach(h => { h._blueSlow = true; h._blueFreeze = false; });
+    spawnNextBlueStage(2);
+    beep(400, 0.06, 'square', 0.18, 800);
+    S.satoshiMsg = '⊛ INTERCEPT · BOTS SLOWED · FIND STAGE 2';
+    S.satoshiMsgT = 60;
+
+  } else if(stage === 2) {
+    // LOCKDOWN — freeze bots, speed up snake again, start window for stage 3
+    S.blueStage = 2;
+    S.blueTimer = performance.now() + BLUE_WINDOW_2;
+    S.tickRate = Math.max(MIN_TICK, S.tickRate - BLUE_SPEED_BOOST);
+    S.blueSpeedBoost++;
+    S.hostiles.forEach(h => { h._blueSlow = false; h._blueFreeze = true; });
+    spawnNextBlueStage(3);
+    beep(600, 0.04, 'square', 0.2); setTimeout(()=>beep(900,0.08,'square',0.18),60);
+    S.satoshiMsg = '⊛⊛ LOCKDOWN · BOTS FROZEN · FIND STAGE 3';
+    S.satoshiMsgT = 60;
+
+  } else if(stage === 3) {
+    // BROADCAST — full wipe
+    S.blueStage = 0;
+    S.blueTimer = 0;
+    // restore speed boosts
+    for(let i=0;i<S.blueSpeedBoost;i++) S.tickRate = Math.min(TICK_TABLE[S.overloads], S.tickRate + BLUE_SPEED_BOOST);
+    S.blueSpeedBoost = 0;
+    const count = S.hostiles.length;
+    const bountyEach = Math.round(400 * S.ptMult);
+    const total = bountyEach * Math.max(1, count);
+    S.score += total;
+    if(S.score>S.hi) S.hi=S.score;
+    S.hostiles.forEach(h => { addParticles(h.x, h.y, h.color, 24, 4); addParticles(h.x, h.y, '#00aaff', 12, 2.5); });
+    S.hostiles = [];
+    S.trailCells = [];
+    S.broadcasts = [];
+    S.broadcastAnim = { x: wx*CS+CS/2, y: GY+wy*CS+CS/2, t:0, maxT:32 };
+    S.entropy = Math.min(256, S.entropy+40);
+    sfxBroadcast();
+    S.satoshiMsg = '⊛⊛⊛ BROADCAST · '+count+' BOTS DESTROYED · +'+total.toLocaleString()+'H';
+    S.satoshiMsgT = 90;
+    const fl=document.getElementById('ol-flash');
+    fl.style.background='rgba(0,160,255,0.22)';
+    setTimeout(()=>fl.style.background='rgba(255,230,60,0)',600);
+    updateUI(); checkUnlocks();
+  }
+}
+
+// Called every tick — expire chain if timer runs out
+function tickBlueChain() {
+  if(S.blueStage === 0) return;
+  if(performance.now() < S.blueTimer) return;
+  // Timer expired — chain broken
+  const wasStage = S.blueStage;
+  S.blueStage = 0; S.blueTimer = 0;
+  S.broadcasts = []; // remove any uncollected next-stage pickup
+  // Restore speed
+  for(let i=0;i<S.blueSpeedBoost;i++) S.tickRate = Math.min(TICK_TABLE[S.overloads], S.tickRate + BLUE_SPEED_BOOST);
+  S.blueSpeedBoost = 0;
+  // Remove bot modifiers
+  S.hostiles.forEach(h => { h._blueSlow = false; h._blueFreeze = false; });
+  beep(180, 0.12, 'sawtooth', 0.15, 80);
+  S.satoshiMsg = 'CHAIN BROKEN · STAGE '+(wasStage+1)+' LOST';
+  S.satoshiMsgT = 60;
+}
+
+// If any bot is camping a key cell, relocate the key immediately
+function evictBotsOnKeys() {
+  S.keys.forEach(k => {
+    const camping = S.hostiles.some(h => h.x===k.x && h.y===k.y);
+    if(camping) {
+      const p = freeCell();
+      if(p) { k.x=p.x; k.y=p.y; k.t=0; }
+    }
+  });
+  // Same for satoshi — don't let bots park on it
+  S.satoshi.forEach(s => {
+    const camping = S.hostiles.some(h => h.x===s.x && h.y===s.y);
+    if(camping) {
+      const p = freeCell();
+      if(p) { s.x=p.x; s.y=p.y; s.t=0; }
+    }
+  });
+}
+
+// Called every tick — respawn one bot after BOT_RESPAWN_TICKS of empty board
+function tickBotRespawn() {
+  if(S.hostiles.length > 0) {
+    S.botRespawnTimer = 0;
+    return;
+  }
+  S.botRespawnTimer++;
+  if(S.botRespawnTimer >= BOT_RESPAWN_TICKS) {
+    S.botRespawnTimer = 0;
+    spawnHostiles();
+    S.satoshiMsg = 'NEW SIGNAL DETECTED';
+    S.satoshiMsgT = 40;
+  }
+}
+
+// Shield TTL — counts down every tick. On expiry removes one stack.
+// Picking up another shield resets the timer regardless of current stack.
+function tickShield() {
+  if(S.shieldStack <= 0) { S.shieldTTL=0; return; }
+  S.shieldTTL--;
+  // Warning pulses when under 40 ticks — drive for key fragment
+  if(S.shieldTTL <= 0) {
+    S.shieldStack--;
+    S.shieldTTL = S.shieldStack > 0 ? SHIELD_TTL : 0;
+    if(S.shieldStack > 0) {
+      S.satoshiMsg = 'SHIELD EXPIRED · '+S.shieldStack+' REMAINING';
+    } else {
+      S.satoshiMsg = 'SHIELDS DOWN · EXPOSED';
+    }
+    S.satoshiMsgT = 70;
+    updateUI();
+  }
 }
 
 // ── NAMED HOSTILE DEFS ───────────────────────────
-// Each bot unlocks at a specific overload threshold.
-// type controls AI behaviour. color is draw color.
+// speed = ms between moves. Higher = slower.
+// chaseRatio = 0..1, how often it chases directly vs wanders.
+//   This ramps up with overloads in moveHostiles() for smoother scaling.
 const BOT_DEFS = [
-  { id:'GCHQ-7',       unlocksAt:0, color:'#ff4422', speed:280, type:'chase',      label:'GCHQ-7'       },
-  { id:'NSA-PRISM',    unlocksAt:2, color:'#ff1100', speed:160, type:'fastchase',   label:'NSA·PRISM'    },
-  { id:'CHAINALYSIS',  unlocksAt:3, color:'#ff6600', speed:200, type:'keyhunter',   label:'CHAINALYSIS'  },
-  { id:'CLOUDFLARE',   unlocksAt:4, color:'#ff3366', speed:999, type:'stationary',  label:'CLOUDFLARE'   },
-  { id:'CENTRAL.BANK', unlocksAt:5, color:'#cc0044', speed:350, type:'trail',       label:'CENTRAL.BANK' },
+  { id:'GCHQ-7',       unlocksAt:0, color:'#ff4422', baseSpeed:320, type:'chase',      label:'GCHQ-7',       baseChase:0.30 },
+  { id:'NSA-PRISM',    unlocksAt:3, color:'#ff1100', baseSpeed:210, type:'fastchase',   label:'NSA·PRISM',    baseChase:0.80 },
+  { id:'CHAINALYSIS',  unlocksAt:5, color:'#ff6600', baseSpeed:260, type:'keyhunter',   label:'CHAINALYSIS',  baseChase:0.60 },
+  { id:'CLOUDFLARE',   unlocksAt:7, color:'#ff3366', baseSpeed:999, type:'stationary',  label:'CLOUDFLARE',   baseChase:0.00 },
+  { id:'CENTRAL.BANK', unlocksAt:9, color:'#cc0044', baseSpeed:400, type:'trail',       label:'CENTRAL.BANK', baseChase:0.45 },
 ];
-// Trail cells left by CENTRAL.BANK — [{x,y,ttl}]
-// (snake touching these = damage)
+
+// Bot count cap by overload count — gradual introduction
+function maxBotsForOverload(ol) {
+  if(ol < 1) return 1;   // OL0: 1 bot max
+  if(ol < 3) return 1;   // OL1-2: still 1 — player learning
+  if(ol < 5) return 2;   // OL3-4: 2 bots
+  if(ol < 8) return 2;   // OL5-7: still 2 while new bot types intro
+  return 3;              // OL8+: 3 bots
+}
 
 function spawnHostiles() {
-  // eligible bots for current overload count
   const eligible = BOT_DEFS.filter(b => S.overloads >= b.unlocksAt);
-  // max 3 hostiles on screen, pick from eligible set
-  const want = Math.min(Math.ceil(eligible.length * 0.6), 3);
+  const want = maxBotsForOverload(S.overloads);
   let attempts = 0;
   while(S.hostiles.length < want && attempts < 30) {
     attempts++;
     const p = freeCell(); if(!p) break;
-    // pick a bot type not already on screen
     const existing = new Set(S.hostiles.map(h=>h.id));
     const pool = eligible.filter(b=>!existing.has(b.id));
     if(!pool.length) break;
     const def = pool[rng(pool.length)];
     S.hostiles.push({
       ...p, mt:0,
-      id:    def.id,
-      color: def.color,
-      speed: def.speed,
-      type:  def.type,
-      label: def.label,
-      trail: [], // only used by CENTRAL.BANK
-      labelT:120, // ticks to show label on spawn
+      id:         def.id,
+      color:      def.color,
+      baseSpeed:  def.baseSpeed,
+      type:       def.type,
+      label:      def.label,
+      baseChase:  def.baseChase,
+      trail:      [],
+      labelT:     120,
     });
   }
 }
@@ -579,14 +840,19 @@ function maybeSpawnSatoshi() {
 function initGame() {
   S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
   S.dir={x:1,y:0}; S.nd={x:1,y:0};
-  S.keys=[]; S.overloadPick=[]; S.shields=[];
+  S.keys=[]; S.overloadPick=[]; S.shields=[]; S.broadcasts=[];
   S.hostiles=[]; S.satoshi=[]; S.trailCells=[];
-  S.particles=[]; S.flash=0;
+  S.particles=[]; S.flash=0; S._pendingDeath=null;
   S.score=0; S.lives=3; S.overloads=0; S.ptMult=1;
-  S.entropy=0; S.shielded=false; S.shieldT=0;
-  S.hotTicks=0;   // ticks remaining where signal can kill hostiles (post-overload)
-  S.tickRate=BASE_TICK; S.lastTick=0;
-  S.satoshiMsg=''; S.satoshiMsgT=0; // "GENESIS SIGNAL" display
+  S.entropy=0; S.shieldStack=0; S.shieldTTL=0;
+  S.hotTicks=0; S.botRespawnTimer=0;
+  S.tickRate=TICK_TABLE[0]; S.lastTick=0;
+  S.satoshiMsg=''; S.satoshiMsgT=0;
+  S.broadcastAnim=null;
+  S.blueStage=0; S.blueTimer=0; S.blueSpeedBoost=0;
+  S.combo=0; S.comboTimer=0; S.comboMult=1;
+  S.heatTrail=[]; S.nearMissCells=[];
+  S.athAnimating=false; S.athDisplayed=0; S.athTarget=0;
   ensureKey(); spawnHostiles();
   updateUI(); buildUnlockList();
 }
@@ -594,37 +860,61 @@ function initGame() {
 // ── HOSTILE AI ────────────────────────────────────
 function moveHostiles(ts) {
   const hd = S.snake[0];
-  // key fragment target for CHAINALYSIS
   const keyTarget = S.keys.length ? S.keys[0] : hd;
 
-  S.hostiles.forEach(h => {
-    // tick trail TTL for CENTRAL.BANK
+  // Bot speed scales relative to snake speed so they don't become
+  // proportionally faster at high overloads. At OL0 a bot at baseSpeed 320
+  // moves roughly every 1.2 snake ticks. That ratio is preserved as speed
+  // increases by anchoring bot speed to current tickRate.
+  // chaseRatio ramps from baseChase toward 0.85 as overloads increase.
+  const ol = S.overloads;
+  const chaseRamp = Math.min(1, ol / 10); // 0 at OL0, 1.0 at OL10
+
+  S.hostiles.forEach((h, hi) => {
     if(h.type==='trail') {
       h.trail = (h.trail||[]).map(c=>({...c,ttl:c.ttl-1})).filter(c=>c.ttl>0);
     }
 
-    const spd = Math.max(80, h.speed - S.overloads*10);
+    // Bot speed floor: at minimum bots move only slightly slower than the snake.
+    const minBotInterval = S.tickRate * 1.05;
+    let spd = Math.max(minBotInterval, h.baseSpeed - ol * 8);
+    // Blue chain modifiers
+    if(h._blueFreeze) return;            // stage 2 — completely frozen
+    if(h._blueSlow)   spd = spd / 0.4;  // stage 1 — 0.4× speed = 2.5× interval
+
     if(ts - h.mt < spd) return;
     h.mt = ts;
 
-    if(h.type==='stationary') return; // CLOUDFLARE never moves
+    if(h.type==='stationary') {
+      checkHostileHit(hi, h.x, h.y);
+      return;
+    }
 
     const oldX=h.x, oldY=h.y;
+    // Effective chase ratio for this bot
+    const chaseRatio = h.baseChase + (0.85 - h.baseChase) * chaseRamp;
+
+    h._tell = false; // reset tell each move cycle
 
     if(h.type==='fastchase') {
-      // always chases directly
+      h._tell = true; // NSA-PRISM always telegraphs — it's always chasing
       const dx=hd.x-h.x, dy=hd.y-h.y;
       if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
       else h.y+=dy>0?1:-1;
     } else if(h.type==='keyhunter') {
-      // 70% chases nearest key, 30% chases player
       const tgt = Math.random()<0.7 ? keyTarget : hd;
-      const dx=tgt.x-h.x, dy=tgt.y-h.y;
-      if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
-      else h.y+=dy>0?1:-1;
+      if(Math.random() < chaseRatio) {
+        h._tell = true;
+        const dx=tgt.x-h.x, dy=tgt.y-h.y;
+        if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
+        else h.y+=dy>0?1:-1;
+      } else {
+        const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+        const d=dirs[rng(4)]; h.x+=d.x; h.y+=d.y;
+      }
     } else {
-      // default chase: 60% direct, 40% random (GCHQ-7, CENTRAL.BANK)
-      if(Math.random()<0.6) {
+      if(Math.random() < chaseRatio) {
+        h._tell = true;
         const dx=hd.x-h.x, dy=hd.y-h.y;
         if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
         else h.y+=dy>0?1:-1;
@@ -636,21 +926,43 @@ function moveHostiles(ts) {
 
     h.x=(h.x+GRID)%GRID; h.y=(h.y+GRID)%GRID;
 
-    // CENTRAL.BANK leaves a trail at old position
     if(h.type==='trail') {
       h.trail = h.trail||[];
       h.trail.push({x:oldX, y:oldY, ttl:8});
     }
     if(h.labelT>0) h.labelT--;
+
+    const headX = hd.x, headY = hd.y;
+    const landed  = h.x===headX && h.y===headY;
+    const swapped = (oldX===headX && oldY===headY);
+    if(landed || swapped) {
+      const freshIdx = S.hostiles.indexOf(h);
+      if(freshIdx >= 0) checkHostileHit(freshIdx, h.x, h.y);
+    }
   });
 
-  // decay global trail cells
-  S.trailCells = S.trailCells.map(c=>({...c,ttl:c.ttl-1})).filter(c=>c.ttl>0);
-  // collect all trail cells from all CENTRAL.BANK bots
   S.trailCells = [];
   S.hostiles.filter(h=>h.type==='trail').forEach(h=>{
     (h.trail||[]).forEach(c=>S.trailCells.push(c));
   });
+}
+
+// Central collision resolver — used by both tick() and moveHostiles()
+function checkHostileHit(idx, wx, wy) {
+  if(idx < 0 || idx >= S.hostiles.length) return;
+  const h = S.hostiles[idx];
+  if(S.hotTicks > 0) {
+    killHostile(idx, wx, wy);
+  } else if(S.shieldStack > 0) {
+    // Shield absorbs hit, consume one stack
+    S.shieldStack--;
+    killHostile(idx, wx, wy);
+    addParticles(wx, wy, '#b06fff', 18);
+    S.satoshiMsg = S.shieldStack>0 ? 'SHIELD ABSORBED ('+S.shieldStack+' LEFT)' : 'SHIELDS DEPLETED';
+    S.satoshiMsgT = 50;
+  } else {
+    S._pendingDeath = {x: wx, y: wy};
+  }
 }
 
 // ── TICK ──────────────────────────────────────────
@@ -665,19 +977,59 @@ function tick(ts) {
 
   if(S.snake.slice(1).some(s=>s.x===nx&&s.y===ny)) { die(nx,ny); return; }
 
+  // ── HEAT TRAIL — record every head position ───
+  S.heatTrail.unshift({x:nx, y:ny, age:0});
+  if(S.heatTrail.length > HEAT_TRAIL_LEN) S.heatTrail.pop();
+  S.heatTrail.forEach(h=>h.age++);
+
+  // ── NEAR MISS CHECK ───────────────────────────
+  // Any bot within NEAR_MISS_DIST cells of new head = near-miss flash
+  S.hostiles.forEach(h=>{
+    const d = Math.abs(h.x-nx)+Math.abs(h.y-ny);
+    if(d===1) {
+      S.nearMissCells.push({x:h.x, y:h.y, t:8});
+      sfxNearMiss();
+    }
+  });
+  // Decay near-miss cells
+  S.nearMissCells = S.nearMissCells.map(c=>({...c,t:c.t-1})).filter(c=>c.t>0);
+
+  // ── COMBO TIMER TICK ──────────────────────────
+  if(S.comboTimer > 0) {
+    S.comboTimer--;
+    if(S.comboTimer===0 && S.combo>0) {
+      // combo timed out
+      sfxComboBreak();
+      S.combo=0; S.comboMult=1;
+      updateUI();
+    }
+  }
+
   let grow=false, pts=0, didOverload=false;
 
   // ── KEY FRAGMENT ─────────────────────────────
   const ki=S.keys.findIndex(k=>k.x===nx&&k.y===ny);
   if(ki>=0) {
     S.keys.splice(ki,1);
-    pts=Math.round(100*S.ptMult);
+    // combo update
+    S.combo++;
+    S.comboTimer = Math.max(8, COMBO_WINDOW - Math.floor(S.overloads*0.5));
+    S.comboMult = 1 + (S.combo-1)*0.5; // ×1, ×1.5, ×2, ×2.5...
+    const comboBonus = Math.round(100 * S.ptMult * S.comboMult);
+    pts = comboBonus;
     grow=true;
     S.entropy=Math.min(256,S.entropy+12);
     addParticles(nx,ny,'#00e87a',8);
     S.flash=4;
+    sfxKey(S.combo-1);
+    // combo message at streak ≥2
+    if(S.combo>=2) {
+      S.satoshiMsg='COMBO ×'+S.combo.toFixed(0)+' +'+comboBonus.toLocaleString()+'H';
+      S.satoshiMsgT=35;
+    }
     maybeShield();
-    maybeSpawnSatoshi(); // 2% chance each key collect
+    maybeSpawnSatoshi();
+    updateUI();
   }
 
   // ── SATOSHI FRAGMENT ─────────────────────────
@@ -698,7 +1050,8 @@ function tick(ts) {
     addParticles(nx,ny,'#fffde0',12,1.5);
     S.flash=10;
     S.satoshiMsg='GENESIS SIGNAL +'+satPts.toLocaleString()+'H';
-    S.satoshiMsgT=90; // ticks to show message
+    S.satoshiMsgT=90;
+    sfxSatoshi();
     // brief white screen flash
     const fl=document.getElementById('ol-flash');
     fl.style.background='rgba(255,255,255,0.15)';
@@ -711,11 +1064,15 @@ function tick(ts) {
     S.overloadPick.splice(oi,1);
     S.overloads++;
     S.ptMult*=2;
-    S.tickRate=Math.max(MIN_TICK,S.tickRate-TICK_BOOST);
+    // Non-linear tick table — look up new rate by overload count
+    const tableIdx = Math.min(S.overloads, TICK_TABLE.length-1);
+    S.tickRate = TICK_TABLE[tableIdx];
     S.hostiles=[]; S.shields=[];
     pts+=Math.round(1000*S.ptMult);
     S.entropy=Math.min(256,S.entropy+32);
-    S.hotTicks=18; // 18 ticks of kill window after overload
+    S.hotTicks=18;
+    S.combo=0; S.comboTimer=0; S.comboMult=1; // overload resets combo
+    sfxOverload();
     addParticles(nx,ny,'#ffffff',32,4);
     addParticles(nx,ny,'#ffee40',20,3);
     addParticles(nx,ny,'#ffb300',16,2);
@@ -730,8 +1087,20 @@ function tick(ts) {
   const si=S.shields.findIndex(k=>k.x===nx&&k.y===ny);
   if(si>=0) {
     S.shields.splice(si,1);
-    S.shielded=true; S.shieldT=180;
+    S.shieldStack = Math.min(MAX_SHIELDS, S.shieldStack+1);
+    S.shieldTTL = SHIELD_TTL;
     addParticles(nx,ny,'#b06fff',10);
+    sfxShield();
+    S.satoshiMsg='SHIELD +1 ('+S.shieldStack+'/'+MAX_SHIELDS+') · '+SHIELD_TTL+' TICKS';
+    S.satoshiMsgT=45;
+  }
+
+  // ── BLUE CHAIN PICKUP ────────────────────────
+  const bi=S.broadcasts.findIndex(b=>b.x===nx&&b.y===ny);
+  if(bi>=0) {
+    const stage = S.broadcasts[bi].stage || 1;
+    S.broadcasts.splice(bi,1);
+    collectBlue(stage, nx, ny);
   }
 
   // move snake
@@ -743,27 +1112,22 @@ function tick(ts) {
     spawnHostiles();
   }
 
-  // ── HOSTILE COLLISION ────────────────────────
-  // Kill modes: hotTicks active (post-overload) OR shielded
-  // Normal: die
+  // ── HOSTILE COLLISION (head moved into bot) ──
   const hitIdx = S.hostiles.findIndex(h=>h.x===nx&&h.y===ny);
-  if(hitIdx>=0) {
-    if(S.hotTicks>0) {
-      // KILL — signal is hot, destroy the bot
-      killHostile(hitIdx, nx, ny);
-    } else if(S.shielded) {
-      // SHIELD absorbs — one hostile killed, shield consumed
-      killHostile(hitIdx, nx, ny);
-      S.shielded=false;
-      addParticles(nx,ny,'#b06fff',18);
-    } else {
+  if(hitIdx>=0) checkHostileHit(hitIdx, nx, ny);
+
+  // ── PENDING DEATH (bot moved into head) ──────
+  // Set by checkHostileHit when called from moveHostiles
+  if(S._pendingDeath) {
+    const pd=S._pendingDeath; S._pendingDeath=null;
+    if(!S.hotTicks && !S.shieldStack) {
       ensureKey(); checkSpawnOverload();
-      die(nx,ny); return;
+      die(pd.x, pd.y); return;
     }
   }
 
   // ── CENTRAL.BANK TRAIL DAMAGE ─────────────────
-  if(!S.hotTicks && !S.shielded) {
+  if(!S.hotTicks && !S.shieldStack) {
     if(S.trailCells.some(c=>c.x===nx&&c.y===ny)) {
       ensureKey(); checkSpawnOverload();
       die(nx,ny); return;
@@ -775,6 +1139,11 @@ function tick(ts) {
 
   ensureKey();
   checkSpawnOverload();
+  maybeBroadcast();
+  evictBotsOnKeys();
+  tickBotRespawn();
+  tickShield();
+  tickBlueChain();
   if(S.hotTicks>0) S.hotTicks--;
 
   if(pts) {
@@ -782,7 +1151,6 @@ function tick(ts) {
     if(S.score>S.hi) S.hi=S.score;
     updateUI(); checkUnlocks();
   }
-  if(S.shielded&&--S.shieldT<=0) S.shielded=false;
 }
 
 function killHostile(idx, wx, wy) {
@@ -801,6 +1169,7 @@ function killHostile(idx, wx, wy) {
 }
 
 function die(x,y) {
+  sfxDeath();
   addParticles(x,y,'#ff3322',24,3.5);
   S.lives--;
   updateUI();
@@ -810,7 +1179,52 @@ function die(x,y) {
     const isATH = S.score>0 && S.score>=S.hi;
     S.phase='dead';
     showOsc('sc-over');
-    document.getElementById('go-sc').textContent=S.score.toLocaleString();
+
+    // ── ATH CELEBRATION ───────────────────────────
+    if(isATH) {
+      sfxOverload(); // reuse the big sound
+      // Gold particle cascade — spawn waves from top
+      let wave=0;
+      const cascade=setInterval(()=>{
+        for(let i=0;i<6;i++) {
+          const x=rng(GRID*CS), y=rng(30);
+          S.particles.push({
+            x, y:y+GY, vx:(Math.random()-0.5)*1.8,
+            vy:0.4+Math.random()*1.2,
+            life:1, dec:0.012+Math.random()*0.01,
+            col:['#ffe040','#ffb300','#ffffff'][rng(3)],
+            r:1.5+Math.random()*2
+          });
+        }
+        if(++wave>=8) clearInterval(cascade);
+      }, 80);
+
+      // Score count-up: displayed value animates from 0 to final
+      S.athAnimating=true;
+      S.athDisplayed=0;
+      S.athTarget=S.score;
+      const scoreEl=document.getElementById('go-sc');
+      const step=Math.ceil(S.athTarget/60);
+      const countUp=setInterval(()=>{
+        S.athDisplayed=Math.min(S.athTarget, S.athDisplayed+step);
+        scoreEl.textContent=S.athDisplayed.toLocaleString();
+        if(S.athDisplayed>=S.athTarget){
+          clearInterval(countUp);
+          S.athAnimating=false;
+        }
+      }, 25);
+
+      // ATH submit button pulse animation
+      const submitBtn=document.getElementById('go-btn-submit');
+      let pulseOn=true;
+      const pulse=setInterval(()=>{
+        if(S.phase!=='dead'){clearInterval(pulse);return;}
+        submitBtn.style.background=pulseOn?'rgba(255,200,0,0.14)':'rgba(255,200,0,0.04)';
+        pulseOn=!pulseOn;
+      },500);
+    } else {
+      document.getElementById('go-sc').textContent=S.score.toLocaleString();
+    }
     document.getElementById('go-ath-lbl').textContent='ATH · '+S.hi.toLocaleString()+' H';
     document.getElementById('t-hi').textContent='ATH · '+fmt(S.hi)+' H';
     // ATH banner
@@ -841,10 +1255,12 @@ function die(x,y) {
   }
   S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
   S.dir={x:1,y:0}; S.nd={x:1,y:0};
-  S.overloadPick=[]; S.keys=[]; S.shields=[];
+  S.overloadPick=[]; S.keys=[]; S.shields=[]; S.broadcasts=[];
   S.hostiles=[]; S.satoshi=[]; S.trailCells=[];
-  S.shielded=false; S.shieldT=0; S.hotTicks=0;
-  S.satoshiMsg=''; S.satoshiMsgT=0;
+  S.shieldStack=0; S.shieldTTL=0; S.hotTicks=0; S.botRespawnTimer=0;
+  S.blueStage=0; S.blueTimer=0; S.blueSpeedBoost=0;
+  S.satoshiMsg=''; S.satoshiMsgT=0; S._pendingDeath=null;
+  S.broadcastAnim=null;
   ensureKey(); spawnHostiles();
 }
 
@@ -1033,6 +1449,29 @@ function draw() {
     document.getElementById('ol-fill').style.width=(pct*100)+'%';
   }
 
+  // ── HEAT TRAIL ────────────────────────────────
+  // Faint amber ghost of recent snake path
+  S.heatTrail.forEach((h,i)=>{
+    const a = (1 - h.age/HEAT_TRAIL_LEN) * 0.13;
+    if(a<=0) return;
+    CTX.save();
+    CTX.fillStyle=`rgba(255,160,0,${a})`;
+    CTX.fillRect(h.x*CS+4, GY+h.y*CS+4, CS-8, CS-8);
+    CTX.restore();
+  });
+
+  // ── NEAR-MISS CELLS ───────────────────────────
+  // Brief amber flash on cells adjacent to close calls
+  S.nearMissCells.forEach(c=>{
+    const a=(c.t/8)*0.45;
+    CTX.save();
+    CTX.fillStyle=`rgba(255,180,0,${a})`;
+    CTX.fillRect(c.x*CS+1, GY+c.y*CS+1, CS-2, CS-2);
+    CTX.strokeStyle=`rgba(255,220,60,${a*0.8})`; CTX.lineWidth=1;
+    CTX.strokeRect(c.x*CS+1, GY+c.y*CS+1, CS-2, CS-2);
+    CTX.restore();
+  });
+
   // particles
   CTX.save();
   S.particles=S.particles.filter(p=>{
@@ -1045,7 +1484,7 @@ function draw() {
   });
   CTX.restore();
 
-  // shields
+  // shields pickup on board
   S.shields.forEach(s=>{
     s.t=(s.t||0)+0.07;
     const a=0.6+Math.sin(s.t)*0.3;
@@ -1054,8 +1493,63 @@ function draw() {
     const cx=s.x*CS+CS/2, cy=GY+s.y*CS+CS/2;
     CTX.beginPath();
     for(let i=0;i<6;i++){const ang=(i*Math.PI/3)-Math.PI/6;i===0?CTX.moveTo(cx+5*Math.cos(ang),cy+5*Math.sin(ang)):CTX.lineTo(cx+5*Math.cos(ang),cy+5*Math.sin(ang));}
-    CTX.closePath(); CTX.fill(); CTX.restore();
+    CTX.closePath(); CTX.fill();
+    // stack count hint
+    CTX.font='6px monospace'; CTX.textAlign='center';
+    CTX.fillStyle=`rgba(220,180,255,${a})`;
+    CTX.fillText('+'+(S.shieldStack+1), cx, cy+2.5);
+    CTX.restore();
   });
+
+  // BLUE CHAIN PICKUP — stage-aware render
+  S.broadcasts.forEach(b=>{
+    b.t=(b.t||0)+0.09;
+    const stage = b.stage || 1;
+    const pulse = stage===3 ? 0.14 : stage===2 ? 0.11 : 0.09;
+    b.t += pulse - 0.09; // stage 3 animates fastest
+    const a=0.7+Math.sin(b.t)*0.25;
+    const cx=b.x*CS+CS/2, cy=GY+b.y*CS+CS/2;
+    // colour shifts by stage: cyan → electric blue → white-blue
+    const cols = ['#00aaff','#0044ff','#aaddff'];
+    const col = cols[stage-1];
+    CTX.save();
+    CTX.shadowColor=col; CTX.shadowBlur=14+Math.sin(b.t)*(5+stage*3);
+    // outer ring — larger per stage
+    CTX.strokeStyle=`rgba(0,170,255,${a*(0.25+stage*0.1)})`; CTX.lineWidth=1;
+    CTX.beginPath(); CTX.arc(cx,cy,(7+stage*1.5)+Math.sin(b.t*0.7)*2,0,Math.PI*2); CTX.stroke();
+    // inner fill
+    const fillCols=['rgba(0,200,255,','rgba(0,100,255,','rgba(180,220,255,'];
+    CTX.fillStyle=fillCols[stage-1]+`${a*0.85})`;
+    CTX.beginPath(); CTX.arc(cx,cy,4+stage*0.5,0,Math.PI*2); CTX.fill();
+    // stage symbol
+    const syms=['⊛','⊛⊛','⊛⊛⊛'];
+    CTX.font=stage===3?'6px monospace':'8px monospace';
+    CTX.textAlign='center';
+    CTX.fillStyle=`rgba(0,10,30,${a})`;
+    CTX.fillText(syms[stage-1],cx,cy+(stage===3?2.5:3));
+    // stage label above pickup
+    CTX.font='5px monospace'; CTX.textAlign='center';
+    CTX.fillStyle=`rgba(0,200,255,${a*0.7})`;
+    const lbk=['INTERCEPT','LOCKDOWN','BROADCAST'];
+    CTX.fillText(lbk[stage-1], cx, cy-9);
+    CTX.restore();
+  });
+
+  // Blue chain timer bar — drains from right, cyan
+  if(S.blueStage > 0 && S.blueTimer > 0) {
+    const window = S.blueStage===1 ? BLUE_WINDOW_1 : BLUE_WINDOW_2;
+    const remaining = Math.max(0, S.blueTimer - performance.now());
+    const frac = remaining / window;
+    const barW = Math.round(frac * GRID*CS);
+    const warning = frac < 0.3;
+    CTX.save();
+    CTX.fillStyle = warning ? 'rgba(0,180,255,0.7)' : 'rgba(0,140,255,0.45)';
+    CTX.fillRect(GRID*CS - barW, GY-6, barW, 2);
+    // stage pips top-right
+    CTX.fillStyle='rgba(0,200,255,0.5)';
+    for(let i=0;i<S.blueStage;i++) CTX.fillRect(GRID*CS-6-i*7, GY-13, 5, 3);
+    CTX.restore();
+  }
 
   // overload pickup
   S.overloadPick.forEach(o=>{
@@ -1118,30 +1612,44 @@ function draw() {
   S.hostiles.forEach(h=>{
     CTX.save();
     const isStationary = h.type==='stationary';
-    // hot kill window — bots pulse when killable
-    const killable = S.hotTicks>0 || S.shielded;
+    const killable = S.hotTicks>0 || S.shieldStack>0;
+    const frozen  = h._blueFreeze;
+    const slowed  = h._blueSlow;
+    // Tell flicker: brief brightness spike when bot commits to chase
+    const tell = h._tell && !killable && !frozen && !slowed;
+
     if(killable) {
       CTX.shadowColor='#ffffff'; CTX.shadowBlur=14;
+    } else if(frozen) {
+      CTX.shadowColor='#88ccff'; CTX.shadowBlur=8;
+    } else if(slowed) {
+      CTX.shadowColor='#4488aa'; CTX.shadowBlur=6;
+    } else if(tell) {
+      CTX.shadowColor='#ffaa44'; CTX.shadowBlur=18;
     } else {
       CTX.shadowColor=h.color; CTX.shadowBlur=10;
     }
 
     if(isStationary) {
-      // CLOUDFLARE — solid square blocker, orange tint
-      CTX.fillStyle=killable?'rgba(255,100,80,0.7)':h.color+'aa';
+      CTX.fillStyle=killable?'rgba(255,100,80,0.7)':frozen?'rgba(80,160,220,0.55)':slowed?'rgba(60,110,150,0.55)':h.color+'aa';
       CTX.fillRect(h.x*CS+1,GY+h.y*CS+1,CS-2,CS-2);
-      CTX.strokeStyle=killable?'rgba(255,200,180,0.9)':h.color;
+      CTX.strokeStyle=killable?'rgba(255,200,180,0.9)':frozen?'rgba(140,200,255,0.8)':h.color;
       CTX.lineWidth=1.5; CTX.strokeRect(h.x*CS+1,GY+h.y*CS+1,CS-2,CS-2);
     } else {
       // Moving bots — X mark
-      CTX.strokeStyle=killable?'rgba(255,220,200,0.95)':h.color+'ee';
+      CTX.strokeStyle=killable?'rgba(255,220,200,0.95)':frozen?'rgba(140,200,255,0.8)':slowed?'rgba(80,140,180,0.7)':h.color+'ee';
       CTX.lineWidth=2;
       const m=3;
       CTX.beginPath(); CTX.moveTo(h.x*CS+m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+CS-m,GY+h.y*CS+CS-m); CTX.stroke();
       CTX.beginPath(); CTX.moveTo(h.x*CS+CS-m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+m,GY+h.y*CS+CS-m); CTX.stroke();
-      // center dot
-      CTX.fillStyle=killable?'rgba(255,200,180,0.6)':(h.color+'55');
+      CTX.fillStyle=killable?'rgba(255,200,180,0.6)':frozen?'rgba(120,180,255,0.5)':slowed?'rgba(60,110,170,0.5)':(h.color+'55');
       CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,3,0,Math.PI*2); CTX.fill();
+      // frozen: draw ice lattice overlay
+      if(frozen) {
+        CTX.strokeStyle='rgba(160,220,255,0.35)'; CTX.lineWidth=0.5;
+        CTX.beginPath(); CTX.moveTo(h.x*CS+CS/2,GY+h.y*CS+2); CTX.lineTo(h.x*CS+CS/2,GY+h.y*CS+CS-2); CTX.stroke();
+        CTX.beginPath(); CTX.moveTo(h.x*CS+2,GY+h.y*CS+CS/2); CTX.lineTo(h.x*CS+CS-2,GY+h.y*CS+CS/2); CTX.stroke();
+      }
     }
 
     // bot name label — shown on spawn and when killable
@@ -1163,15 +1671,14 @@ function draw() {
     const t=1-(i/Math.max(S.snake.length,1));
     CTX.save();
     if(isHd) {
-      // hot signal — bright white/gold when kills are active
-      const hot = S.hotTicks>0;
-      const col = hot ? '#ffffff' : S.shielded ? '#c090ff' : '#ffb300';
-      const fc  = S.flash>0 ? '#ffe575' : col;
+      const hot  = S.hotTicks>0;
+      const shld = S.shieldStack>0;
+      const col  = hot ? '#ffffff' : shld ? '#c090ff' : '#ffb300';
+      const fc   = S.flash>0 ? '#ffe575' : col;
       CTX.shadowColor=fc;
       CTX.shadowBlur=hot?28:(S.flash>0?22:9);
       CTX.fillStyle=fc+'ee';
       CTX.fillRect(seg.x*CS+1,GY+seg.y*CS+1,CS-2,CS-2);
-      // hot pulse ring
       if(hot) {
         const pulse=(S.hotTicks/18);
         CTX.strokeStyle=`rgba(255,255,200,${pulse*0.6})`;
@@ -1184,20 +1691,80 @@ function draw() {
     } else {
       const hot=S.hotTicks>0;
       CTX.fillStyle=hot?`rgba(255,255,200,${t*0.6})`:
-                    S.shielded?`rgba(180,140,255,${t*0.68})`:`rgba(255,179,0,${t*0.65})`;
+                    S.shieldStack>0?`rgba(180,140,255,${t*0.68})`:`rgba(255,179,0,${t*0.65})`;
       CTX.fillRect(seg.x*CS+2,GY+seg.y*CS+2,CS-4,CS-4);
     }
     CTX.restore();
   });
 
-  if(S.shielded&&S.snake.length) {
+  // Shield stack aura around head — pulses fast when TTL low
+  if(S.shieldStack>0 && S.snake.length) {
     const h=S.snake[0];
-    CTX.save(); CTX.strokeStyle='rgba(176,111,255,0.4)'; CTX.lineWidth=1.5;
-    CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,CS,0,Math.PI*2); CTX.stroke();
-    CTX.restore();
+    const ttlFrac = S.shieldTTL / SHIELD_TTL;
+    const warning = S.shieldTTL < 40;
+    // Warning: rapid flicker by using frame time
+    const flickerOn = !warning || (Date.now()%400 < 240);
+    if(flickerOn) {
+      for(let i=0;i<S.shieldStack;i++) {
+        CTX.save();
+        const alpha = warning ? 0.55+Math.sin(Date.now()*0.025)*0.35 : 0.2+i*0.1;
+        CTX.strokeStyle=warning
+          ? `rgba(255,120,255,${alpha})`
+          : `rgba(176,111,255,${alpha})`;
+        CTX.lineWidth= warning ? 1.5 : 1;
+        CTX.beginPath();
+        CTX.arc(h.x*CS+CS/2, GY+h.y*CS+CS/2, CS+i*3, 0, Math.PI*2);
+        CTX.stroke();
+        CTX.restore();
+      }
+    }
+    // TTL drain bar — thin line under HUD, purple fading to pink
+    if(S.shieldStack>0) {
+      const barW = Math.round(ttlFrac * GRID*CS);
+      CTX.save();
+      CTX.fillStyle= warning ? 'rgba(255,80,220,0.55)' : 'rgba(176,111,255,0.4)';
+      CTX.fillRect(0, GY-3, barW, 2);
+      CTX.restore();
+    }
   }
 
   CTX.restore(); // release clip
+
+  // ── BROADCAST RING ANIMATION (outside clip) ──
+  if(S.broadcastAnim) {
+    const ba=S.broadcastAnim;
+    ba.t++;
+    const prog=ba.t/ba.maxT;
+    if(prog>=1) {
+      S.broadcastAnim=null;
+    } else {
+      CTX.save();
+      for(let r=0;r<3;r++) {
+        const rProg=Math.max(0,(prog-r*0.12));
+        const radius=rProg*160;
+        const alpha=(1-rProg)*0.7;
+        CTX.strokeStyle=`rgba(0,180,255,${alpha})`;
+        CTX.lineWidth=2-rProg;
+        CTX.beginPath(); CTX.arc(ba.x,ba.y,radius,0,Math.PI*2); CTX.stroke();
+      }
+      CTX.restore();
+    }
+  }
+
+  // ── COMBO OVERLAY ─────────────────────────────
+  // Floating multiplier above snake head when combo ≥ 2
+  if(S.combo>=2 && S.snake.length) {
+    const hd=S.snake[0];
+    const cx=hd.x*CS+CS/2;
+    const cy=GY+hd.y*CS-4;
+    const a=Math.min(1, S.comboTimer/6);
+    CTX.save();
+    CTX.font='bold 8px Orbitron,monospace'; CTX.textAlign='center';
+    CTX.shadowColor='rgba(255,220,60,0.9)'; CTX.shadowBlur=10;
+    CTX.fillStyle=`rgba(255,230,80,${a})`;
+    CTX.fillText('×'+S.combo, cx, cy);
+    CTX.restore();
+  }
 
   // ── STATUS MESSAGES (outside clip, centre bottom) ─
   if(S.satoshiMsgT>0) {
@@ -1249,12 +1816,26 @@ function updateUI() {
   document.getElementById('rp-bits').textContent=S.entropy+' bits';
   document.getElementById('rp-mult').textContent='×'+Math.round(S.ptMult);
   const keysToOL=Math.max(0,OVERLOAD_SIZE-S.snake.length);
+  // Stage labels mapped to overload count
+  const stageNames=['GENESIS','DIFFICULTY 1','DIFFICULTY 2','ADJUSTMENT',
+    'HALVING','LIGHTNING','TAPROOT','SCHNORR','TIMELOCK','MULTISIG','SATOSHI'];
+  const stageName = stageNames[Math.min(S.overloads, stageNames.length-1)];
   document.getElementById('rp-mult-desc').textContent=
-    keysToOL>0 ? keysToOL+' keys to OVERLOAD' : '⚡ OVERLOAD READY!';
+    keysToOL>0
+      ? stageName+' · '+keysToOL+' keys to OVERLOAD'
+      : stageName+' · ⚡ OVERLOAD READY';
   document.getElementById('hud-lv').textContent=
     S.overloads>0 ? '×'+Math.round(S.ptMult)+' OL'+S.overloads : 'MINE';
+  // shield stack pips in lives area — reuse hud-lv2 for combined display
   const lv=document.getElementById('hud-lv2'); lv.innerHTML='';
   for(let i=0;i<3;i++){const d=document.createElement('div');d.className='hud-pip '+(i<S.lives?'a':'d');lv.appendChild(d);}
+  // shield stack indicator
+  if(S.shieldStack>0) {
+    const sp=document.createElement('span');
+    sp.style.cssText='font-size:6px;color:rgba(176,111,255,0.9);margin-left:4px;letter-spacing:1px;';
+    sp.textContent='▣'.repeat(S.shieldStack);
+    lv.appendChild(sp);
+  }
 }
 
 function buildUnlockList() {
