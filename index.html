@@ -241,7 +241,7 @@ body::before {
         <div class="t-logo">CIPHER</div>
         <div class="t-sub">HASH MINER</div>
         <div class="t-desc">MINE HASH · SET YOUR ATH<br>ENTER THE DRAW · WIN SATS</div>
-        <div class="t-overload">⚡ OVERLOAD: grow to 10 keys to<br>SHRINK · SPEED UP · 2× HASH RATE</div>
+        <div class="t-overload">⚡ OVERLOAD: grow to 10 · SHRINK · 2× HASH<br>OVERLOAD = HOT SIGNAL · RUN THROUGH BOTS TO KILL</div>
         <div class="t-start">● START MINING</div>
         <div class="t-hi" id="t-hi">ATH · 000000 H</div>
       </div>
@@ -387,9 +387,11 @@ body::before {
     <div class="legend">
       <div class="lg"><div class="lgd" style="background:#ffb300"></div><span class="lgt">SIGNAL (YOU)</span></div>
       <div class="lg"><div class="lgd" style="background:#00e87a;box-shadow:0 0 4px #00e87a"></div><span class="lgt">KEY FRAGMENT</span></div>
-      <div class="lg"><div class="lgd" style="background:#ff3322;box-shadow:0 0 4px #ff3322"></div><span class="lgt">HOSTILE NODE</span></div>
+      <div class="lg"><div class="lgd" style="background:#fffde0"></div><span class="lgt">₿ SATOSHI (RARE)</span></div>
       <div class="lg"><div class="lgd" style="background:#ffe040;box-shadow:0 0 6px #ffe040"></div><span class="lgt">⚡ OVERLOAD</span></div>
-      <div class="lg"><div class="lgd" style="background:#b06fff;box-shadow:0 0 4px #b06fff"></div><span class="lgt">SHIELD</span></div>
+      <div class="lg"><div class="lgd" style="background:#b06fff;box-shadow:0 0 4px #b06fff"></div><span class="lgt">SHIELD (kill 1 bot)</span></div>
+      <div class="lg"><div class="lgd" style="background:#ff4422;box-shadow:0 0 4px #ff4422"></div><span class="lgt">HOSTILE BOT</span></div>
+      <div class="lg"><div class="lgd" style="background:rgba(200,0,60,0.5)"></div><span class="lgt">CENTRAL.BANK TRAIL</span></div>
     </div>
   </div>
 </div>
@@ -458,18 +460,20 @@ const S = {
   // snake
   snake:[], dir:{x:1,y:0}, nd:{x:1,y:0},
   // pickups
-  keys:[], overloadPick:[], shields:[],
+  keys:[], overloadPick:[], shields:[], satoshi:[],
   // enemies
-  hostiles:[], particles:[],
+  hostiles:[], trailCells:[], particles:[],
   flash:0, shielded:false, shieldT:0,
+  hotTicks:0,       // post-overload kill window
   overloads:0, ptMult:1,
   tickRate:BASE_TICK, lastTick:0, afr:null,
+  satoshiMsg:'', satoshiMsgT:0,
   // pool/draw state
-  selectedPool: null,     // null=none, 'solo', or pool tag string
-  selectedPoolIdx: 0,     // cursor in join list
-  poolMode: 'solo',       // 'solo'|'join'|'create'
-  submittedATH: false,    // has user submitted this ATH round
-  poolChoice: null,       // pool chosen after game over
+  selectedPool: null,
+  selectedPoolIdx: 0,
+  poolMode: 'solo',
+  submittedATH: false,
+  poolChoice: null,
 };
 
 // ── HELPERS ──────────────────────────────────────
@@ -483,6 +487,7 @@ function freeCell() {
   S.keys.forEach(k         => occ.add(`${k.x},${k.y}`));
   S.overloadPick.forEach(o => occ.add(`${o.x},${o.y}`));
   S.shields.forEach(k      => occ.add(`${k.x},${k.y}`));
+  S.satoshi.forEach(k      => occ.add(`${k.x},${k.y}`));
   S.hostiles.forEach(h     => occ.add(`${h.x},${h.y}`));
   const free = [];
   for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++)
@@ -519,43 +524,132 @@ function maybeShield() {
   if(Math.random() < 0.09) { const p = freeCell(); if(p) S.shields.push({...p, t:0}); }
 }
 
+// ── NAMED HOSTILE DEFS ───────────────────────────
+// Each bot unlocks at a specific overload threshold.
+// type controls AI behaviour. color is draw color.
+const BOT_DEFS = [
+  { id:'GCHQ-7',       unlocksAt:0, color:'#ff4422', speed:280, type:'chase',      label:'GCHQ-7'       },
+  { id:'NSA-PRISM',    unlocksAt:2, color:'#ff1100', speed:160, type:'fastchase',   label:'NSA·PRISM'    },
+  { id:'CHAINALYSIS',  unlocksAt:3, color:'#ff6600', speed:200, type:'keyhunter',   label:'CHAINALYSIS'  },
+  { id:'CLOUDFLARE',   unlocksAt:4, color:'#ff3366', speed:999, type:'stationary',  label:'CLOUDFLARE'   },
+  { id:'CENTRAL.BANK', unlocksAt:5, color:'#cc0044', speed:350, type:'trail',       label:'CENTRAL.BANK' },
+];
+// Trail cells left by CENTRAL.BANK — [{x,y,ttl}]
+// (snake touching these = damage)
+
 function spawnHostiles() {
-  const want = Math.min(1 + Math.floor(S.overloads/2), 3);
-  while(S.hostiles.length < want) {
+  // eligible bots for current overload count
+  const eligible = BOT_DEFS.filter(b => S.overloads >= b.unlocksAt);
+  // max 3 hostiles on screen, pick from eligible set
+  const want = Math.min(Math.ceil(eligible.length * 0.6), 3);
+  let attempts = 0;
+  while(S.hostiles.length < want && attempts < 30) {
+    attempts++;
     const p = freeCell(); if(!p) break;
-    S.hostiles.push({...p, mt:0});
+    // pick a bot type not already on screen
+    const existing = new Set(S.hostiles.map(h=>h.id));
+    const pool = eligible.filter(b=>!existing.has(b.id));
+    if(!pool.length) break;
+    const def = pool[rng(pool.length)];
+    S.hostiles.push({
+      ...p, mt:0,
+      id:    def.id,
+      color: def.color,
+      speed: def.speed,
+      type:  def.type,
+      label: def.label,
+      trail: [], // only used by CENTRAL.BANK
+      labelT:120, // ticks to show label on spawn
+    });
   }
+}
+
+// ── SATOSHI FRAGMENT ─────────────────────────────
+// Plain white cell, no glow. Appears randomly.
+// Gives 100–50,000 H, completely random.
+// Max 1 on screen. ~2% chance per key collected.
+function maybeSpawnSatoshi() {
+  if(S.satoshi.length > 0) return;
+  if(Math.random() > 0.02) return;
+  const p = freeCell();
+  if(p) S.satoshi.push({...p, t:0});
 }
 
 // ── INIT ──────────────────────────────────────────
 function initGame() {
   S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
   S.dir={x:1,y:0}; S.nd={x:1,y:0};
-  S.keys=[]; S.overloadPick=[]; S.shields=[]; S.hostiles=[];
+  S.keys=[]; S.overloadPick=[]; S.shields=[];
+  S.hostiles=[]; S.satoshi=[]; S.trailCells=[];
   S.particles=[]; S.flash=0;
   S.score=0; S.lives=3; S.overloads=0; S.ptMult=1;
   S.entropy=0; S.shielded=false; S.shieldT=0;
+  S.hotTicks=0;   // ticks remaining where signal can kill hostiles (post-overload)
   S.tickRate=BASE_TICK; S.lastTick=0;
+  S.satoshiMsg=''; S.satoshiMsgT=0; // "GENESIS SIGNAL" display
   ensureKey(); spawnHostiles();
   updateUI(); buildUnlockList();
 }
 
 // ── HOSTILE AI ────────────────────────────────────
 function moveHostiles(ts) {
-  const hd=S.snake[0];
-  const hSpd=Math.max(100,260-S.overloads*28);
-  S.hostiles.forEach(h=>{
-    if(ts-h.mt<hSpd) return;
-    h.mt=ts;
-    if(Math.random()<0.65) {
+  const hd = S.snake[0];
+  // key fragment target for CHAINALYSIS
+  const keyTarget = S.keys.length ? S.keys[0] : hd;
+
+  S.hostiles.forEach(h => {
+    // tick trail TTL for CENTRAL.BANK
+    if(h.type==='trail') {
+      h.trail = (h.trail||[]).map(c=>({...c,ttl:c.ttl-1})).filter(c=>c.ttl>0);
+    }
+
+    const spd = Math.max(80, h.speed - S.overloads*10);
+    if(ts - h.mt < spd) return;
+    h.mt = ts;
+
+    if(h.type==='stationary') return; // CLOUDFLARE never moves
+
+    const oldX=h.x, oldY=h.y;
+
+    if(h.type==='fastchase') {
+      // always chases directly
       const dx=hd.x-h.x, dy=hd.y-h.y;
       if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
       else h.y+=dy>0?1:-1;
+    } else if(h.type==='keyhunter') {
+      // 70% chases nearest key, 30% chases player
+      const tgt = Math.random()<0.7 ? keyTarget : hd;
+      const dx=tgt.x-h.x, dy=tgt.y-h.y;
+      if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
+      else h.y+=dy>0?1:-1;
     } else {
-      const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
-      const d=dirs[rng(4)]; h.x+=d.x; h.y+=d.y;
+      // default chase: 60% direct, 40% random (GCHQ-7, CENTRAL.BANK)
+      if(Math.random()<0.6) {
+        const dx=hd.x-h.x, dy=hd.y-h.y;
+        if(Math.abs(dx)>=Math.abs(dy)) h.x+=dx>0?1:-1;
+        else h.y+=dy>0?1:-1;
+      } else {
+        const dirs=[{x:1,y:0},{x:-1,y:0},{x:0,y:1},{x:0,y:-1}];
+        const d=dirs[rng(4)]; h.x+=d.x; h.y+=d.y;
+      }
     }
+
     h.x=(h.x+GRID)%GRID; h.y=(h.y+GRID)%GRID;
+
+    // CENTRAL.BANK leaves a trail at old position
+    if(h.type==='trail') {
+      h.trail = h.trail||[];
+      h.trail.push({x:oldX, y:oldY, ttl:8});
+    }
+    if(h.labelT>0) h.labelT--;
+  });
+
+  // decay global trail cells
+  S.trailCells = S.trailCells.map(c=>({...c,ttl:c.ttl-1})).filter(c=>c.ttl>0);
+  // collect all trail cells from all CENTRAL.BANK bots
+  S.trailCells = [];
+  S.hostiles.filter(h=>h.type==='trail').forEach(h=>{
+    (h.trail||[]).forEach(c=>S.trailCells.push(c));
   });
 }
 
@@ -571,10 +665,9 @@ function tick(ts) {
 
   if(S.snake.slice(1).some(s=>s.x===nx&&s.y===ny)) { die(nx,ny); return; }
 
-  let grow=false, pts=0;
-  let didOverload=false;
+  let grow=false, pts=0, didOverload=false;
 
-  // key fragment
+  // ── KEY FRAGMENT ─────────────────────────────
   const ki=S.keys.findIndex(k=>k.x===nx&&k.y===ny);
   if(ki>=0) {
     S.keys.splice(ki,1);
@@ -584,9 +677,35 @@ function tick(ts) {
     addParticles(nx,ny,'#00e87a',8);
     S.flash=4;
     maybeShield();
+    maybeSpawnSatoshi(); // 2% chance each key collect
   }
 
-  // overload pickup
+  // ── SATOSHI FRAGMENT ─────────────────────────
+  const sai=S.satoshi.findIndex(s=>s.x===nx&&s.y===ny);
+  if(sai>=0) {
+    S.satoshi.splice(sai,1);
+    // random hash: 100–50000, weighted toward low end
+    const roll=Math.random();
+    let satPts;
+    if(roll<0.60)       satPts=100+Math.floor(Math.random()*900);    // 100–999    60%
+    else if(roll<0.85)  satPts=1000+Math.floor(Math.random()*4000);  // 1k–4,999   25%
+    else if(roll<0.97)  satPts=5000+Math.floor(Math.random()*10000); // 5k–14,999  12%
+    else                satPts=15000+Math.floor(Math.random()*35000);// 15k–50k     3%
+    pts += satPts;
+    S.entropy=Math.min(256,S.entropy+20);
+    // distinctive no-glow flash — pure white
+    addParticles(nx,ny,'#ffffff',20,3);
+    addParticles(nx,ny,'#fffde0',12,1.5);
+    S.flash=10;
+    S.satoshiMsg='GENESIS SIGNAL +'+satPts.toLocaleString()+'H';
+    S.satoshiMsgT=90; // ticks to show message
+    // brief white screen flash
+    const fl=document.getElementById('ol-flash');
+    fl.style.background='rgba(255,255,255,0.15)';
+    setTimeout(()=>fl.style.background='rgba(255,230,60,0)',500);
+  }
+
+  // ── OVERLOAD PICKUP ──────────────────────────
   const oi=S.overloadPick.findIndex(o=>o.x===nx&&o.y===ny);
   if(oi>=0) {
     S.overloadPick.splice(oi,1);
@@ -594,8 +713,9 @@ function tick(ts) {
     S.ptMult*=2;
     S.tickRate=Math.max(MIN_TICK,S.tickRate-TICK_BOOST);
     S.hostiles=[]; S.shields=[];
-    pts=Math.round(1000*S.ptMult);
+    pts+=Math.round(1000*S.ptMult);
     S.entropy=Math.min(256,S.entropy+32);
+    S.hotTicks=18; // 18 ticks of kill window after overload
     addParticles(nx,ny,'#ffffff',32,4);
     addParticles(nx,ny,'#ffee40',20,3);
     addParticles(nx,ny,'#ffb300',16,2);
@@ -606,7 +726,7 @@ function tick(ts) {
     grow=false; didOverload=true;
   }
 
-  // shield
+  // ── SHIELD ───────────────────────────────────
   const si=S.shields.findIndex(k=>k.x===nx&&k.y===ny);
   if(si>=0) {
     S.shields.splice(si,1);
@@ -614,6 +734,7 @@ function tick(ts) {
     addParticles(nx,ny,'#b06fff',10);
   }
 
+  // move snake
   S.snake.unshift({x:nx,y:ny});
   if(!grow) S.snake.pop();
 
@@ -622,16 +743,39 @@ function tick(ts) {
     spawnHostiles();
   }
 
-  if(S.hostiles.some(h=>h.x===nx&&h.y===ny)) {
-    if(S.shielded) { S.shielded=false; addParticles(nx,ny,'#b06fff',18); }
-    else {
+  // ── HOSTILE COLLISION ────────────────────────
+  // Kill modes: hotTicks active (post-overload) OR shielded
+  // Normal: die
+  const hitIdx = S.hostiles.findIndex(h=>h.x===nx&&h.y===ny);
+  if(hitIdx>=0) {
+    if(S.hotTicks>0) {
+      // KILL — signal is hot, destroy the bot
+      killHostile(hitIdx, nx, ny);
+    } else if(S.shielded) {
+      // SHIELD absorbs — one hostile killed, shield consumed
+      killHostile(hitIdx, nx, ny);
+      S.shielded=false;
+      addParticles(nx,ny,'#b06fff',18);
+    } else {
       ensureKey(); checkSpawnOverload();
       die(nx,ny); return;
     }
   }
 
+  // ── CENTRAL.BANK TRAIL DAMAGE ─────────────────
+  if(!S.hotTicks && !S.shielded) {
+    if(S.trailCells.some(c=>c.x===nx&&c.y===ny)) {
+      ensureKey(); checkSpawnOverload();
+      die(nx,ny); return;
+    }
+  }
+
+  // ── SATOSHI MSG TICK ─────────────────────────
+  if(S.satoshiMsgT>0) S.satoshiMsgT--;
+
   ensureKey();
   checkSpawnOverload();
+  if(S.hotTicks>0) S.hotTicks--;
 
   if(pts) {
     S.score+=pts;
@@ -639,6 +783,21 @@ function tick(ts) {
     updateUI(); checkUnlocks();
   }
   if(S.shielded&&--S.shieldT<=0) S.shielded=false;
+}
+
+function killHostile(idx, wx, wy) {
+  const h = S.hostiles[idx];
+  const bounty = Math.round(200 * S.ptMult);
+  S.score += bounty;
+  if(S.score>S.hi) S.hi=S.score;
+  // explosion in bot's color
+  addParticles(wx,wy,h.color,20,3.5);
+  addParticles(wx,wy,'#ffffff',10,2);
+  S.hostiles.splice(idx,1);
+  // show kill message briefly
+  S.satoshiMsg = h.label+' DESTROYED +'+bounty+'H';
+  S.satoshiMsgT = 60;
+  updateUI();
 }
 
 function die(x,y) {
@@ -683,7 +842,9 @@ function die(x,y) {
   S.snake=[{x:5,y:5},{x:4,y:5},{x:3,y:5}];
   S.dir={x:1,y:0}; S.nd={x:1,y:0};
   S.overloadPick=[]; S.keys=[]; S.shields=[];
-  S.hostiles=[]; S.shielded=false; S.shieldT=0;
+  S.hostiles=[]; S.satoshi=[]; S.trailCells=[];
+  S.shielded=false; S.shieldT=0; S.hotTicks=0;
+  S.satoshiMsg=''; S.satoshiMsgT=0;
   ensureKey(); spawnHostiles();
 }
 
@@ -928,34 +1089,102 @@ function draw() {
     CTX.restore();
   });
 
-  // hostiles
-  S.hostiles.forEach(h=>{
-    CTX.save(); CTX.shadowColor='#ff3322'; CTX.shadowBlur=11;
-    CTX.strokeStyle='rgba(255,51,34,0.9)'; CTX.lineWidth=2;
-    const m=3;
-    CTX.beginPath(); CTX.moveTo(h.x*CS+m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+CS-m,GY+h.y*CS+CS-m); CTX.stroke();
-    CTX.beginPath(); CTX.moveTo(h.x*CS+CS-m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+m,GY+h.y*CS+CS-m); CTX.stroke();
-    CTX.fillStyle='rgba(255,51,34,0.3)';
-    CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,3,0,Math.PI*2); CTX.fill();
+  // ── CENTRAL.BANK TRAIL CELLS ─────────────────
+  S.trailCells.forEach(c=>{
+    const a=(c.ttl/8)*0.35;
+    CTX.save();
+    CTX.fillStyle=`rgba(200,0,60,${a})`;
+    CTX.fillRect(c.x*CS+1,GY+c.y*CS+1,CS-2,CS-2);
+    CTX.strokeStyle=`rgba(255,0,80,${a*0.6})`; CTX.lineWidth=0.5;
+    CTX.strokeRect(c.x*CS+1,GY+c.y*CS+1,CS-2,CS-2);
     CTX.restore();
   });
 
-  // snake
+  // ── SATOSHI FRAGMENT — plain white, no glow ───
+  S.satoshi.forEach(s=>{
+    s.t=(s.t||0)+0.04;
+    // very subtle breath — NOT the green glow treatment
+    const a=0.55+Math.sin(s.t)*0.08;
+    CTX.save();
+    CTX.fillStyle=`rgba(255,255,240,${a})`;
+    CTX.fillRect(s.x*CS+4,GY+s.y*CS+4,CS-8,CS-8);
+    CTX.fillStyle=`rgba(255,255,200,${a*0.85})`;
+    CTX.font='7px monospace'; CTX.textAlign='center';
+    CTX.fillText('₿',s.x*CS+CS/2,GY+s.y*CS+CS/2+2.5);
+    CTX.restore();
+  });
+
+  // ── NAMED HOSTILE BOTS ───────────────────────
+  S.hostiles.forEach(h=>{
+    CTX.save();
+    const isStationary = h.type==='stationary';
+    // hot kill window — bots pulse when killable
+    const killable = S.hotTicks>0 || S.shielded;
+    if(killable) {
+      CTX.shadowColor='#ffffff'; CTX.shadowBlur=14;
+    } else {
+      CTX.shadowColor=h.color; CTX.shadowBlur=10;
+    }
+
+    if(isStationary) {
+      // CLOUDFLARE — solid square blocker, orange tint
+      CTX.fillStyle=killable?'rgba(255,100,80,0.7)':h.color+'aa';
+      CTX.fillRect(h.x*CS+1,GY+h.y*CS+1,CS-2,CS-2);
+      CTX.strokeStyle=killable?'rgba(255,200,180,0.9)':h.color;
+      CTX.lineWidth=1.5; CTX.strokeRect(h.x*CS+1,GY+h.y*CS+1,CS-2,CS-2);
+    } else {
+      // Moving bots — X mark
+      CTX.strokeStyle=killable?'rgba(255,220,200,0.95)':h.color+'ee';
+      CTX.lineWidth=2;
+      const m=3;
+      CTX.beginPath(); CTX.moveTo(h.x*CS+m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+CS-m,GY+h.y*CS+CS-m); CTX.stroke();
+      CTX.beginPath(); CTX.moveTo(h.x*CS+CS-m,GY+h.y*CS+m); CTX.lineTo(h.x*CS+m,GY+h.y*CS+CS-m); CTX.stroke();
+      // center dot
+      CTX.fillStyle=killable?'rgba(255,200,180,0.6)':(h.color+'55');
+      CTX.beginPath(); CTX.arc(h.x*CS+CS/2,GY+h.y*CS+CS/2,3,0,Math.PI*2); CTX.fill();
+    }
+
+    // bot name label — shown on spawn and when killable
+    if(h.labelT>0 || killable) {
+      const la = killable ? 0.9 : Math.min(1, h.labelT/30);
+      CTX.font='5px monospace'; CTX.textAlign='center';
+      CTX.fillStyle=`rgba(255,200,180,${la})`;
+      // draw above or below depending on position
+      const yOff = h.y < 2 ? CS+7 : -3;
+      CTX.fillText(h.label, h.x*CS+CS/2, GY+h.y*CS+yOff);
+    }
+
+    CTX.restore();
+  });
+
+  // ── SNAKE ─────────────────────────────────────
   S.snake.forEach((seg,i)=>{
     const isHd=i===0;
     const t=1-(i/Math.max(S.snake.length,1));
     CTX.save();
     if(isHd) {
-      const col=S.shielded?'#c090ff':'#ffb300';
-      const fc=S.flash>0?'#ffe575':col;
-      CTX.shadowColor=fc; CTX.shadowBlur=S.flash>0?22:9;
+      // hot signal — bright white/gold when kills are active
+      const hot = S.hotTicks>0;
+      const col = hot ? '#ffffff' : S.shielded ? '#c090ff' : '#ffb300';
+      const fc  = S.flash>0 ? '#ffe575' : col;
+      CTX.shadowColor=fc;
+      CTX.shadowBlur=hot?28:(S.flash>0?22:9);
       CTX.fillStyle=fc+'ee';
       CTX.fillRect(seg.x*CS+1,GY+seg.y*CS+1,CS-2,CS-2);
+      // hot pulse ring
+      if(hot) {
+        const pulse=(S.hotTicks/18);
+        CTX.strokeStyle=`rgba(255,255,200,${pulse*0.6})`;
+        CTX.lineWidth=1.5;
+        CTX.beginPath(); CTX.arc(seg.x*CS+CS/2,GY+seg.y*CS+CS/2,CS*pulse,0,Math.PI*2); CTX.stroke();
+      }
       CTX.fillStyle='rgba(255,240,180,0.85)';
       CTX.fillRect(seg.x*CS+CS/2-1.5+S.dir.x*4,GY+seg.y*CS+CS/2-1.5+S.dir.y*4,3,3);
       if(S.flash>0) S.flash--;
     } else {
-      CTX.fillStyle=S.shielded?`rgba(180,140,255,${t*0.68})`:`rgba(255,179,0,${t*0.65})`;
+      const hot=S.hotTicks>0;
+      CTX.fillStyle=hot?`rgba(255,255,200,${t*0.6})`:
+                    S.shielded?`rgba(180,140,255,${t*0.68})`:`rgba(255,179,0,${t*0.65})`;
       CTX.fillRect(seg.x*CS+2,GY+seg.y*CS+2,CS-4,CS-4);
     }
     CTX.restore();
@@ -970,10 +1199,21 @@ function draw() {
 
   CTX.restore(); // release clip
 
+  // ── STATUS MESSAGES (outside clip, centre bottom) ─
+  if(S.satoshiMsgT>0) {
+    const a=Math.min(1,S.satoshiMsgT/20);
+    CTX.save();
+    CTX.font='bold 7px Orbitron,monospace'; CTX.textAlign='center';
+    CTX.fillStyle=`rgba(255,255,220,${a})`;
+    CTX.shadowColor='rgba(255,255,200,0.8)'; CTX.shadowBlur=8;
+    CTX.fillText(S.satoshiMsg, GRID*CS/2, 236);
+    CTX.restore();
+  }
+
   if(S.ptMult>1) {
-    CTX.font='bold 8px Orbitron,monospace'; CTX.textAlign='right';
+    CTX.font='bold 7px Orbitron,monospace'; CTX.textAlign='right';
     CTX.fillStyle='rgba(255,220,60,0.2)';
-    CTX.fillText('×'+Math.round(S.ptMult)+' H',214,236);
+    CTX.fillText('×'+Math.round(S.ptMult)+' H', GRID*CS-2, 236);
   }
 }
 
