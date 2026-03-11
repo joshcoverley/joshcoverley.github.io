@@ -1114,8 +1114,8 @@ function startQRScanner(video, onFound, onStatus) {
     if (window.ZXingWASM) dbg('keys: ' + Object.keys(window.ZXingWASM).join(', '));
 
     const zxing = window.ZXingWASM;
-    if (!zxing || !zxing.readBarcodes) {
-      dbg('readBarcodes not found — trying readBarcodesFromImageData');
+    if (!zxing || !zxing.readBarcodesFromImageData) {
+      dbg('readBarcodesFromImageData not found');
       if (onStatus) onStatus('// DECODER API MISMATCH');
       return;
     }
@@ -1144,7 +1144,7 @@ function startQRScanner(video, onFound, onStatus) {
         ctx.drawImage(video, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        const results = await zxing.readBarcodes(imageData, {
+        const results = await zxing.readBarcodesFromImageData(imageData, {
           formats: ['QRCode'],
           tryHarder: true,
           tryInvert: true,
