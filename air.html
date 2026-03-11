@@ -534,8 +534,15 @@ const RELAYS = [
   'wss://nostr.mom',
 ];
 
+// Safe localStorage wrapper — Safari Private mode throws SecurityError
+const LS = {
+  get(k)    { try { return localStorage.getItem(k); }    catch(e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); }        catch(e) {} },
+  del(k)    { try { localStorage.removeItem(k); }        catch(e) {} },
+};
+
 const state = {
-  pubkeyHex: localStorage.getItem('kv_pubkey') || '',
+  pubkeyHex: LS.get('kv_pubkey') || '',
   unsignedEvent: null, signedEvent: null,
   sockets: {}, profiles: {}, notes: [], knownIds: new Set(),
   scanStream: null, scanTimer: null,
@@ -554,12 +561,12 @@ function onPubkeyInput() {
   const val = document.getElementById('pubkey-input').value.trim();
   const hex = npubToHex(val) || (isHex64(val) ? val : '');
   state.pubkeyHex = hex;
-  if(hex) { localStorage.setItem('kv_pubkey', hex); updatePubkeyHint(hex); }
-  else { localStorage.removeItem('kv_pubkey'); document.getElementById('pubkey-hint').textContent = 'Enter pubkey to sign as you. Leave blank to post anonymously.'; }
+  if(hex) { LS.set('kv_pubkey', hex); updatePubkeyHint(hex); }
+  else { LS.del('kv_pubkey'); document.getElementById('pubkey-hint').textContent = 'Enter pubkey to sign as you. Leave blank to post anonymously.'; }
 }
 function clearPubkey() {
   document.getElementById('pubkey-input').value = '';
-  state.pubkeyHex = ''; localStorage.removeItem('kv_pubkey');
+  state.pubkeyHex = ''; LS.del('kv_pubkey');
   document.getElementById('pubkey-hint').textContent = '// Pubkey cleared';
 }
 function updatePubkeyHint(hex) {
