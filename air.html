@@ -865,27 +865,82 @@ function setRelayState(url, st) {
 
 async function publishEvent() {
   if(!state.signedEvent)return;
+  const ev = state.signedEvent;
+  console.log('[PUBLISH] event:', JSON.stringify(ev));
+  console.log('[PUBLISH] pubkey:', ev.pubkey);
+  console.log('[PUBLISH] id:', ev.id);
+  console.log('[PUBLISH] sig:', ev.sig ? ev.sig.slice(0,16)+'...' : 'MISSING');
+  console.log('[PUBLISH] content:', ev.content);
+
   const btn = document.getElementById('publish-btn');
   btn.disabled=true; btn.textContent='Publishing…';
-  const msg = JSON.stringify(['EVENT',state.signedEvent]);
-  let sent=0;
-  const promises = RELAYS.map(url=>new Promise(resolve=>{
-    setRelayState(url,'sending');
-    const ws=state.sockets[url];
-    if(ws&&ws.readyState===WebSocket.OPEN){
-      try{ws.send(msg);sent++;setRelayState(url,'sent');}catch(e){setRelayState(url,'failed');}
-      resolve();
+  const msg = JSON.stringify(['EVENT', ev]);
+  let sent=0, accepted=0, rejected=[];
+
+  const promises = RELAYS.map(url => new Promise(resolve => {
+    setRelayState(url, 'sending');
+    const ws = state.sockets[url];
+    const doSend = (sock) => {
+      try {
+        // Listen for OK response
+        const prevMsg = sock.onmessage;
+        sock.onmessage = (e) => {
+          try {
+            const r = JSON.parse(e.data);
+            if (r[0] === 'OK' && r[1] === ev.id) {
+              if (r[2] === true) {
+                accepted++;
+                setRelayState(url, 'sent');
+                console.log('[RELAY OK]', url, 'accepted');
+              } else {
+                rejected.push(url.replace('wss://','') + ': ' + (r[3]||'rejected'));
+                setRelayState(url, 'failed');
+                console.warn('[RELAY REJECT]', url, r[3]);
+              }
+              sock.onmessage = prevMsg;
+              resolve();
+              return;
+            }
+          } catch(e) {}
+          if (prevMsg) prevMsg(e);
+        };
+        sock.send(msg);
+        sent++;
+        // Timeout if no OK within 5s
+        setTimeout(() => { sock.onmessage = prevMsg; resolve(); }, 5000);
+      } catch(e) { setRelayState(url, 'failed'); resolve(); }
+    };
+
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      doSend(ws);
     } else {
-      const fresh=new WebSocket(url);
-      const timer=setTimeout(()=>{fresh.close();setRelayState(url,'failed');resolve();},4000);
-      fresh.onopen=()=>{clearTimeout(timer);try{fresh.send(msg);sent++;setRelayState(url,'sent');}catch(e){setRelayState(url,'failed');}resolve();};
-      fresh.onerror=()=>{clearTimeout(timer);setRelayState(url,'failed');resolve();};
+      const fresh = new WebSocket(url);
+      const timer = setTimeout(() => { fresh.close(); setRelayState(url,'failed'); resolve(); }, 5000);
+      fresh.onopen = () => { clearTimeout(timer); doSend(fresh); };
+      fresh.onerror = () => { clearTimeout(timer); setRelayState(url,'failed'); resolve(); };
     }
   }));
+
   await Promise.all(promises);
-  btn.textContent='// Published!';
-  showToast('// Sent to '+sent+' relay'+(sent!==1?'s':'')+' ✓');
-  if(sent>0)addNote(state.signedEvent);
+
+  if (accepted > 0) {
+    btn.textContent = '// Published to ' + accepted + ' relay' + (accepted!==1?'s':'') + ' ✓';
+    showToast('✓ Accepted by ' + accepted + ' relay' + (accepted!==1?'s':''));
+    addNote(ev);
+  } else if (sent > 0 && rejected.length > 0) {
+    btn.textContent = '// REJECTED';
+    btn.disabled = false;
+    showToast('✗ Rejected: ' + rejected[0]);
+    console.warn('[PUBLISH] all rejected:', rejected);
+  } else if (sent > 0) {
+    btn.textContent = '// Sent (no response)';
+    showToast('Sent to ' + sent + ' relay' + (sent!==1?'s':'') + ' (unconfirmed)');
+    addNote(ev);
+  } else {
+    btn.textContent = '// No relays connected';
+    btn.disabled = false;
+    showToast('✗ No relays available');
+  }
 }
 
 function resetAll() {
