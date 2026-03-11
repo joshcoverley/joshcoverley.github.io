@@ -440,29 +440,8 @@ footer strong { color: var(--muted); }
     <div class="card-body">
       <div class="scan-wrap">
 
-        <!-- Primary: native camera capture -->
-        <div id="scan-paste-mode" style="width:100%;text-align:center">
-          <p style="font-size:11px;color:var(--text);letter-spacing:0.08em;line-height:1.9;margin-bottom:16px">
-            Tap below to open your camera.<br>
-            <span style="color:var(--dim)">Point at the FAVILLA Key screen and take a photo.</span>
-          </p>
-
-          <!-- Hidden file input — triggers native camera on iOS -->
-          <input type="file" id="qr-capture-input" accept="image/*" capture="environment"
-            style="display:none" onchange="decodeFromPhoto(this)">
-
-          <button class="btn-primary" style="width:100%;margin-bottom:10px"
-            onclick="document.getElementById('qr-capture-input').click()">
-            ◉ OPEN CAMERA
-          </button>
-
-          <div id="paste-status" style="font-size:10px;color:var(--orange);min-height:16px;margin-bottom:12px;letter-spacing:0.08em"></div>
-          <button class="btn-ghost" style="font-size:10px;opacity:0.6" onclick="showCameraScanner()">or use in-app scanner ↓</button>
-          <button class="btn-ghost" style="font-size:10px;opacity:0.6;margin-left:8px" onclick="pasteSignedQR()">or paste ↓</button>
-        </div>
-
-        <!-- Secondary: in-app jsQR camera -->
-        <div id="scan-camera-mode" style="display:none;width:100%">
+        <!-- Primary: in-app camera scanner -->
+        <div id="scan-camera-mode" style="width:100%">
           <div class="video-container">
             <video id="scan-video" autoplay playsinline muted></video>
             <div class="scan-overlay">
@@ -471,11 +450,19 @@ footer strong { color: var(--muted); }
           </div>
           <div class="scan-status">
             <div class="pulse"></div>
-            <span id="scan-status-text">SCANNING · HOLD CLOSE TO DEVICE SCREEN</span>
+            <span id="scan-status-text">STARTING CAMERA…</span>
           </div>
-          <p class="scan-tip">Hold phone 5–10cm from device screen. Keep steady.</p>
-          <div id="scan-debug" style="width:100%;max-width:380px;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:0.05em;line-height:1.9;text-align:left;min-height:60px"></div>
-          <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
+          <p class="scan-tip">Point at the FAVILLA Key screen · hold ~5–10cm away · keep steady</p>
+          <button class="btn-ghost" style="width:100%;margin-top:10px" onclick="showPasteMode()">or paste manually ↓</button>
+          <button class="btn-ghost" style="width:100%;margin-top:6px;opacity:0.5" onclick="stopScan()">← Back</button>
+        </div>
+
+        <!-- Fallback: paste -->
+        <div id="scan-paste-mode" style="display:none;width:100%;text-align:center">
+          <div id="paste-status" style="font-size:10px;color:var(--orange);min-height:16px;margin-bottom:12px;letter-spacing:0.08em"></div>
+          <button class="btn-primary" style="width:100%;margin-bottom:10px" onclick="pasteSignedQR()">⌘ PASTE FROM CLIPBOARD</button>
+          <button class="btn-ghost" style="width:100%;margin-bottom:6px" onclick="showCameraScanner()">← Back to camera</button>
+          <button class="btn-ghost" style="width:100%;opacity:0.5" onclick="stopScan()">← Back to Step 2</button>
         </div>
 
       </div>
@@ -648,56 +635,36 @@ function backToCompose() { showStep('compose'); }
 
 async function startScan() {
   showStep('scan');
-  document.getElementById('scan-paste-mode').style.display = 'block';
+  document.getElementById('scan-camera-mode').style.display = 'block';
+  document.getElementById('scan-paste-mode').style.display = 'none';
+  await startCameraScanner();
+}
+
+function showPasteMode() {
+  if (typeof state.scanTimer === 'function') state.scanTimer();
+  state.scanTimer = null;
+  if (state.scanStream) { state.scanStream.getTracks().forEach(t => t.stop()); state.scanStream = null; }
   document.getElementById('scan-camera-mode').style.display = 'none';
-  // Reset file input so same photo can be reused
-  document.getElementById('qr-capture-input').value = '';
+  document.getElementById('scan-paste-mode').style.display = 'block';
+  document.getElementById('paste-status').textContent = 'USE IPHONE CAMERA APP → COPY → PASTE HERE';
+
+  // Auto-detect when returning from Camera app
+  document.addEventListener('visibilitychange', function onVisible() {
+    if (document.visibilityState !== 'visible') return;
+    setTimeout(async () => {
+      try {
+        const text = (await navigator.clipboard.readText()).trim();
+        const isCompact = text.length === 192 && /^[0-9a-f]{192}$/.test(text);
+        const isJSON    = text.startsWith('{') && text.includes('"sig"');
+        if (isCompact || isJSON) {
+          document.removeEventListener('visibilitychange', onVisible);
+          document.getElementById('paste-status').textContent = '✓ DETECTED';
+          gotSignedQR(text);
+        }
+      } catch(e) {}
+    }, 300);
+  });
 }
-
-async function decodeFromPhoto(input) {
-  const statusEl = document.getElementById('paste-status');
-  if (!input.files || !input.files[0]) return;
-  statusEl.textContent = 'DECODING…';
-
-  const file = input.files[0];
-  const url = URL.createObjectURL(file);
-  const img = new Image();
-  img.src = url;
-  await new Promise(r => { img.onload = r; });
-  URL.revokeObjectURL(url);
-
-  // Draw to canvas — try multiple scales for best decode
-  await (window._jsQRReady || Promise.resolve());
-  if (typeof jsQR === 'undefined') { statusEl.textContent = 'jsQR not loaded'; return; }
-
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-
-  // Try at original size, then downscaled versions
-  const scales = [1, 0.5, 0.25, 2];
-  for (const scale of scales) {
-    canvas.width  = Math.round(img.width  * scale);
-    canvas.height = Math.round(img.height * scale);
-    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-    const idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const code = jsQR(idata.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-    if (code && code.data && code.data.length > 0) {
-      statusEl.textContent = '✓ DECODED';
-      gotSignedQR(code.data);
-      return;
-    }
-    // chunk fallback
-    if (code && code.chunks) {
-      const text = code.chunks.map(c =>
-        c.type === 'byte' ? new TextDecoder().decode(new Uint8Array(c.bytes)) : (c.text || '')
-      ).join('');
-      if (text.length > 0) { statusEl.textContent = '✓ DECODED'; gotSignedQR(text); return; }
-    }
-  }
-  statusEl.textContent = '✗ COULD NOT DECODE — TRY AGAIN, HOLD STEADY';
-}
-
-
 
 async function showCameraScanner() {
   document.getElementById('scan-paste-mode').style.display = 'none';
