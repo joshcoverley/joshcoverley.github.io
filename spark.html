@@ -834,10 +834,10 @@ footer a { color: var(--accent); text-decoration: none; }
       <span class="card-title">Write your note</span>
     </div>
     <div class="card-body">
-      <textarea id="compose-area" rows="4" placeholder="What's on your mind?"
+      <textarea id="compose-area" rows="4" placeholder="What's on your mind?" maxlength="60"
         oninput="onComposeInput()"></textarea>
       <div class="compose-footer">
-        <span class="char-count" id="char-count">0 / 280</span>
+        <span class="char-count" id="char-count">0 / 60 · airgap limit</span>
         <button class="btn-primary" id="gen-qr-btn" onclick="generateQR()" disabled>
           Generate QR →
         </button>
@@ -1020,9 +1020,9 @@ function onComposeInput() {
   const val = document.getElementById('compose-area').value;
   const len = val.length;
   const cc = document.getElementById('char-count');
-  cc.textContent = len + ' / 280';
-  cc.className = 'char-count' + (len > 260 ? ' warn' : '');
-  document.getElementById('gen-qr-btn').disabled = !val.trim();
+  cc.textContent = len + ' / 60';
+  cc.className = 'char-count' + (len > 55 ? ' warn' : '');
+  document.getElementById('gen-qr-btn').disabled = !val.trim() || len > 60;
 }
 
 function generateQR() {
