@@ -690,6 +690,8 @@ function gotSignedQR(json) {
 
   dbg('gotSignedQR: len=' + json.length + ' starts=' + json.slice(0,20));
   dbg('unsignedEvent: ' + (state.unsignedEvent ? 'YES pubkey=' + (state.unsignedEvent.pubkey||'?').slice(0,8) : 'NULL'));
+  dbg('isHex192: ' + (json.length === 192 && /^[0-9a-f]{192}$/.test(json)));
+  dbg('raw: ' + json.slice(0, 64) + '...');
 
   let ev = null;
   try {
