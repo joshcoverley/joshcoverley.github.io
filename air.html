@@ -957,13 +957,24 @@ function startQRScanner(video, onFound, onStatus) {
     dbg('jsQR ready — starting decode loop');
     if (onStatus) onStatus('SCANNING · jsQR');
 
+    // Defined outside interval so it's not re-created every tick
+    function attempt(imageData, w, h, opts, label) {
+      const code = jsQR(imageData, w, h, opts);
+      if (!code) return false;
+      const data = (code.data && code.data.length > 0) ? code.data
+        : code.chunks ? code.chunks.map(c =>
+            c.type === 'byte' ? new TextDecoder().decode(new Uint8Array(c.bytes)) : (c.text || '')
+          ).join('')
+        : '';
+      if (!data) { dbg(label + ': empty (ECC bug)'); return false; }
+      dbg(label + ': FOUND len=' + data.length);
+      clearInterval(timer); stopped = true; onFound(data); return true;
+    }
+
   timer = setInterval(() => {
     if (stopped) { clearInterval(timer); return; }
     tickCount++;
-    if (video.readyState < 2 || !video.videoWidth) {
-      if (tickCount <= 5) dbg('tick ' + tickCount + ': video not ready (state=' + video.readyState + ')');
-      return;
-    }
+    if (video.readyState < 2 || !video.videoWidth) return;
 
     if (tickCount <= 3) dbg('tick ' + tickCount + ': ' + video.videoWidth + 'x' + video.videoHeight);
 
@@ -971,53 +982,18 @@ function startQRScanner(video, onFound, onStatus) {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
-    // Helper — try jsQR and extract data even if code.data is empty (jsQR ECC bug)
-    function attempt(imageData, w, h, opts, label) {
-      const code = jsQR(imageData, w, h, opts);
-      if (!code) return false;
-      // Try code.data first
-      if (code.data && code.data.length > 0) {
-        dbg(label + ': FOUND len=' + code.data.length);
-        clearInterval(timer); stopped = true; onFound(code.data); return true;
-      }
-      // Fallback: reconstruct from chunks (jsQR bug workaround)
-      if (code.chunks) {
-        const text = code.chunks.map(c => {
-          if (c.type === 'byte') return new TextDecoder().decode(new Uint8Array(c.bytes));
-          return c.text || '';
-        }).join('');
-        if (text.length > 0) {
-          dbg(label + ': FOUND via chunks len=' + text.length);
-          clearInterval(timer); stopped = true; onFound(text); return true;
-        }
-      }
-      dbg(label + ': empty result (ECC bug)');
-      return false;
-    }
+    // Downsample to 640x480 — jsQR doesn't need full resolution and it's much faster
+    const SW = 640, SH = Math.round(video.videoHeight * 640 / video.videoWidth);
+    const small = document.createElement('canvas');
+    small.width = SW; small.height = SH;
+    small.getContext('2d').drawImage(canvas, 0, 0, SW, SH);
+    const idata = small.getContext('2d').getImageData(0, 0, SW, SH);
 
-    const idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    // Single pass — attemptBoth handles white-on-black automatically
+    if (attempt(idata.data, SW, SH, { inversionAttempts: 'attemptBoth' }, 'raw')) return;
 
-    // Pass 1: full frame, attemptBoth
-    if (attempt(idata.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' }, 'raw')) return;
-
-    // Pass 2: hard threshold (helps white-on-black)
-    const td = new Uint8ClampedArray(idata.data);
-    for (let i = 0; i < td.length; i += 4) {
-      const v = (td[i] + td[i+1] + td[i+2]) / 3 < 128 ? 0 : 255;
-      td[i] = td[i+1] = td[i+2] = v; td[i+3] = 255;
-    }
-    if (attempt(td, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' }, 'threshold')) return;
-
-    // Pass 3: center crop 2x
-    const cw = Math.floor(canvas.width / 2), ch = Math.floor(canvas.height / 2);
-    const c2 = document.createElement('canvas');
-    c2.width = cw * 2; c2.height = ch * 2;
-    c2.getContext('2d').drawImage(canvas, Math.floor(canvas.width/4), Math.floor(canvas.height/4), cw, ch, 0, 0, cw*2, ch*2);
-    const id2 = c2.getContext('2d').getImageData(0, 0, c2.width, c2.height);
-    if (attempt(id2.data, c2.width, c2.height, { inversionAttempts: 'attemptBoth' }, 'crop2x')) return;
-
-    if (tickCount <= 3 || tickCount % 10 === 0) dbg('tick ' + tickCount + ': no QR found');
-  }, 250);
+    if (tickCount % 10 === 0) dbg('tick ' + tickCount + ': no QR');
+  }, 300);
   }); // end _jsQRReady.then()
 
   function stop() { stopped = true; if (timer) clearInterval(timer); }
