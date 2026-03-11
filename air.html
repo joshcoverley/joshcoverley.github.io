@@ -643,21 +643,32 @@ async function startScan() {
   document.getElementById('scan-paste-mode').style.display = 'block';
   document.getElementById('scan-camera-mode').style.display = 'none';
 
-  // Check BarcodeDetector and update instructions
   const statusEl = document.getElementById('paste-status');
+
+  // Detailed BarcodeDetector check
+  console.log('[BD] in window:', 'BarcodeDetector' in window);
+  console.log('[BD] type:', typeof BarcodeDetector);
   if ('BarcodeDetector' in window) {
     try {
       const formats = await BarcodeDetector.getSupportedFormats();
+      console.log('[BD] formats:', formats);
       if (formats.includes('qr_code')) {
         statusEl.textContent = 'NATIVE QR SCANNER AVAILABLE — TAP SCAN BELOW';
-        // Replace paste button with native scan button
         document.getElementById('paste-primary-btn').textContent = '◉ SCAN WITH NATIVE CAMERA';
         document.getElementById('paste-primary-btn').onclick = startNativeBarcodeDetector;
         return;
+      } else {
+        console.log('[BD] qr_code not in formats:', formats);
+        statusEl.textContent = 'BD available but no qr_code: ' + formats.join(', ');
       }
-    } catch(e) {}
+    } catch(e) {
+      console.log('[BD] getSupportedFormats error:', e.message);
+      statusEl.textContent = 'BD error: ' + e.message;
+    }
+  } else {
+    console.log('[BD] not available');
+    statusEl.textContent = 'BarcodeDetector not available on this browser';
   }
-  dbg('BarcodeDetector: ' + ('BarcodeDetector' in window ? 'exists but no qr_code' : 'not available'));
 }
 
 async function showCameraScanner() {
