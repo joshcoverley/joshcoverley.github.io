@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>SPARK — FAVILLA KEY AIRGAP PORTAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #040503;
+  --bg2:     #060805;
+  --panel:   #090c07;
+  --panel2:  #0b0e07;
+  --border:  #111608;
+  --border2: #1a2210;
+  --acid:    #a8f000;
+  --acid2:   #72aa00;
+  --acid3:   #2e4400;
+  --orange:  #ff6b00;
+  --dim:     #252e10;
+  --muted:   #3a4c18;
+  --danger:  #ff2200;
+  --text:    #8aaa48;
+  --mono:    'Share Tech Mono', monospace;
+  --display: 'Orbitron', monospace;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  min-height: 100vh;
+}
+
+/* Grid background */
+body::before {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 50px 50px;
+  opacity: 0.12;
+}
+
+/* Scanlines */
+body::after {
+  content: '';
+  position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
+  );
+}
+
+.wrap {
+  max-width: 860px; margin: 0 auto;
+  padding: 0 16px 60px;
+  position: relative; z-index: 1;
+}
+
+/* ── Header ── */
+header {
+  padding: 28px 0 20px;
+  border-bottom: 1px solid var(--border2);
+  margin-bottom: 28px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.header-top {
+  font-size: 10px; letter-spacing: 0.35em; color: var(--muted);
+  text-transform: uppercase;
+}
+.header-top::before { content: '// '; color: var(--acid3); }
+.header-title {
+  font-family: var(--display); font-size: clamp(36px,8vw,64px);
+  font-weight: 900; letter-spacing: 0.25em; color: var(--acid);
+  text-shadow: 0 0 24px rgba(168,240,0,0.3), 0 0 48px rgba(168,240,0,0.1);
+  text-transform: uppercase; line-height: 1;
+}
+.header-sub {
+  font-size: 10px; letter-spacing: 0.3em; color: var(--muted); text-transform: uppercase;
+}
+.header-badge {
+  display: inline-block; font-size: 9px; letter-spacing: 0.2em;
+  color: var(--orange); border: 1px solid var(--orange);
+  padding: 3px 10px; text-transform: uppercase; margin-top: 4px;
+}
+
+/* ── Section headers ── */
+.sec {
+  font-size: 10px; letter-spacing: 0.22em; color: var(--acid2);
+  text-transform: uppercase; margin-bottom: 10px;
+}
+.sec::before { content: '-- '; }
+.sec-line {
+  border: none; border-top: 1px dashed var(--border2);
+  margin: 24px 0;
+}
+
+/* ── How it works ── */
+.how {
+  display: flex; gap: 0; margin-bottom: 28px;
+  border: 1px solid var(--border);
+}
+.how-step {
+  flex: 1; padding: 14px 16px;
+  border-right: 1px solid var(--border);
+}
+.how-step:last-child { border-right: none; }
+.how-num { font-family: var(--display); font-size: 20px; font-weight: 900; color: var(--acid3); line-height: 1; }
+.how-label { font-size: 10px; color: var(--muted); margin-top: 6px; letter-spacing: 0.05em; line-height: 1.5; }
+
+/* ── Pubkey ── */
+.pubkey-section { margin-bottom: 24px; }
+.field-label {
+  font-size: 9px; letter-spacing: 0.2em; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 6px; display: flex; align-items: center; gap: 8px;
+}
+.dot { width: 6px; height: 6px; background: var(--acid2); display: inline-block; }
+.pubkey-row { display: flex; gap: 6px; }
+.pubkey-hint { font-size: 10px; color: var(--dim); margin-top: 5px; letter-spacing: 0.04em; }
+
+input[type=text], textarea {
+  background: var(--panel); border: 1px solid var(--border2);
+  color: var(--text); font-family: var(--mono); font-size: 13px;
+  padding: 10px 12px; outline: none; width: 100%;
+  transition: border-color 0.15s; letter-spacing: 0.03em;
+}
+input[type=text]:focus, textarea:focus { border-color: var(--acid2); }
+input[type=text]::placeholder, textarea::placeholder { color: var(--dim); }
+
+.btn-sm {
+  background: none; border: 1px solid var(--border2); color: var(--muted);
+  font-family: var(--mono); font-size: 9px; padding: 0 12px;
+  cursor: pointer; letter-spacing: 0.15em; text-transform: uppercase;
+  white-space: nowrap; transition: all 0.15s;
+}
+.btn-sm:hover { border-color: var(--muted); color: var(--text); }
+
+/* ── Cards ── */
+.card {
+  background: var(--panel); border: 1px solid var(--border2);
+  margin-bottom: 16px; display: none;
+}
+.card.active { display: block; }
+.card-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  background: var(--bg2);
+}
+.step-pill {
+  font-family: var(--display); font-size: 8px; font-weight: 700;
+  letter-spacing: 0.2em; padding: 3px 8px;
+  border: 1px solid var(--acid3); color: var(--acid2);
+  text-transform: uppercase;
+}
+.step-pill.done { border-color: var(--acid2); color: var(--acid); }
+.card-title {
+  font-size: 11px; letter-spacing: 0.15em; color: var(--text);
+  text-transform: uppercase;
+}
+.card-body { padding: 16px; }
+
+/* ── Compose ── */
+textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
+.compose-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: 8px;
+}
+.char-count { font-size: 10px; color: var(--dim); letter-spacing: 0.1em; }
+.char-count.warn { color: var(--orange); }
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--panel2); color: var(--acid); border: 1px solid var(--acid2);
+  font-family: var(--mono); font-size: 10px; padding: 12px 20px;
+  cursor: pointer; letter-spacing: 0.2em; text-transform: uppercase;
+  transition: all 0.15s;
+}
+.btn-primary::before { content: '→ '; }
+.btn-primary:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-primary:not(:disabled):hover { background: var(--acid2); color: var(--bg); }
+.btn-outline {
+  background: none; color: var(--muted); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 10px; padding: 12px 20px;
+  cursor: pointer; letter-spacing: 0.15em; text-transform: uppercase;
+  transition: all 0.15s;
+}
+.btn-outline:hover { border-color: var(--muted); color: var(--text); }
+.btn-ghost {
+  background: none; color: var(--dim); border: 1px solid var(--border);
+  font-family: var(--mono); font-size: 10px; padding: 10px 16px;
+  cursor: pointer; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: all 0.15s; margin-top: 10px;
+}
+.btn-ghost:hover { border-color: var(--muted); color: var(--text); }
+.btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+
+/* ── QR ── */
+.qr-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 14px; }
+@media(min-width:600px){.qr-wrap{flex-direction:row;align-items:flex-start;}}
+.qr-canvas-container {
+  background: #fff; padding: 12px;
+  border: 2px solid var(--acid2); flex-shrink: 0;
+  line-height: 0;
+}
+.qr-instructions { font-size: 11px; color: var(--muted); line-height: 1.8; letter-spacing: 0.04em; }
+.qr-instructions strong { color: var(--acid2); }
+
+/* ── Scan ── */
+.scan-wrap { display: flex; flex-direction: column; align-items: center; }
+.video-container {
+  position: relative; width: 100%; max-width: 380px;
+  background: #000; overflow: hidden;
+}
+.video-container video { width: 100%; display: block; }
+.scan-overlay { position: absolute; inset: 0; pointer-events: none; }
+.scan-frame {
+  position: absolute; top: 50%; left: 50%;
+  width: 60%; padding-top: 60%;
+  transform: translate(-50%,-50%);
+}
+.scan-corners-br {
+  position: absolute; inset: 0;
+  border: 2px solid transparent;
+  border-right-color: var(--acid); border-bottom-color: var(--acid);
+  clip-path: polygon(70% 0,100% 0,100% 100%,0 100%,0 70%,70% 70%);
+}
+.scan-corners-tr {
+  position: absolute; inset: 0;
+  border: 2px solid transparent;
+  border-left-color: var(--acid); border-top-color: var(--acid);
+  clip-path: polygon(0 0,100% 0,100% 30%,30% 30%,30% 100%,0 100%);
+}
+.scan-status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 10px; color: var(--acid2); margin-top: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.pulse {
+  width: 7px; height: 7px; background: var(--acid);
+  animation: blink 0.8s step-end infinite;
+}
+.scan-tip { font-size: 10px; color: var(--dim); text-align: center; margin-top: 6px; letter-spacing: 0.05em; }
+
+/* ── Publish ── */
+.publish-wrap { display: flex; flex-direction: column; gap: 14px; }
+.success-block { text-align: center; padding: 10px 0; }
+.success-label {
+  font-size: 10px; letter-spacing: 0.25em; color: var(--acid2);
+  text-transform: uppercase; margin-bottom: 6px;
+}
+.success-label::before { content: '// '; }
+.success-title {
+  font-family: var(--display); font-size: 28px; font-weight: 900;
+  letter-spacing: 0.3em; color: var(--acid);
+  text-shadow: 0 0 16px rgba(168,240,0,0.3);
+}
+.event-preview {
+  background: var(--bg2); border: 1px solid var(--border);
+  padding: 12px; font-size: 12px; line-height: 1.6;
+}
+.event-preview .content { color: var(--text); margin-bottom: 8px; }
+.event-preview .meta { display: flex; gap: 8px; flex-wrap: wrap; }
+.meta-tag {
+  font-size: 9px; letter-spacing: 0.1em; color: var(--muted);
+  border: 1px solid var(--border2); padding: 2px 6px; text-transform: uppercase;
+}
+.relay-list { display: flex; flex-direction: column; gap: 4px; }
+.relay-item {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10px; letter-spacing: 0.08em; color: var(--muted);
+  padding: 7px 10px; background: var(--bg2); border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.relay-item .relay-dot { width: 6px; height: 6px; background: var(--dim); flex-shrink: 0; }
+.relay-item.sending { border-color: var(--orange); color: var(--orange); }
+.relay-item.sending .relay-dot { background: var(--orange); animation: blink 0.4s step-end infinite; }
+.relay-item.sent { border-color: var(--acid2); color: var(--acid2); }
+.relay-item.sent .relay-dot { background: var(--acid2); }
+.relay-item.failed { border-color: var(--danger); color: var(--danger); }
+.relay-item.failed .relay-dot { background: var(--danger); }
+
+/* ── Feed ── */
+.feed-section { margin-top: 40px; }
+.feed-header {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 14px;
+}
+.feed-title { font-family: var(--display); font-size: 11px; font-weight: 700; letter-spacing: 0.25em; color: var(--acid2); text-transform: uppercase; }
+.feed-title::before { content: '-- '; }
+.feed-line { flex: 1; border-top: 1px dashed var(--border2); }
+.relay-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.relay-chip {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 9px; letter-spacing: 0.1em; color: var(--dim);
+  border: 1px solid var(--border); padding: 4px 8px;
+  text-transform: uppercase; transition: all 0.2s;
+}
+.relay-chip .chip-dot { width: 5px; height: 5px; background: var(--dim); }
+.relay-chip.connected { border-color: var(--acid2); color: var(--acid2); }
+.relay-chip.connected .chip-dot { background: var(--acid2); }
+.feed-loading {
+  display: flex; align-items: center; gap: 10px;
+  font-size: 10px; color: var(--dim); letter-spacing: 0.12em;
+  padding: 20px 0; text-transform: uppercase;
+}
+.feed-empty { font-size: 10px; color: var(--dim); padding: 20px 0; letter-spacing: 0.1em; text-transform: uppercase; }
+.note-card {
+  padding: 12px 14px; border: 1px solid var(--border);
+  margin-bottom: 6px; background: var(--panel);
+  animation: fadeIn 0.2s ease;
+}
+.note-card:hover { border-color: var(--border2); }
+.note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.note-avatar {
+  width: 28px; height: 28px; background: var(--bg2); border: 1px solid var(--border2);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--muted); flex-shrink: 0; overflow: hidden;
+}
+.note-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.note-name { font-size: 11px; color: var(--acid); letter-spacing: 0.05em; }
+.note-pubkey { font-size: 8px; color: var(--dim); letter-spacing: 0.04em; }
+.note-time { font-size: 9px; color: var(--dim); margin-left: auto; letter-spacing: 0.04em; white-space: nowrap; }
+.note-content { font-size: 13px; color: var(--text); line-height: 1.6; word-break: break-word; }
+
+footer {
+  margin-top: 48px; padding: 20px 0;
+  border-top: 1px dashed var(--border2);
+  font-size: 10px; color: var(--dim); text-align: center;
+  letter-spacing: 0.06em; line-height: 1.9;
+}
+footer a { color: var(--muted); text-decoration: none; }
+footer a:hover { color: var(--acid2); }
+footer strong { color: var(--muted); }
+
+/* ── Toast ── */
+#toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px);
+  background: var(--panel2); border: 1px solid var(--acid2);
+  padding: 9px 18px; font-size: 10px; letter-spacing: 0.15em;
+  text-transform: uppercase; color: var(--acid);
+  opacity: 0; transition: all 0.2s; pointer-events: none; z-index: 999;
+  white-space: nowrap;
+}
+#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes blink  { 0%,49%{ opacity:1; } 50%,100%{ opacity:0.15; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-top">FAVILLA KEY · BUILT-IN EXCLUSIVE</div>
+    <div class="header-title">SPARK</div>
+    <div class="header-sub">Airgap Nostr Signing Portal</div>
+    <div class="header-badge">● No Key Online · Airgap Mode</div>
+  </header>
+
+  <!-- How it works -->
+  <div class="sec">Protocol</div>
+  <div class="how">
+    <div class="how-step">
+      <div class="how-num">01</div>
+      <div class="how-label">Write note, generate unsigned QR</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">02</div>
+      <div class="how-label">Device signs offline, shows signed QR</div>
+    </div>
+    <div class="how-step">
+      <div class="how-num">03</div>
+      <div class="how-label">Scan back → broadcast to relays</div>
+    </div>
+  </div>
+
+  <!-- Pubkey -->
+  <div class="pubkey-section">
+    <div class="field-label"><span class="dot"></span>Your Pubkey (optional)</div>
+    <div class="pubkey-row">
+      <input type="text" id="pubkey-input" placeholder="npub1… or hex pubkey"
+        oninput="onPubkeyInput()" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="btn-sm" onclick="clearPubkey()">Clear</button>
+    </div>
+    <div class="pubkey-hint" id="pubkey-hint">Enter pubkey to sign as you. Leave blank to post anonymously.</div>
+  </div>
+
+  <hr class="sec-line">
+
+  <!-- Step 1: Compose -->
+  <div class="card active" id="card-compose">
+    <div class="card-header">
+      <span class="step-pill active" id="pill-compose">STEP 01</span>
+      <span class="card-title">Write Note</span>
+    </div>
+    <div class="card-body">
+      <textarea id="compose-area" rows="4" placeholder="Transmit message…" maxlength="60"
+        oninput="onComposeInput()"></textarea>
+      <div class="compose-footer">
+        <span class="char-count" id="char-count">0 / 60 · airgap limit</span>
+        <button class="btn-primary" id="gen-qr-btn" onclick="generateQR()" disabled>Generate QR</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Show QR -->
+  <div class="card" id="card-qr">
+    <div class="card-header">
+      <span class="step-pill active" id="pill-qr">STEP 02</span>
+      <span class="card-title">Show QR to Device</span>
+    </div>
+    <div class="card-body">
+      <div class="qr-wrap">
+        <div class="qr-canvas-container">
+          <div id="qr-canvas" style="line-height:0"></div>
+        </div>
+        <div class="qr-instructions">
+          Hold QR up to your <strong>FAVILLA Key</strong> camera.<br>
+          Select <strong>Menu → Scan QR</strong> on the device.<br>
+          Press BTN1 to approve — device shows signed QR.
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn-primary" onclick="startScan()">Scan Signed QR</button>
+        <button class="btn-outline" onclick="backToCompose()">← Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Scan -->
+  <div class="card" id="card-scan">
+    <div class="card-header">
+      <span class="step-pill active">STEP 03</span>
+      <span class="card-title">Scan Device Screen</span>
+    </div>
+    <div class="card-body">
+      <div class="scan-wrap">
+        <div class="video-container">
+          <video id="scan-video" autoplay playsinline muted></video>
+          <div class="scan-overlay">
+            <div class="scan-frame">
+              <div class="scan-corners-br"></div>
+              <div class="scan-corners-tr"></div>
+            </div>
+          </div>
+        </div>
+        <div class="scan-status">
+          <div class="pulse"></div>
+          <span id="scan-status-text">Hold phone close to FAVILLA Key screen</span>
+        </div>
+        <p class="scan-tip">Get 5–10cm from the device display for best results</p>
+        <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 4: Publish -->
+  <div class="card" id="card-publish">
+    <div class="card-header">
+      <span class="step-pill active">STEP 04</span>
+      <span class="card-title">Publish to Relays</span>
+    </div>
+    <div class="card-body">
+      <div class="publish-wrap">
+        <div class="success-block">
+          <div class="success-label">Signature Verified</div>
+          <div class="success-title">SIGNED</div>
+        </div>
+        <div class="event-preview" id="event-preview">
+          <div class="content" id="preview-content"></div>
+          <div class="meta" id="preview-meta"></div>
+        </div>
+        <div class="relay-list" id="relay-list"></div>
+        <div class="btn-row">
+          <button class="btn-primary" id="publish-btn" onclick="publishEvent()">Publish to Relays</button>
+          <button class="btn-outline" onclick="resetAll()">Start Over</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feed -->
+  <div class="feed-section">
+    <div class="feed-header">
+      <span class="feed-title">Global Feed</span>
+      <div class="feed-line"></div>
+    </div>
+    <div class="relay-chips" id="relay-chips"></div>
+    <div id="feed-loading" class="feed-loading">
+      <div class="pulse"></div>
+      Connecting to relays…
+    </div>
+    <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
+    <div id="feed"></div>
+  </div>
+
+  <footer>
+    Your signing key never leaves your FAVILLA Key hardware.<br>
+    This portal handles only the <strong>unsigned</strong> event and relay publishing.<br>
+    <a href="https://github.com/nostr-protocol/nostr" target="_blank">Nostr Protocol</a> ·
+    Open Source · No Tracking · No Key Online
+  </footer>
+
+</div><!-- /wrap -->
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://nostr.mom',
+];
+
+const state = {
+  pubkeyHex: localStorage.getItem('kv_pubkey') || '',
+  unsignedEvent: null, signedEvent: null,
+  sockets: {}, profiles: {}, notes: [], knownIds: new Set(),
+  scanStream: null, scanTimer: null,
+};
+
+(function boot() {
+  if(state.pubkeyHex) {
+    document.getElementById('pubkey-input').value = state.pubkeyHex;
+    updatePubkeyHint(state.pubkeyHex);
+  }
+  connectRelays();
+  showStep('compose');
+})();
+
+function onPubkeyInput() {
+  const val = document.getElementById('pubkey-input').value.trim();
+  const hex = npubToHex(val) || (isHex64(val) ? val : '');
+  state.pubkeyHex = hex;
+  if(hex) { localStorage.setItem('kv_pubkey', hex); updatePubkeyHint(hex); }
+  else { localStorage.removeItem('kv_pubkey'); document.getElementById('pubkey-hint').textContent = 'Enter pubkey to sign as you. Leave blank to post anonymously.'; }
+}
+function clearPubkey() {
+  document.getElementById('pubkey-input').value = '';
+  state.pubkeyHex = ''; localStorage.removeItem('kv_pubkey');
+  document.getElementById('pubkey-hint').textContent = '// Pubkey cleared';
+}
+function updatePubkeyHint(hex) {
+  document.getElementById('pubkey-hint').textContent = '// Pubkey set — ' + hex.slice(0,8)+'…'+hex.slice(-6);
+}
+function npubToHex(str) {
+  if(!str.startsWith('npub1')) return null;
+  try { const dec=bech32Decode(str); return dec?toHex(dec):null; } catch(e){return null;}
+}
+function isHex64(s) { return /^[0-9a-f]{64}$/i.test(s); }
+
+function onComposeInput() {
+  const val = document.getElementById('compose-area').value;
+  const len = val.length;
+  const cc = document.getElementById('char-count');
+  cc.textContent = len + ' / 60';
+  cc.className = 'char-count' + (len > 55 ? ' warn' : '');
+  document.getElementById('gen-qr-btn').disabled = !val.trim() || len > 60;
+}
+
+function generateQR() {
+  const content = document.getElementById('compose-area').value.trim();
+  if(!content) return;
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  state.unsignedEvent = { kind:1, content, tags:[], created_at:Math.floor(Date.now()/1000), pubkey };
+  const el = document.getElementById('qr-canvas');
+  el.innerHTML = '';
+  new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:256, height:256, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
+  showStep('qr');
+  document.getElementById('pill-compose').className = 'step-pill done';
+}
+
+function backToCompose() { showStep('compose'); }
+
+async function startScan() {
+  showStep('scan');
+  const video = document.getElementById('scan-video');
+  try {
+    state.scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode:'environment', width:{ideal:1280}, height:{ideal:720} }
+    });
+    video.srcObject = state.scanStream;
+    await video.play();
+    if('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({formats:['qr_code']});
+      state.scanTimer = setInterval(async()=>{
+        try { const codes=await detector.detect(video); if(codes.length>0)gotSignedQR(codes[0].rawValue); } catch(e){}
+      }, 300);
+    } else {
+      const c=document.createElement('canvas'), ctx=c.getContext('2d');
+      const c2=document.createElement('canvas'), ctx2=c2.getContext('2d');
+      state.scanTimer = setInterval(()=>{
+        if(video.readyState!==video.HAVE_ENOUGH_DATA)return;
+        c.width=video.videoWidth; c.height=video.videoHeight; ctx.drawImage(video,0,0);
+        const img=ctx.getImageData(0,0,c.width,c.height);
+        let code=jsQR(img.data,img.width,img.height,{inversionAttempts:'attemptBoth'});
+        if(code){gotSignedQR(code.data);return;}
+        const b=ctx.getImageData(0,0,c.width,c.height);
+        for(let i=0;i<b.data.length;i+=4){const v=(b.data[i]+b.data[i+1]+b.data[i+2])/3<128?0:255;b.data[i]=b.data[i+1]=b.data[i+2]=v;}
+        code=jsQR(b.data,c.width,c.height,{inversionAttempts:'attemptBoth'});
+        if(code){gotSignedQR(code.data);return;}
+        const cx=Math.floor(c.width/4),cy=Math.floor(c.height/4),cw=Math.floor(c.width/2),ch=Math.floor(c.height/2);
+        c2.width=cw;c2.height=ch;ctx2.putImageData(b,-cx,-cy);
+        const crop=ctx2.getImageData(0,0,cw,ch);
+        code=jsQR(crop.data,cw,ch,{inversionAttempts:'attemptBoth'});
+        if(code)gotSignedQR(code.data);
+      }, 150);
+    }
+  } catch(e) { document.getElementById('scan-status-text').textContent='CAMERA ERROR: '+e.message; }
+}
+
+function stopScan() {
+  clearInterval(state.scanTimer); state.scanTimer=null;
+  if(state.scanStream){state.scanStream.getTracks().forEach(t=>t.stop());state.scanStream=null;}
+  showStep('qr');
+}
+
+function gotSignedQR(json) {
+  clearInterval(state.scanTimer); state.scanTimer=null;
+  if(state.scanStream){state.scanStream.getTracks().forEach(t=>t.stop());state.scanStream=null;}
+  try {
+    const ev = JSON.parse(json);
+    if(!ev.sig||!ev.id) throw new Error('Missing sig/id');
+    state.signedEvent = ev;
+    document.getElementById('preview-content').textContent = ev.content||'';
+    const ts = new Date(ev.created_at*1000).toLocaleString();
+    document.getElementById('preview-meta').innerHTML =
+      `<span class="meta-tag">kind:${ev.kind}</span>
+       <span class="meta-tag">${ts}</span>
+       <span class="meta-tag">${ev.pubkey.slice(0,8)}…</span>
+       <span class="meta-tag">sig:${ev.sig.slice(0,8)}…</span>`;
+    buildRelayList(); showStep('publish');
+  } catch(e) {
+    document.getElementById('scan-status-text').textContent='// INVALID QR — RETRY';
+    setTimeout(()=>{document.getElementById('scan-status-text').textContent='Hold phone close to FAVILLA Key screen';},2000);
+  }
+}
+
+function buildRelayList() {
+  document.getElementById('relay-list').innerHTML = RELAYS.map(r=>
+    `<div class="relay-item" id="relay-${btoa(r).replace(/[^a-zA-Z0-9]/g,'')}">
+      <div class="relay-dot"></div><span>${r.replace('wss://','')}</span>
+     </div>`
+  ).join('');
+}
+function setRelayState(url, st) {
+  const el = document.getElementById('relay-'+btoa(url).replace(/[^a-zA-Z0-9]/g,''));
+  if(el) el.className='relay-item '+st;
+}
+
+async function publishEvent() {
+  if(!state.signedEvent)return;
+  const btn = document.getElementById('publish-btn');
+  btn.disabled=true; btn.textContent='Publishing…';
+  const msg = JSON.stringify(['EVENT',state.signedEvent]);
+  let sent=0;
+  const promises = RELAYS.map(url=>new Promise(resolve=>{
+    setRelayState(url,'sending');
+    const ws=state.sockets[url];
+    if(ws&&ws.readyState===WebSocket.OPEN){
+      try{ws.send(msg);sent++;setRelayState(url,'sent');}catch(e){setRelayState(url,'failed');}
+      resolve();
+    } else {
+      const fresh=new WebSocket(url);
+      const timer=setTimeout(()=>{fresh.close();setRelayState(url,'failed');resolve();},4000);
+      fresh.onopen=()=>{clearTimeout(timer);try{fresh.send(msg);sent++;setRelayState(url,'sent');}catch(e){setRelayState(url,'failed');}resolve();};
+      fresh.onerror=()=>{clearTimeout(timer);setRelayState(url,'failed');resolve();};
+    }
+  }));
+  await Promise.all(promises);
+  btn.textContent='// Published!';
+  showToast('// Sent to '+sent+' relay'+(sent!==1?'s':'')+' ✓');
+  if(sent>0)addNote(state.signedEvent);
+}
+
+function resetAll() {
+  state.unsignedEvent=null;state.signedEvent=null;
+  document.getElementById('compose-area').value='';
+  document.getElementById('gen-qr-btn').disabled=true;
+  document.getElementById('char-count').textContent='0 / 60 · airgap limit';
+  document.getElementById('pill-compose').className='step-pill active';
+  document.getElementById('publish-btn').disabled=false;
+  document.getElementById('publish-btn').textContent='Publish to Relays';
+  showStep('compose');
+}
+
+function showStep(name){
+  ['compose','qr','scan','publish'].forEach(s=>{
+    document.getElementById('card-'+s).classList.toggle('active',s===name);
+  });
+}
+
+function connectRelays(){
+  renderRelayChips();
+  RELAYS.forEach(url=>openRelay(url));
+}
+function openRelay(url){
+  try{
+    const ws=new WebSocket(url);state.sockets[url]=ws;
+    ws.onopen=()=>{
+      updateChip(url,true);
+      ws.send(JSON.stringify(['REQ','global',{kinds:[1],limit:30}]));
+    };
+    ws.onmessage=e=>{
+      try{const msg=JSON.parse(e.data);if(msg[0]==='EVENT'&&msg[2])handleNote(msg[2]);}catch(er){}
+    };
+    ws.onclose=()=>{updateChip(url,false);setTimeout(()=>openRelay(url),8000);};
+    ws.onerror=()=>{};
+  }catch(e){}
+}
+function handleNote(ev){
+  if(ev.kind!==1||state.knownIds.has(ev.id))return;
+  state.knownIds.add(ev.id);state.notes.unshift(ev);
+  if(state.notes.length>100)state.notes.pop();
+  renderNote(ev,true);
+  document.getElementById('feed-loading').style.display='none';
+  document.getElementById('feed-empty').style.display='none';
+  if(!state.profiles[ev.pubkey])fetchProfile(ev.pubkey);
+}
+function renderNote(ev,prepend=false){
+  const feed=document.getElementById('feed');
+  const id='note-'+ev.id;
+  if(document.getElementById(id))return;
+  const profile=state.profiles[ev.pubkey]||{};
+  const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
+  const div=document.createElement('div');div.className='note-card';div.id=id;
+  div.innerHTML=`
+    <div class="note-header">
+      <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
+      <div><div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
+      <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div></div>
+      <div class="note-time">${timeAgo(ev.created_at)}</div>
+    </div>
+    <div class="note-content">${escHtml(ev.content||'')}</div>`;
+  if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
+  else feed.appendChild(div);
+  while(feed.children.length>50)feed.removeChild(feed.lastChild);
+}
+function fetchProfile(pubkey){
+  state.profiles[pubkey]={};
+  const ws=Object.values(state.sockets).find(w=>w&&w.readyState===WebSocket.OPEN);
+  if(!ws)return;
+  const sub='prof-'+pubkey.slice(0,8);
+  ws.send(JSON.stringify(['REQ',sub,{kinds:[0],authors:[pubkey],limit:1}]));
+  const prev=ws.onmessage;
+  ws.onmessage=e=>{
+    if(prev)prev(e);
+    try{
+      const msg=JSON.parse(e.data);
+      if(msg[0]==='EVENT'&&msg[1]===sub&&msg[2]){
+        const p=JSON.parse(msg[2].content||'{}');
+        state.profiles[pubkey]=p;
+        updateNotesWithProfile(pubkey,p);
+        ws.send(JSON.stringify(['CLOSE',sub]));
+      }
+    }catch(er){}
+  };
+}
+function updateNotesWithProfile(pubkey,p){
+  const name=p.name||p.display_name||(pubkey.slice(0,8)+'…');
+  document.querySelectorAll('[id^="nm-"]').forEach(el=>{
+    const noteId=el.id.replace('nm-','');
+    const note=state.notes.find(n=>n.id===noteId);
+    if(note&&note.pubkey===pubkey){
+      el.textContent=name;
+      const av=document.getElementById('av-'+noteId);
+      if(av){if(p.picture)av.innerHTML=`<img src="${escHtml(p.picture)}" alt="">`;else av.textContent=name[0]||'?';}
+    }
+  });
+}
+function renderRelayChips(){
+  document.getElementById('relay-chips').innerHTML=RELAYS.map(url=>
+    `<div class="relay-chip" id="chip-${btoa(url).replace(/[^a-zA-Z0-9]/g,'')}">
+      <div class="chip-dot"></div>${url.replace('wss://','').split('/')[0]}
+     </div>`
+  ).join('');
+}
+function updateChip(url,connected){
+  const el=document.getElementById('chip-'+btoa(url).replace(/[^a-zA-Z0-9]/g,''));
+  if(el)el.className='relay-chip'+(connected?' connected':'');
+}
+function timeAgo(ts){
+  const s=Math.floor(Date.now()/1000)-ts;
+  if(s<60)return s+'s'; if(s<3600)return Math.floor(s/60)+'m';
+  if(s<86400)return Math.floor(s/3600)+'h'; return Math.floor(s/86400)+'d';
+}
+function escHtml(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+function toHex(bytes){return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');}
+function bech32Decode(str){
+  const CHARSET='qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const s=str.toLowerCase();const pos=s.lastIndexOf('1');if(pos<1)return null;
+  const data=[];
+  for(let i=pos+1;i<s.length-6;i++){const d=CHARSET.indexOf(s[i]);if(d<0)return null;data.push(d);}
+  const bytes=[];let acc=0,bits=0;
+  for(const val of data){acc=(acc<<5)|val;bits+=5;if(bits>=8){bits-=8;bytes.push((acc>>bits)&0xff);}}
+  return new Uint8Array(bytes);
+}
+function addNote(ev){
+  if(state.knownIds.has(ev.id))return;
+  state.knownIds.add(ev.id);state.notes.unshift(ev);
+  renderNote(ev,true);
+  document.getElementById('feed-loading').style.display='none';
+}
+let toastTimer;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
+}
+</script>
+</body>
+</html>
