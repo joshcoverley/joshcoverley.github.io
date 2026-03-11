@@ -1,0 +1,1388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>KeyVault — Airgap Nostr Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0a0a0a;
+  --surface:  #111111;
+  --border:   #1e1e1e;
+  --border2:  #2a2a2a;
+  --text:     #e8e8e8;
+  --muted:    #555;
+  --accent:   #00ff88;
+  --accent2:  #00cc6a;
+  --warn:     #ff6b35;
+  --mono:     'DM Mono', monospace;
+  --sans:     'Syne', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── Background grid ── */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(var(--border) 1px, transparent 1px),
+    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-size: 40px 40px;
+  opacity: 0.4;
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: -40%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(ellipse, rgba(0,255,136,0.06) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* ── Layout ── */
+.wrap {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+}
+
+/* ── Header ── */
+header {
+  padding: 36px 0 32px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 36px;
+}
+
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  border: 1.5px solid var(--accent);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.logo-mark::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(0,255,136,0.12), transparent);
+}
+
+.logo-mark svg { position: relative; z-index: 1; }
+
+.logo-text h1 {
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  line-height: 1;
+}
+
+.logo-text p {
+  font-size: 11px;
+  color: var(--muted);
+  font-family: var(--mono);
+  margin-top: 3px;
+  letter-spacing: 0.04em;
+}
+
+.header-badge {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 8px;
+  border: 1px solid rgba(0,255,136,0.3);
+  border-radius: 4px;
+  color: var(--accent);
+  background: rgba(0,255,136,0.06);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+/* ── How it works ── */
+.how {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 36px;
+}
+
+.how-step {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 12px;
+  text-align: center;
+}
+
+.how-step .num {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  margin-bottom: 6px;
+  letter-spacing: 0.1em;
+}
+
+.how-step .label {
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+/* ── Pubkey input ── */
+.pubkey-section {
+  margin-bottom: 28px;
+}
+
+.field-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-label .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+input[type="text"], textarea {
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 10px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.2s;
+  resize: none;
+}
+
+input[type="text"]:focus, textarea:focus {
+  border-color: rgba(0,255,136,0.4);
+}
+
+input[type="text"]::placeholder, textarea::placeholder {
+  color: var(--muted);
+}
+
+.pubkey-row {
+  display: flex;
+  gap: 8px;
+}
+
+.pubkey-row input { flex: 1; }
+
+.btn-sm {
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 0 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s;
+  flex-shrink: 0;
+}
+
+.btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+
+.pubkey-hint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 7px;
+  line-height: 1.5;
+}
+
+/* ── Main card ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.card-header {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.step-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.06em;
+}
+
+.step-pill.active  { background: rgba(0,255,136,0.15); color: var(--accent); border: 1px solid rgba(0,255,136,0.3); }
+.step-pill.done    { background: rgba(0,255,136,0.08); color: var(--accent2); border: 1px solid rgba(0,255,136,0.15); }
+.step-pill.waiting { background: rgba(255,255,255,0.04); color: var(--muted); border: 1px solid var(--border2); }
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.card-body { padding: 18px; }
+
+/* ── Compose step ── */
+#compose-area {
+  font-size: 15px;
+  font-family: var(--sans);
+  line-height: 1.6;
+  min-height: 100px;
+  max-height: 200px;
+  overflow-y: auto;
+  border-color: var(--border2);
+}
+
+#compose-area:focus { border-color: rgba(0,255,136,0.4); }
+
+.compose-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+}
+
+.char-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.char-count.warn { color: var(--warn); }
+
+/* ── Buttons ── */
+.btn-primary {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 13px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.btn-primary:hover { background: var(--accent2); }
+.btn-primary:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-outline {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 13px;
+  padding: 10px 20px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  border: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 4px 0;
+  text-decoration: underline;
+  transition: color 0.15s;
+}
+
+.btn-ghost:hover { color: var(--text); }
+
+/* ── QR step ── */
+.qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.qr-canvas-container {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  display: inline-flex;
+}
+
+#qr-canvas { display: block; border-radius: 4px; }
+
+.qr-instructions {
+  background: rgba(0,255,136,0.06);
+  border: 1px solid rgba(0,255,136,0.15);
+  border-radius: 10px;
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.qr-instructions p {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.6;
+  font-family: var(--mono);
+}
+
+.qr-instructions strong { color: var(--accent); }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+.btn-row .btn-primary { flex: 1; }
+.btn-row .btn-outline { flex: 0; }
+
+/* ── Scan step ── */
+.scan-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.video-container {
+  width: 100%;
+  max-width: 320px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  position: relative;
+  background: #000;
+  border: 1px solid var(--border2);
+}
+
+#scan-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scan-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.scan-frame {
+  width: 60%;
+  height: 60%;
+  position: relative;
+}
+
+.scan-frame::before,
+.scan-frame::after {
+  content: '';
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  border-color: var(--accent);
+  border-style: solid;
+}
+
+.scan-frame::before { top: 0; left: 0; border-width: 2px 0 0 2px; }
+.scan-frame::after  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+.scan-corners-br::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 20px;
+  height: 20px;
+  border-color: var(--accent);
+  border-style: solid;
+  border-width: 0 0 2px 2px;
+}
+
+.scan-corners-tr::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  border-color: var(--accent);
+  border-style: solid;
+  border-width: 2px 2px 0 0;
+}
+
+.scan-status {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.7); }
+}
+
+/* ── Publish step ── */
+.publish-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  text-align: center;
+}
+
+.success-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(0,255,136,0.12);
+  border: 1.5px solid rgba(0,255,136,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+}
+
+.event-preview {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  text-align: left;
+}
+
+.event-preview .content {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.6;
+  word-break: break-word;
+  margin-bottom: 10px;
+}
+
+.event-preview .meta {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.meta-tag {
+  padding: 2px 6px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 4px;
+}
+
+.relay-list {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.relay-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.relay-item.sending { border-color: rgba(0,255,136,0.2); color: var(--accent); }
+.relay-item.sent    { border-color: rgba(0,255,136,0.3); color: var(--accent2); }
+.relay-item.failed  { border-color: rgba(255,107,53,0.3); color: var(--warn); }
+
+.relay-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.relay-dot.sending { animation: pulse 0.8s ease-in-out infinite; }
+
+/* ── Feed section ── */
+.feed-section {
+  margin-top: 32px;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  font-family: var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.relay-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.relay-chip {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 10px;
+  border: 1px solid var(--border2);
+  border-radius: 20px;
+  color: var(--muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.relay-chip .chip-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.2s;
+}
+
+.relay-chip.connected { border-color: rgba(0,255,136,0.3); color: var(--accent); }
+.relay-chip.connected .chip-dot { background: var(--accent); }
+
+.note-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+  animation: fadeIn 0.3s ease;
+}
+
+.note-card:hover { border-color: var(--border2); }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.note-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.note-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--border2);
+  overflow: hidden;
+  flex-shrink: 0;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+}
+
+.note-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.note-author {
+  flex: 1;
+  min-width: 0;
+}
+
+.note-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.note-pubkey {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.note-time {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+.note-content {
+  font-size: 14px;
+  line-height: 1.65;
+  color: #ccc;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.feed-empty {
+  text-align: center;
+  padding: 32px 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.feed-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 24px 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ── Footer ── */
+footer {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  text-align: center;
+}
+
+footer p {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.8;
+  letter-spacing: 0.04em;
+}
+
+footer a { color: var(--accent); text-decoration: none; }
+
+/* ── Toast ── */
+#toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: var(--text);
+  color: var(--bg);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  transition: transform 0.25s cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 999;
+  font-weight: 500;
+}
+
+#toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ── Step visibility ── */
+.step { display: none; }
+.step.active { display: block; }
+
+/* ── Responsive ── */
+@media (max-width: 480px) {
+  .how { grid-template-columns: 1fr; gap: 8px; }
+  .how-step { display: flex; gap: 12px; align-items: center; text-align: left; padding: 12px 14px; }
+  .how-step .num { margin-bottom: 0; flex-shrink: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <header>
+    <div class="logo-mark">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect x="3" y="8" width="14" height="10" rx="2" stroke="#00ff88" stroke-width="1.5"/>
+        <path d="M6 8V6a4 4 0 018 0v2" stroke="#00ff88" stroke-width="1.5" stroke-linecap="round"/>
+        <circle cx="10" cy="13" r="1.5" fill="#00ff88"/>
+      </svg>
+    </div>
+    <div class="logo-text">
+      <h1>KeyVault</h1>
+      <p>AIRGAP PORTAL</p>
+    </div>
+    <div class="header-badge">NO KEY ONLINE</div>
+  </header>
+
+  <!-- How it works -->
+  <div class="how">
+    <div class="how-step">
+      <div class="num">01</div>
+      <div class="label">Write a note, generate QR</div>
+    </div>
+    <div class="how-step">
+      <div class="num">02</div>
+      <div class="label">Device signs it, shows signed QR</div>
+    </div>
+    <div class="how-step">
+      <div class="num">03</div>
+      <div class="label">Scan back &amp; publish to relays</div>
+    </div>
+  </div>
+
+  <!-- Pubkey -->
+  <div class="pubkey-section">
+    <div class="field-label"><span class="dot"></span>YOUR PUBKEY (optional — for feed)</div>
+    <div class="pubkey-row">
+      <input type="text" id="pubkey-input" placeholder="npub1… or hex pubkey"
+        oninput="onPubkeyInput()" autocomplete="off" autocorrect="off" spellcheck="false">
+      <button class="btn-sm" onclick="clearPubkey()">clear</button>
+    </div>
+    <div class="pubkey-hint" id="pubkey-hint">Enter your pubkey to sign as you. Leave blank to post anonymously.</div>
+  </div>
+
+  <!-- ── STEP 1: Compose ── -->
+  <div class="card" id="card-compose">
+    <div class="card-header">
+      <span class="step-pill active" id="pill-compose">STEP 1</span>
+      <span class="card-title">Write your note</span>
+    </div>
+    <div class="card-body">
+      <textarea id="compose-area" rows="4" placeholder="What's on your mind?"
+        oninput="onComposeInput()"></textarea>
+      <div class="compose-footer">
+        <span class="char-count" id="char-count">0 / 280</span>
+        <button class="btn-primary" id="gen-qr-btn" onclick="generateQR()" disabled>
+          Generate QR →
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: Show QR ── -->
+  <div class="card step" id="card-qr">
+    <div class="card-header">
+      <span class="step-pill active" id="pill-qr">STEP 2</span>
+      <span class="card-title">Show QR to your device</span>
+    </div>
+    <div class="card-body">
+      <div class="qr-wrap">
+        <div class="qr-canvas-container">
+          <div id="qr-canvas" style="line-height:0"></div>
+        </div>
+        <div class="qr-instructions">
+          <p>Hold this QR up to your <strong>KeyVault device</strong>.<br>
+          Press the button to approve — the device will display a signed QR.</p>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="startScan()">Scan signed QR →</button>
+          <button class="btn-outline" onclick="backToCompose()">← Back</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: Scan ── -->
+  <div class="card step" id="card-scan">
+    <div class="card-header">
+      <span class="step-pill active">STEP 3</span>
+      <span class="card-title">Scan signed QR from device</span>
+    </div>
+    <div class="card-body">
+      <div class="scan-wrap">
+        <div class="video-container">
+          <video id="scan-video" autoplay playsinline muted></video>
+          <div class="scan-overlay">
+            <div class="scan-frame">
+              <div class="scan-corners-br"></div>
+              <div class="scan-corners-tr"></div>
+            </div>
+          </div>
+        </div>
+        <div class="scan-status">
+          <div class="pulse"></div>
+          <span id="scan-status-text">SCANNING FOR QR CODE</span>
+        </div>
+        <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: Publish ── -->
+  <div class="card step" id="card-publish">
+    <div class="card-header">
+      <span class="step-pill active">STEP 4</span>
+      <span class="card-title">Publish to relays</span>
+    </div>
+    <div class="card-body">
+      <div class="publish-wrap">
+        <div class="success-icon">✓</div>
+        <div class="event-preview" id="event-preview">
+          <div class="content" id="preview-content"></div>
+          <div class="meta" id="preview-meta"></div>
+        </div>
+        <div class="relay-list" id="relay-list"></div>
+        <div class="btn-row">
+          <button class="btn-primary" id="publish-btn" onclick="publishEvent()">
+            Publish to Relays
+          </button>
+          <button class="btn-outline" onclick="resetAll()">Start over</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Feed ── -->
+  <div class="feed-section">
+    <div class="section-header">
+      <span class="section-title">Global feed</span>
+      <div class="section-line"></div>
+    </div>
+    <div class="relay-chips" id="relay-chips"></div>
+    <div id="feed-loading" class="feed-loading">
+      <div class="pulse"></div>
+      Connecting to relays…
+    </div>
+    <div id="feed-empty" class="feed-empty" style="display:none">No notes yet.</div>
+    <div id="feed"></div>
+  </div>
+
+  <footer>
+    <p>
+      Your signing key never leaves your hardware device.<br>
+      This page only handles the <strong>unsigned</strong> event and publishing.<br>
+      <a href="https://github.com/nostr-protocol/nostr" target="_blank">Nostr protocol</a> ·
+      Open source · No tracking
+    </p>
+  </footer>
+
+</div><!-- /wrap -->
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// ── State ──────────────────────────────────────────────────────────────────
+const RELAYS = [
+  'wss://relay.damus.io',
+  'wss://nos.lol',
+  'wss://relay.nostr.band',
+  'wss://nostr.mom',
+];
+
+const state = {
+  pubkeyHex: localStorage.getItem('kv_pubkey') || '',
+  unsignedEvent: null,
+  signedEvent:   null,
+  sockets:       {},   // url -> WebSocket
+  profiles:      {},
+  notes:         [],
+  knownIds:      new Set(),
+  scanStream:    null,
+  scanTimer:     null,
+};
+
+// ── Boot ───────────────────────────────────────────────────────────────────
+(function boot() {
+  if(state.pubkeyHex) {
+    document.getElementById('pubkey-input').value = state.pubkeyHex;
+    updatePubkeyHint(state.pubkeyHex);
+  }
+  connectRelays();
+})();
+
+// ── Pubkey ─────────────────────────────────────────────────────────────────
+function onPubkeyInput() {
+  const val = document.getElementById('pubkey-input').value.trim();
+  const hex = npubToHex(val) || (isHex64(val) ? val : '');
+  state.pubkeyHex = hex;
+  if(hex) {
+    localStorage.setItem('kv_pubkey', hex);
+    updatePubkeyHint(hex);
+  } else {
+    localStorage.removeItem('kv_pubkey');
+    document.getElementById('pubkey-hint').textContent = 'Enter your pubkey to sign as you. Leave blank to post anonymously.';
+  }
+}
+
+function clearPubkey() {
+  document.getElementById('pubkey-input').value = '';
+  state.pubkeyHex = '';
+  localStorage.removeItem('kv_pubkey');
+  document.getElementById('pubkey-hint').textContent = 'Pubkey cleared.';
+}
+
+function updatePubkeyHint(hex) {
+  const short = hex.slice(0,8)+'…'+hex.slice(-6);
+  document.getElementById('pubkey-hint').textContent = '✓ Pubkey set — ' + short;
+}
+
+function npubToHex(str) {
+  if(!str.startsWith('npub1')) return null;
+  try {
+    const dec = bech32Decode(str);
+    return dec ? toHex(dec) : null;
+  } catch(e) { return null; }
+}
+
+function isHex64(s) { return /^[0-9a-f]{64}$/i.test(s); }
+
+// ── Compose ─────────────────────────────────────────────────────────────────
+function onComposeInput() {
+  const val = document.getElementById('compose-area').value;
+  const len = val.length;
+  const cc = document.getElementById('char-count');
+  cc.textContent = len + ' / 280';
+  cc.className = 'char-count' + (len > 260 ? ' warn' : '');
+  document.getElementById('gen-qr-btn').disabled = !val.trim();
+}
+
+function generateQR() {
+  const content = document.getElementById('compose-area').value.trim();
+  if(!content) return;
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const created_at = Math.floor(Date.now() / 1000);
+  state.unsignedEvent = { kind: 1, content, tags: [], created_at, pubkey };
+  const json = JSON.stringify(state.unsignedEvent);
+
+  // Draw QR using qrcodejs
+  const el = document.getElementById('qr-canvas');
+  el.innerHTML = '';
+  new QRCode(el, {
+    text: json,
+    width: 256,
+    height: 256,
+    colorDark: '#000000',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M
+  });
+
+  showStep('qr');
+  document.getElementById('card-compose').querySelector('.step-pill').className = 'step-pill done';
+}
+
+function backToCompose() {
+  showStep('compose');
+}
+
+// ── Scan ───────────────────────────────────────────────────────────────────
+async function startScan() {
+  showStep('scan');
+  const video = document.getElementById('scan-video');
+  try {
+    state.scanStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment' }
+    });
+    video.srcObject = state.scanStream;
+    await video.play();
+
+    if('BarcodeDetector' in window) {
+      const detector = new BarcodeDetector({ formats: ['qr_code'] });
+      state.scanTimer = setInterval(async () => {
+        try {
+          const codes = await detector.detect(video);
+          if(codes.length > 0) gotSignedQR(codes[0].rawValue);
+        } catch(e) {}
+      }, 300);
+    } else {
+      // jsQR fallback
+      const c = document.createElement('canvas');
+      const ctx = c.getContext('2d');
+      state.scanTimer = setInterval(() => {
+        if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
+        c.width = video.videoWidth; c.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0);
+        const img = ctx.getImageData(0, 0, c.width, c.height);
+        const code = jsQR(img.data, img.width, img.height);
+        if(code) gotSignedQR(code.data);
+      }, 200);
+    }
+  } catch(e) {
+    document.getElementById('scan-status-text').textContent = 'Camera error: ' + e.message;
+  }
+}
+
+function stopScan() {
+  clearInterval(state.scanTimer); state.scanTimer = null;
+  if(state.scanStream) {
+    state.scanStream.getTracks().forEach(t => t.stop());
+    state.scanStream = null;
+  }
+  showStep('qr');
+}
+
+function gotSignedQR(json) {
+  clearInterval(state.scanTimer); state.scanTimer = null;
+  if(state.scanStream) {
+    state.scanStream.getTracks().forEach(t => t.stop());
+    state.scanStream = null;
+  }
+  try {
+    const ev = JSON.parse(json);
+    if(!ev.sig || !ev.id) throw new Error('Missing sig or id');
+    state.signedEvent = ev;
+    // Populate preview
+    document.getElementById('preview-content').textContent = ev.content || '';
+    const meta = document.getElementById('preview-meta');
+    const ts = new Date(ev.created_at * 1000).toLocaleString();
+    meta.innerHTML = `
+      <span class="meta-tag">kind:${ev.kind}</span>
+      <span class="meta-tag">${ts}</span>
+      <span class="meta-tag">${ev.pubkey.slice(0,8)}…</span>
+      <span class="meta-tag">sig:${ev.sig.slice(0,8)}…</span>
+    `;
+    // Build relay list UI
+    buildRelayList();
+    showStep('publish');
+  } catch(e) {
+    document.getElementById('scan-status-text').textContent = 'Invalid QR — try again';
+    setTimeout(() => {
+      document.getElementById('scan-status-text').textContent = 'SCANNING FOR QR CODE';
+    }, 2000);
+  }
+}
+
+// ── Publish ────────────────────────────────────────────────────────────────
+function buildRelayList() {
+  const list = document.getElementById('relay-list');
+  list.innerHTML = RELAYS.map(r => `
+    <div class="relay-item" id="relay-${btoa(r).replace(/[^a-zA-Z0-9]/g,'')}">
+      <div class="relay-dot"></div>
+      <span>${r.replace('wss://','')}</span>
+    </div>
+  `).join('');
+}
+
+function setRelayState(url, st) {
+  const id = 'relay-' + btoa(url).replace(/[^a-zA-Z0-9]/g,'');
+  const el = document.getElementById(id);
+  if(el) el.className = 'relay-item ' + st;
+}
+
+async function publishEvent() {
+  if(!state.signedEvent) return;
+  const btn = document.getElementById('publish-btn');
+  btn.disabled = true;
+  btn.textContent = 'Publishing…';
+
+  const msg = JSON.stringify(['EVENT', state.signedEvent]);
+  let sent = 0;
+
+  const promises = RELAYS.map(url => new Promise(resolve => {
+    setRelayState(url, 'sending');
+    const ws = state.sockets[url];
+    if(ws && ws.readyState === WebSocket.OPEN) {
+      try { ws.send(msg); sent++; setRelayState(url, 'sent'); }
+      catch(e) { setRelayState(url, 'failed'); }
+      resolve();
+    } else {
+      // Try a fresh connection
+      const fresh = new WebSocket(url);
+      const timer = setTimeout(() => { fresh.close(); setRelayState(url, 'failed'); resolve(); }, 4000);
+      fresh.onopen = () => {
+        clearTimeout(timer);
+        try { fresh.send(msg); sent++; setRelayState(url, 'sent'); }
+        catch(e) { setRelayState(url, 'failed'); }
+        resolve();
+      };
+      fresh.onerror = () => { clearTimeout(timer); setRelayState(url, 'failed'); resolve(); };
+    }
+  }));
+
+  await Promise.all(promises);
+  btn.textContent = 'Published!';
+  showToast('Sent to ' + sent + ' relay' + (sent !== 1 ? 's' : '') + ' ✓');
+
+  // Add to local feed
+  if(sent > 0) addNote(state.signedEvent);
+}
+
+function resetAll() {
+  state.unsignedEvent = null;
+  state.signedEvent   = null;
+  document.getElementById('compose-area').value = '';
+  document.getElementById('gen-qr-btn').disabled = true;
+  document.getElementById('char-count').textContent = '0 / 280';
+  document.getElementById('card-compose').querySelector('.step-pill').className = 'step-pill active';
+  document.getElementById('publish-btn').disabled = false;
+  document.getElementById('publish-btn').textContent = 'Publish to Relays';
+  showStep('compose');
+}
+
+// ── Steps ──────────────────────────────────────────────────────────────────
+function showStep(name) {
+  ['compose','qr','scan','publish'].forEach(s => {
+    document.getElementById('card-'+s).classList.toggle('active', s === name);
+  });
+}
+
+// Start on compose
+showStep('compose');
+
+// ── Relays / Feed ──────────────────────────────────────────────────────────
+function connectRelays() {
+  renderRelayChips();
+  RELAYS.forEach(url => openRelay(url));
+}
+
+function openRelay(url) {
+  try {
+    const ws = new WebSocket(url);
+    state.sockets[url] = ws;
+    ws.onopen = () => {
+      updateChip(url, true);
+      // Subscribe to global feed
+      ws.send(JSON.stringify(['REQ','global',{kinds:[1],limit:30}]));
+    };
+    ws.onmessage = e => {
+      try {
+        const msg = JSON.parse(e.data);
+        if(msg[0]==='EVENT' && msg[2]) handleNote(msg[2]);
+      } catch(er) {}
+    };
+    ws.onclose = () => { updateChip(url, false); setTimeout(()=>openRelay(url), 8000); };
+    ws.onerror = () => {};
+  } catch(e) {}
+}
+
+function handleNote(ev) {
+  if(ev.kind !== 1 || state.knownIds.has(ev.id)) return;
+  state.knownIds.add(ev.id);
+  state.notes.unshift(ev);
+  if(state.notes.length > 100) state.notes.pop();
+  renderNote(ev, true);
+  document.getElementById('feed-loading').style.display = 'none';
+  document.getElementById('feed-empty').style.display = 'none';
+  // Fetch profile if unknown
+  if(!state.profiles[ev.pubkey]) fetchProfile(ev.pubkey);
+}
+
+function renderNote(ev, prepend=false) {
+  const feed = document.getElementById('feed');
+  const id = 'note-' + ev.id;
+  if(document.getElementById(id)) return;
+  const time = timeAgo(ev.created_at);
+  const profile = state.profiles[ev.pubkey] || {};
+  const name = profile.name || profile.display_name || (ev.pubkey.slice(0,8)+'…');
+  const content = escHtml(ev.content || '');
+  const div = document.createElement('div');
+  div.className = 'note-card';
+  div.id = id;
+  div.innerHTML = `
+    <div class="note-header">
+      <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
+      <div class="note-author">
+        <div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
+        <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div>
+      </div>
+      <div class="note-time">${time}</div>
+    </div>
+    <div class="note-content">${content}</div>
+  `;
+  if(prepend && feed.firstChild) feed.insertBefore(div, feed.firstChild);
+  else feed.appendChild(div);
+  // Cap feed at 50 rendered notes
+  while(feed.children.length > 50) feed.removeChild(feed.lastChild);
+}
+
+function fetchProfile(pubkey) {
+  state.profiles[pubkey] = {}; // mark as fetching
+  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
+  if(!ws) return;
+  const sub = 'prof-' + pubkey.slice(0,8);
+  ws.send(JSON.stringify(['REQ', sub, {kinds:[0], authors:[pubkey], limit:1}]));
+  const orig = ws.onmessage;
+  const handler = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if(msg[0]==='EVENT' && msg[1]===sub && msg[2]) {
+        const p = JSON.parse(msg[2].content || '{}');
+        state.profiles[pubkey] = p;
+        updateNotesWithProfile(pubkey, p);
+        ws.send(JSON.stringify(['CLOSE', sub]));
+      }
+    } catch(er) {}
+  };
+  // Attach additional listener
+  const prevOnmessage = ws.onmessage;
+  ws.onmessage = e => { if(prevOnmessage) prevOnmessage(e); handler(e); };
+}
+
+function updateNotesWithProfile(pubkey, p) {
+  const name = p.name || p.display_name || (pubkey.slice(0,8)+'…');
+  document.querySelectorAll('[id^="nm-"]').forEach(el => {
+    const noteId = el.id.replace('nm-','');
+    const note = state.notes.find(n=>n.id===noteId);
+    if(note && note.pubkey === pubkey) {
+      el.textContent = name;
+      const av = document.getElementById('av-'+noteId);
+      if(av) {
+        if(p.picture) av.innerHTML = `<img src="${escHtml(p.picture)}" alt="">`;
+        else av.textContent = name[0]||'?';
+      }
+    }
+  });
+}
+
+// ── Relay chips ────────────────────────────────────────────────────────────
+function renderRelayChips() {
+  const el = document.getElementById('relay-chips');
+  el.innerHTML = RELAYS.map(url => `
+    <div class="relay-chip" id="chip-${btoa(url).replace(/[^a-zA-Z0-9]/g,'')}">
+      <div class="chip-dot"></div>
+      ${url.replace('wss://','').split('/')[0]}
+    </div>
+  `).join('');
+}
+
+function updateChip(url, connected) {
+  const id = 'chip-' + btoa(url).replace(/[^a-zA-Z0-9]/g,'');
+  const el = document.getElementById(id);
+  if(el) el.className = 'relay-chip' + (connected ? ' connected' : '');
+}
+
+// ── Helpers ────────────────────────────────────────────────────────────────
+function timeAgo(ts) {
+  const s = Math.floor(Date.now()/1000) - ts;
+  if(s < 60) return s + 's';
+  if(s < 3600) return Math.floor(s/60) + 'm';
+  if(s < 86400) return Math.floor(s/3600) + 'h';
+  return Math.floor(s/86400) + 'd';
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function toHex(bytes) {
+  return Array.from(bytes).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// Minimal bech32 decode for npub
+function bech32Decode(bech32Str) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const str = bech32Str.toLowerCase();
+  const pos = str.lastIndexOf('1');
+  if(pos < 1) return null;
+  const data = [];
+  for(let i=pos+1; i<str.length-6; i++) {
+    const d = CHARSET.indexOf(str[i]);
+    if(d < 0) return null;
+    data.push(d);
+  }
+  // Convert 5-bit groups to bytes
+  const bytes = [];
+  let acc = 0, bits = 0;
+  for(const val of data) {
+    acc = (acc<<5)|val; bits+=5;
+    if(bits>=8) { bits-=8; bytes.push((acc>>bits)&0xff); }
+  }
+  return new Uint8Array(bytes);
+}
+
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+function addNote(ev) {
+  if(state.knownIds.has(ev.id)) return;
+  state.knownIds.add(ev.id);
+  state.notes.unshift(ev);
+  renderNote(ev, true);
+  document.getElementById('feed-loading').style.display = 'none';
+}
+
+</script>
+</body>
+</html>
