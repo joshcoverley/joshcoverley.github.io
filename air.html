@@ -440,17 +440,25 @@ footer strong { color: var(--muted); }
     <div class="card-body">
       <div class="scan-wrap">
 
-        <!-- Primary: paste from native camera scan -->
+        <!-- Primary: native camera capture -->
         <div id="scan-paste-mode" style="width:100%;text-align:center">
           <p style="font-size:11px;color:var(--text);letter-spacing:0.08em;line-height:1.9;margin-bottom:16px">
-            <span style="color:var(--acid)">01</span> · Open iPhone Camera app<br>
-            <span style="color:var(--acid)">02</span> · Point at FAVILLA Key screen<br>
-            <span style="color:var(--acid)">03</span> · Tap the notification → <strong style="color:var(--acid)">Copy</strong><br>
-            <span style="color:var(--acid)">04</span> · Tap Paste below
+            Tap below to open your camera.<br>
+            <span style="color:var(--dim)">Point at the FAVILLA Key screen and take a photo.</span>
           </p>
-          <button class="btn-primary" id="paste-primary-btn" onclick="pasteSignedQR()" style="width:100%;margin-bottom:10px">⌘ PASTE FROM CAMERA</button>
+
+          <!-- Hidden file input — triggers native camera on iOS -->
+          <input type="file" id="qr-capture-input" accept="image/*" capture="environment"
+            style="display:none" onchange="decodeFromPhoto(this)">
+
+          <button class="btn-primary" style="width:100%;margin-bottom:10px"
+            onclick="document.getElementById('qr-capture-input').click()">
+            ◉ OPEN CAMERA
+          </button>
+
           <div id="paste-status" style="font-size:10px;color:var(--orange);min-height:16px;margin-bottom:12px;letter-spacing:0.08em"></div>
-          <button class="btn-ghost" style="font-size:10px;opacity:0.6" onclick="showCameraScanner()">or use in-app camera scanner ↓</button>
+          <button class="btn-ghost" style="font-size:10px;opacity:0.6" onclick="showCameraScanner()">or use in-app scanner ↓</button>
+          <button class="btn-ghost" style="font-size:10px;opacity:0.6;margin-left:8px" onclick="pasteSignedQR()">or paste ↓</button>
         </div>
 
         <!-- Secondary: in-app jsQR camera -->
@@ -642,34 +650,54 @@ async function startScan() {
   showStep('scan');
   document.getElementById('scan-paste-mode').style.display = 'block';
   document.getElementById('scan-camera-mode').style.display = 'none';
-
-  const statusEl = document.getElementById('paste-status');
-
-  // Detailed BarcodeDetector check
-  console.log('[BD] in window:', 'BarcodeDetector' in window);
-  console.log('[BD] type:', typeof BarcodeDetector);
-  if ('BarcodeDetector' in window) {
-    try {
-      const formats = await BarcodeDetector.getSupportedFormats();
-      console.log('[BD] formats:', formats);
-      if (formats.includes('qr_code')) {
-        statusEl.textContent = 'NATIVE QR SCANNER AVAILABLE — TAP SCAN BELOW';
-        document.getElementById('paste-primary-btn').textContent = '◉ SCAN WITH NATIVE CAMERA';
-        document.getElementById('paste-primary-btn').onclick = startNativeBarcodeDetector;
-        return;
-      } else {
-        console.log('[BD] qr_code not in formats:', formats);
-        statusEl.textContent = 'BD available but no qr_code: ' + formats.join(', ');
-      }
-    } catch(e) {
-      console.log('[BD] getSupportedFormats error:', e.message);
-      statusEl.textContent = 'BD error: ' + e.message;
-    }
-  } else {
-    console.log('[BD] not available');
-    statusEl.textContent = 'BarcodeDetector not available on this browser';
-  }
+  // Reset file input so same photo can be reused
+  document.getElementById('qr-capture-input').value = '';
 }
+
+async function decodeFromPhoto(input) {
+  const statusEl = document.getElementById('paste-status');
+  if (!input.files || !input.files[0]) return;
+  statusEl.textContent = 'DECODING…';
+
+  const file = input.files[0];
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.src = url;
+  await new Promise(r => { img.onload = r; });
+  URL.revokeObjectURL(url);
+
+  // Draw to canvas — try multiple scales for best decode
+  await (window._jsQRReady || Promise.resolve());
+  if (typeof jsQR === 'undefined') { statusEl.textContent = 'jsQR not loaded'; return; }
+
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+
+  // Try at original size, then downscaled versions
+  const scales = [1, 0.5, 0.25, 2];
+  for (const scale of scales) {
+    canvas.width  = Math.round(img.width  * scale);
+    canvas.height = Math.round(img.height * scale);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const code = jsQR(idata.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+    if (code && code.data && code.data.length > 0) {
+      statusEl.textContent = '✓ DECODED';
+      gotSignedQR(code.data);
+      return;
+    }
+    // chunk fallback
+    if (code && code.chunks) {
+      const text = code.chunks.map(c =>
+        c.type === 'byte' ? new TextDecoder().decode(new Uint8Array(c.bytes)) : (c.text || '')
+      ).join('');
+      if (text.length > 0) { statusEl.textContent = '✓ DECODED'; gotSignedQR(text); return; }
+    }
+  }
+  statusEl.textContent = '✗ COULD NOT DECODE — TRY AGAIN, HOLD STEADY';
+}
+
+
 
 async function showCameraScanner() {
   document.getElementById('scan-paste-mode').style.display = 'none';
