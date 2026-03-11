@@ -1092,7 +1092,7 @@ async function startScan() {
         const boosted = ctx.getImageData(0, 0, c.width, c.height);
         for(let i = 0; i < boosted.data.length; i += 4) {
           const avg = (boosted.data[i] + boosted.data[i+1] + boosted.data[i+2]) / 3;
-          const v = avg < 140 ? 0 : 255;  // hard threshold
+          const v = avg < 128 ? 0 : 255;  // hard threshold (works for both normal and inverted QR)
           boosted.data[i] = boosted.data[i+1] = boosted.data[i+2] = v;
         }
         code = jsQR(boosted.data, c.width, c.height, {inversionAttempts: 'attemptBoth'});
