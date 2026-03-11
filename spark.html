@@ -858,7 +858,7 @@ footer a { color: var(--accent); text-decoration: none; }
         </div>
         <div class="qr-instructions">
           <p>Hold this QR up to your <strong>KeyVault device</strong>.<br>
-          Press the button to approve — the device will display a signed QR.</p>
+          Press the button to approve — the device will display a signed QR on its small screen.</p>
         </div>
         <div class="btn-row">
           <button class="btn-primary" onclick="startScan()">Scan signed QR →</button>
@@ -887,8 +887,9 @@ footer a { color: var(--accent); text-decoration: none; }
         </div>
         <div class="scan-status">
           <div class="pulse"></div>
-          <span id="scan-status-text">SCANNING FOR QR CODE</span>
+          <span id="scan-status-text">HOLD PHONE CLOSE TO DEVICE SCREEN</span>
         </div>
+        <p style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;max-width:280px">Tip: Hold your phone 5–10cm from the device screen. The QR is small — get close.</p>
         <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
       </div>
     </div>
@@ -1058,7 +1059,7 @@ async function startScan() {
   const video = document.getElementById('scan-video');
   try {
     state.scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment' }
+      video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } }
     });
     video.srcObject = state.scanStream;
     await video.play();
@@ -1075,14 +1076,37 @@ async function startScan() {
       // jsQR fallback
       const c = document.createElement('canvas');
       const ctx = c.getContext('2d');
+      const c2 = document.createElement('canvas');
+      const ctx2 = c2.getContext('2d');
       state.scanTimer = setInterval(() => {
         if(video.readyState !== video.HAVE_ENOUGH_DATA) return;
         c.width = video.videoWidth; c.height = video.videoHeight;
         ctx.drawImage(video, 0, 0);
+
+        // Attempt 1: raw frame, try both inversion modes
         const img = ctx.getImageData(0, 0, c.width, c.height);
-        const code = jsQR(img.data, img.width, img.height);
+        let code = jsQR(img.data, img.width, img.height, {inversionAttempts: 'attemptBoth'});
+        if(code) { gotSignedQR(code.data); return; }
+
+        // Attempt 2: boost contrast — remap pixel values to increase black/white separation
+        const boosted = ctx.getImageData(0, 0, c.width, c.height);
+        for(let i = 0; i < boosted.data.length; i += 4) {
+          const avg = (boosted.data[i] + boosted.data[i+1] + boosted.data[i+2]) / 3;
+          const v = avg < 140 ? 0 : 255;  // hard threshold
+          boosted.data[i] = boosted.data[i+1] = boosted.data[i+2] = v;
+        }
+        code = jsQR(boosted.data, c.width, c.height, {inversionAttempts: 'attemptBoth'});
+        if(code) { gotSignedQR(code.data); return; }
+
+        // Attempt 3: center crop of boosted image (QR may not fill frame)
+        const cx = Math.floor(c.width/4), cy = Math.floor(c.height/4);
+        const cw = Math.floor(c.width/2), ch = Math.floor(c.height/2);
+        c2.width = cw; c2.height = ch;
+        ctx2.putImageData(boosted, -cx, -cy);
+        const crop = ctx2.getImageData(0, 0, cw, ch);
+        code = jsQR(crop.data, cw, ch, {inversionAttempts: 'attemptBoth'});
         if(code) gotSignedQR(code.data);
-      }, 200);
+      }, 150);
     }
   } catch(e) {
     document.getElementById('scan-status-text').textContent = 'Camera error: ' + e.message;
