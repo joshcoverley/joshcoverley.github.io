@@ -450,6 +450,7 @@ footer strong { color: var(--muted); }
           <span id="scan-status-text">SCANNING · HOLD CLOSE TO DEVICE SCREEN</span>
         </div>
         <p class="scan-tip">Point the dot at the device screen. No framing needed — just hold ~5cm away and steady.</p>
+        <div id="scan-debug" style="width:100%;max-width:380px;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:0.05em;line-height:1.9;text-align:left;min-height:60px"></div>
         <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
       </div>
     </div>
@@ -836,8 +837,19 @@ function showToast(msg){
 }
 
 // ── QR Scanner ────────────────────────────────────────────────────────────
+function dbg(msg) {
+  const el = document.getElementById('scan-debug');
+  if (el) el.innerHTML += msg + '<br>';
+  console.log('[SCAN]', msg);
+}
+
 function startQRScanner(video, onFound, onStatus) {
   let stopped = false;
+  dbg('startQRScanner called');
+  dbg('BarcodeDetector: ' + ('BarcodeDetector' in window ? 'YES' : 'NO'));
+  dbg('isSecureContext: ' + window.isSecureContext);
+  dbg('video.readyState: ' + video.readyState);
+  dbg('video size: ' + video.videoWidth + 'x' + video.videoHeight);
 
   function stop() {
     stopped = true;
@@ -846,6 +858,7 @@ function startQRScanner(video, onFound, onStatus) {
   // ── Path 1: BarcodeDetector (iOS Safari uses Apple Vision — very reliable) ──
   if ('BarcodeDetector' in window) {
     if (onStatus) onStatus('SCANNING · NATIVE DECODER');
+    dbg('Using BarcodeDetector');
     let detecting = false;
     const bd = new BarcodeDetector({ formats: ['qr_code'] });
     const timer = setInterval(async () => {
@@ -854,12 +867,16 @@ function startQRScanner(video, onFound, onStatus) {
       detecting = true;
       try {
         const codes = await bd.detect(video);
+        dbg('BD tick: ' + codes.length + ' codes');
         if (codes.length > 0 && codes[0].rawValue) {
+          dbg('BD found: ' + codes[0].rawValue.slice(0, 30));
           clearInterval(timer);
           stopped = true;
           onFound(codes[0].rawValue);
         }
-      } catch(e) {}
+      } catch(e) {
+        dbg('BD error: ' + (e.message || e.name || e));
+      }
       detecting = false;
     }, 300);
     return stop;
@@ -867,12 +884,21 @@ function startQRScanner(video, onFound, onStatus) {
 
   // ── Path 2: jsQR fallback ─────────────────────────────────────────────────
   if (onStatus) onStatus('SCANNING · jsQR');
+  dbg('Using jsQR');
+  dbg('jsQR loaded: ' + (typeof jsQR !== 'undefined' ? 'YES' : 'NO'));
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  let tickCount = 0;
 
   const timer = setInterval(() => {
     if (stopped) { clearInterval(timer); return; }
-    if (video.readyState < 2 || !video.videoWidth) return;
+    tickCount++;
+    if (video.readyState < 2 || !video.videoWidth) {
+      if (tickCount <= 5) dbg('tick ' + tickCount + ': video not ready (state=' + video.readyState + ')');
+      return;
+    }
+
+    if (tickCount <= 3) dbg('tick ' + tickCount + ': ' + video.videoWidth + 'x' + video.videoHeight);
 
     canvas.width  = video.videoWidth;
     canvas.height = video.videoHeight;
@@ -881,16 +907,16 @@ function startQRScanner(video, onFound, onStatus) {
     // Full frame — raw
     let idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
     let code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
+    if (code) { clearInterval(timer); stopped = true; dbg('jsQR full raw: FOUND'); onFound(code.data); return; }
 
-    // Full frame — hard threshold (helps white-on-black QR)
+    // Full frame — hard threshold
     const d = new Uint8ClampedArray(idata.data);
     for (let i = 0; i < d.length; i += 4) {
       const v = (d[i] + d[i+1] + d[i+2]) / 3 < 128 ? 0 : 255;
       d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
     }
     code = jsQR(d, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
+    if (code) { clearInterval(timer); stopped = true; dbg('jsQR threshold: FOUND'); onFound(code.data); return; }
 
     // Center crop 2x upscale
     const cw = Math.floor(canvas.width / 2),  ch = Math.floor(canvas.height / 2);
@@ -900,8 +926,9 @@ function startQRScanner(video, onFound, onStatus) {
     c2.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw*2, ch*2);
     idata = c2.getContext('2d').getImageData(0, 0, c2.width, c2.height);
     code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
+    if (code) { clearInterval(timer); stopped = true; dbg('jsQR crop: FOUND'); onFound(code.data); return; }
 
+    if (tickCount <= 3 || tickCount % 10 === 0) dbg('tick ' + tickCount + ': no QR found');
   }, 250);
 
   return stop;
