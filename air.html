@@ -439,19 +439,37 @@ footer strong { color: var(--muted); }
     </div>
     <div class="card-body">
       <div class="scan-wrap">
-        <div class="video-container">
-          <video id="scan-video" autoplay playsinline muted></video>
-          <div class="scan-overlay">
-            <div class="scan-reticle"></div>
+
+        <!-- Primary: paste from native camera scan -->
+        <div id="scan-paste-mode" style="width:100%;text-align:center">
+          <p style="font-size:11px;color:var(--text);letter-spacing:0.08em;line-height:1.9;margin-bottom:16px">
+            <span style="color:var(--acid)">01</span> · Open iPhone Camera app<br>
+            <span style="color:var(--acid)">02</span> · Point at FAVILLA Key screen<br>
+            <span style="color:var(--acid)">03</span> · Tap the notification → <strong style="color:var(--acid)">Copy</strong><br>
+            <span style="color:var(--acid)">04</span> · Tap Paste below
+          </p>
+          <button class="btn-primary" id="paste-primary-btn" onclick="pasteSignedQR()" style="width:100%;margin-bottom:10px">⌘ PASTE FROM CAMERA</button>
+          <div id="paste-status" style="font-size:10px;color:var(--orange);min-height:16px;margin-bottom:12px;letter-spacing:0.08em"></div>
+          <button class="btn-ghost" style="font-size:10px;opacity:0.6" onclick="showCameraScanner()">or use in-app camera scanner ↓</button>
+        </div>
+
+        <!-- Secondary: in-app jsQR camera -->
+        <div id="scan-camera-mode" style="display:none;width:100%">
+          <div class="video-container">
+            <video id="scan-video" autoplay playsinline muted></video>
+            <div class="scan-overlay">
+              <div class="scan-reticle"></div>
+            </div>
           </div>
+          <div class="scan-status">
+            <div class="pulse"></div>
+            <span id="scan-status-text">SCANNING · HOLD CLOSE TO DEVICE SCREEN</span>
+          </div>
+          <p class="scan-tip">Hold phone 5–10cm from device screen. Keep steady.</p>
+          <div id="scan-debug" style="width:100%;max-width:380px;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:0.05em;line-height:1.9;text-align:left;min-height:60px"></div>
+          <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
         </div>
-        <div class="scan-status">
-          <div class="pulse"></div>
-          <span id="scan-status-text">SCANNING · HOLD CLOSE TO DEVICE SCREEN</span>
-        </div>
-        <p class="scan-tip">Point the dot at the device screen. No framing needed — just hold ~5cm away and steady.</p>
-        <div id="scan-debug" style="width:100%;max-width:380px;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:0.05em;line-height:1.9;text-align:left;min-height:60px"></div>
-        <button class="btn-ghost" onclick="stopScan()">← Cancel</button>
+
       </div>
     </div>
   </div>
@@ -622,6 +640,110 @@ function backToCompose() { showStep('compose'); }
 
 async function startScan() {
   showStep('scan');
+  document.getElementById('scan-paste-mode').style.display = 'block';
+  document.getElementById('scan-camera-mode').style.display = 'none';
+
+  // Check BarcodeDetector and update instructions
+  const statusEl = document.getElementById('paste-status');
+  if ('BarcodeDetector' in window) {
+    try {
+      const formats = await BarcodeDetector.getSupportedFormats();
+      if (formats.includes('qr_code')) {
+        statusEl.textContent = 'NATIVE QR SCANNER AVAILABLE — TAP SCAN BELOW';
+        // Replace paste button with native scan button
+        document.getElementById('paste-primary-btn').textContent = '◉ SCAN WITH NATIVE CAMERA';
+        document.getElementById('paste-primary-btn').onclick = startNativeBarcodeDetector;
+        return;
+      }
+    } catch(e) {}
+  }
+  dbg('BarcodeDetector: ' + ('BarcodeDetector' in window ? 'exists but no qr_code' : 'not available'));
+}
+
+async function showCameraScanner() {
+  document.getElementById('scan-paste-mode').style.display = 'none';
+  document.getElementById('scan-camera-mode').style.display = 'block';
+  await startCameraScanner();
+}
+
+async function pasteSignedQR() {
+  const statusEl = document.getElementById('paste-status');
+  try {
+    const text = await navigator.clipboard.readText();
+    if (!text || !text.trim()) { statusEl.textContent = 'CLIPBOARD EMPTY — COPY FROM CAMERA FIRST'; return; }
+    const trimmed = text.trim();
+    statusEl.textContent = 'Got ' + trimmed.length + ' chars — processing…';
+    gotSignedQR(trimmed);
+  } catch(e) {
+    // Clipboard API blocked — show manual paste input instead
+    statusEl.textContent = '';
+    const existing = document.getElementById('manual-paste-input');
+    if (existing) { existing.focus(); return; }
+    const wrap = document.getElementById('scan-paste-mode');
+    const inp = document.createElement('textarea');
+    inp.id = 'manual-paste-input';
+    inp.placeholder = 'Paste QR data here…';
+    inp.style.cssText = 'width:100%;height:60px;background:var(--panel);color:var(--text);border:1px solid var(--acid);padding:8px;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;margin-bottom:8px;resize:none;box-sizing:border-box';
+    const btn = document.createElement('button');
+    btn.className = 'btn-primary';
+    btn.style.width = '100%';
+    btn.textContent = '→ SUBMIT';
+    btn.onclick = () => {
+      const val = inp.value.trim();
+      if (val) gotSignedQR(val);
+      else statusEl.textContent = 'NOTHING PASTED';
+    };
+    wrap.insertBefore(inp, wrap.querySelector('.btn-ghost'));
+    wrap.insertBefore(btn, wrap.querySelector('.btn-ghost'));
+    inp.focus();
+    statusEl.textContent = 'PASTE MANUALLY BELOW ↓';
+  }
+}
+
+async function startNativeBarcodeDetector() {
+  // Use BarcodeDetector with a hidden video stream — most reliable on iOS 17+
+  document.getElementById('scan-paste-mode').style.display = 'none';
+  document.getElementById('scan-camera-mode').style.display = 'block';
+  const statusEl = document.getElementById('scan-status-text');
+  statusEl.textContent = 'SCANNING · NATIVE DECODER';
+
+  const video = document.getElementById('scan-video');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+  } catch(e) {
+    statusEl.textContent = 'CAMERA ERROR: ' + (e.name || e.message);
+    return;
+  }
+  state.scanStream = stream;
+  video.srcObject = stream;
+  await new Promise(r => { video.onloadedmetadata = r; });
+  await video.play();
+
+  const bd = new BarcodeDetector({ formats: ['qr_code'] });
+  let stopped = false;
+  state.scanTimer = () => { stopped = true; };
+
+  let detecting = false;
+  const timer = setInterval(async () => {
+    if (stopped) { clearInterval(timer); return; }
+    if (detecting || video.readyState < 2) return;
+    detecting = true;
+    try {
+      const codes = await bd.detect(video);
+      if (codes.length > 0 && codes[0].rawValue) {
+        clearInterval(timer);
+        stopped = true;
+        stream.getTracks().forEach(t => t.stop());
+        dbg('BarcodeDetector FOUND: len=' + codes[0].rawValue.length);
+        gotSignedQR(codes[0].rawValue);
+      }
+    } catch(e) { dbg('BD error: ' + e.message); }
+    detecting = false;
+  }, 200);
+}
+
+async function startCameraScanner() {
   const video = document.getElementById('scan-video');
   const statusEl = document.getElementById('scan-status-text');
 
