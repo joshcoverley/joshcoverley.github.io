@@ -1144,28 +1144,11 @@ function startQRScanner(video, onFound, onStatus) {
         ctx.drawImage(video, 0, 0);
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-        // Invert pixels — SHARP display is white-on-black, ZXing expects black-on-white
-        const inv = new Uint8ClampedArray(imageData.data);
-        for (let i = 0; i < inv.length; i += 4) {
-          inv[i] = 255 - inv[i];
-          inv[i+1] = 255 - inv[i+1];
-          inv[i+2] = 255 - inv[i+2];
-        }
-        const invertedData = new ImageData(inv, canvas.width, canvas.height);
-
-        // Try inverted first (SHARP display), then original as fallback
-        let results = await zxing.readBarcodesFromImageData(invertedData, {
+        const results = await zxing.readBarcodesFromImageData(imageData, {
           formats: ['QRCode'],
           tryHarder: true,
           maxSymbols: 1,
         });
-        if (!results || results.length === 0) {
-          results = await zxing.readBarcodesFromImageData(imageData, {
-            formats: ['QRCode'],
-            tryHarder: true,
-            maxSymbols: 1,
-          });
-        }
 
         if (results && results.length > 0) {
           // zxing-wasm result shape varies by version: .text or .rawValue
