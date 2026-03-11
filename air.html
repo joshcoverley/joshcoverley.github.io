@@ -803,7 +803,8 @@ async function startCameraScanner() {
       // Quick pre-validate before stopping the scanner
       const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
       const isJSON    = data.startsWith('{') && data.endsWith('}');
-      if (!isCompact && !isJSON) {
+      const isURL     = data.includes('?e=') && /[0-9a-f]{192}/.test(data);
+      if (!isCompact && !isJSON && !isURL) {
         dbg('ignoring: len=' + data.length + ' not compact or JSON, keeps scanning');
         return; // don't stop scanner, keep trying
       }
@@ -826,6 +827,12 @@ function gotSignedQR(json) {
   if(typeof state.scanTimer==='function') state.scanTimer();
   state.scanTimer = null;
   if(state.scanStream){state.scanStream.getTracks().forEach(t=>t.stop());state.scanStream=null;}
+
+  // Extract compact hex from URL format: https://...?e=<192hexchars>
+  if (json.includes('?e=')) {
+    const match = json.match(/[?&]e=([0-9a-f]{192})/i);
+    if (match) { json = match[1]; dbg('extracted ?e= param: ' + json.slice(0,16) + '...'); }
+  }
 
   dbg('gotSignedQR: len=' + json.length + ' starts=' + json.slice(0,20));
   dbg('unsignedEvent: ' + (state.unsignedEvent ? 'YES pubkey=' + (state.unsignedEvent.pubkey||'?').slice(0,8) : 'NULL'));
