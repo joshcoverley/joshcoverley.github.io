@@ -579,30 +579,57 @@ function backToCompose() { showStep('compose'); }
 async function startScan() {
   showStep('scan');
   const video = document.getElementById('scan-video');
-  try {
-    state.scanStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-    }).catch(() => navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }));
-    // Apply zoom via track constraints — shifts autofocus to close range (~5cm)
+  const statusEl = document.getElementById('scan-status-text');
+
+  // Try camera constraints from most specific to most permissive
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+
+  let stream = null;
+  let lastErr = null;
+  for (const constraints of attempts) {
     try {
-      const track = state.scanStream.getVideoTracks()[0];
-      const caps = track.getCapabilities ? track.getCapabilities() : {};
-      if(caps.zoom) {
-        const z = Math.min(2.5, caps.zoom.max);
-        await track.applyConstraints({ advanced: [{ zoom: z }] });
-      }
-    } catch(e) {}
-    video.srcObject = state.scanStream;
-    await new Promise(r => { video.onloadedmetadata = r; });
-    const stopFn = await buildScanner(
-      video,
-      (data) => { if(stopFn) stopFn(); gotSignedQR(data); },
-      (msg)  => { const el = document.getElementById('scan-status-text'); if(el) el.textContent = msg; }
-    );
-    state.scanTimer = stopFn;
-  } catch(e) {
-    document.getElementById('scan-status-text').textContent = 'CAMERA ERROR: ' + e.message;
+      stream = await navigator.mediaDevices.getUserMedia(constraints);
+      break;
+    } catch(e) {
+      lastErr = e;
+    }
   }
+
+  if (!stream) {
+    const name = (lastErr && lastErr.name) || '';
+    statusEl.textContent =
+      name === 'NotAllowedError'  ? '// CAMERA PERMISSION DENIED — CHECK SAFARI SETTINGS' :
+      name === 'NotFoundError'    ? '// NO CAMERA FOUND ON THIS DEVICE' :
+      name === 'NotReadableError' ? '// CAMERA IN USE BY ANOTHER APP' :
+      name === 'OverconstrainedError' ? '// CAMERA CONSTRAINT ERROR — TRY RELOADING' :
+      '// CAMERA ERROR: ' + (name || (lastErr && lastErr.message) || 'unknown — is this page on HTTPS?');
+    return;
+  }
+
+  state.scanStream = stream;
+
+  // Optional: zoom in to shift focus plane closer (~5cm)
+  try {
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.zoom && caps.zoom.max > 1) {
+      await track.applyConstraints({ advanced: [{ zoom: Math.min(2.5, caps.zoom.max) }] });
+    }
+  } catch(e) {}
+
+  video.srcObject = stream;
+  await new Promise(r => { video.onloadedmetadata = r; });
+
+  const stopFn = await buildScanner(
+    video,
+    (data) => { if (typeof stopFn === 'function') stopFn(); gotSignedQR(data); },
+    (msg)  => { if (statusEl) statusEl.textContent = msg; }
+  );
+  state.scanTimer = stopFn;
 }
 
 function stopScan() {
