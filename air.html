@@ -519,13 +519,29 @@ window._jsQRReady = new Promise((resolve, reject) => {
     document.head.appendChild(s);
   }
   tryLoad([
-    'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js',
     'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js',
     'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js',
   ]);
 });
+
+// Load qrcodejs with fallback CDN
+window._qrReady = new Promise((resolve, reject) => {
+  function tryLoad(urls) {
+    if (!urls.length) { reject(new Error('qrcodejs failed to load')); return; }
+    const s = document.createElement('script');
+    s.src = urls[0];
+    s.onload  = () => resolve();
+    s.onerror = () => { console.warn('qrcodejs CDN failed:', urls[0]); tryLoad(urls.slice(1)); };
+    document.head.appendChild(s);
+  }
+  tryLoad([
+    'https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js',
+    'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+    'https://unpkg.com/qrcodejs@1.0.0/qrcode.min.js',
+  ]);
+});
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const RELAYS = [
   'wss://relay.damus.io',
@@ -594,7 +610,10 @@ function generateQR() {
   state.unsignedEvent = { kind:1, content, tags:[], created_at:Math.floor(Date.now()/1000), pubkey };
   const el = document.getElementById('qr-canvas');
   el.innerHTML = '';
-  new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:256, height:256, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
+  (window._qrReady || Promise.resolve()).then(() => {
+    if (typeof QRCode === 'undefined') { el.textContent = 'QR library failed to load — check console'; return; }
+    new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:256, height:256, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
+  });
   showStep('qr');
   document.getElementById('pill-compose').className = 'step-pill done';
 }
@@ -694,7 +713,6 @@ function gotSignedQR(json) {
      <span class="meta-tag">sig:${ev.sig.slice(0,8)}…</span>`;
   buildRelayList();
   showStep('publish');
-}
 }
 
 function buildRelayList() {
@@ -882,6 +900,7 @@ function startQRScanner(video, onFound, onStatus) {
   dbg('startQRScanner called');
   dbg('BarcodeDetector: ' + ('BarcodeDetector' in window ? 'YES' : 'NO'));
   dbg('isSecureContext: ' + window.isSecureContext);
+  dbg('jsQR now: ' + (typeof jsQR !== 'undefined' ? 'YES' : 'NO — waiting for CDN'));
   dbg('video.readyState: ' + video.readyState);
   dbg('video size: ' + video.videoWidth + 'x' + video.videoHeight);
 
