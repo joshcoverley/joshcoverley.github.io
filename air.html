@@ -661,23 +661,33 @@ function gotSignedQR(json) {
   if(typeof state.scanTimer==='function') state.scanTimer();
   state.scanTimer = null;
   if(state.scanStream){state.scanStream.getTracks().forEach(t=>t.stop());state.scanStream=null;}
+
+  dbg('gotSignedQR: len=' + json.length + ' starts=' + json.slice(0,20));
+  dbg('unsignedEvent: ' + (state.unsignedEvent ? 'YES pubkey=' + (state.unsignedEvent.pubkey||'?').slice(0,8) : 'NULL'));
+
+  let ev = null;
   try {
-    // Try compact NSIG: format first, then fall back to full JSON
-    const ev = decodeCompactQR(json, state.unsignedEvent) || JSON.parse(json);
-    if(!ev.sig||!ev.id) throw new Error('Missing sig/id');
-    state.signedEvent = ev;
-    document.getElementById('preview-content').textContent = ev.content||'';
-    const ts = new Date(ev.created_at*1000).toLocaleString();
-    document.getElementById('preview-meta').innerHTML =
-      `<span class="meta-tag">kind:${ev.kind}</span>
-       <span class="meta-tag">${ts}</span>
-       <span class="meta-tag">${ev.pubkey.slice(0,8)}…</span>
-       <span class="meta-tag">sig:${ev.sig.slice(0,8)}…</span>`;
-    buildRelayList(); showStep('publish');
+    ev = decodeCompactQR(json, state.unsignedEvent);
+    dbg('decodeCompactQR: ' + (ev ? 'OK id=' + ev.id.slice(0,8) : 'null'));
+    if (!ev) ev = JSON.parse(json);
+    if (!ev.sig || !ev.id) throw new Error('Missing sig/id');
   } catch(e) {
-    document.getElementById('scan-status-text').textContent='// INVALID QR — RETRY';
-    setTimeout(()=>{document.getElementById('scan-status-text').textContent='Hold phone close to FAVILLA Key screen';},2000);
+    dbg('parse error: ' + (e.message || e));
+    document.getElementById('scan-status-text').textContent = '// PARSE ERROR — ' + (e.message || 'unknown');
+    return;
   }
+
+  state.signedEvent = ev;
+  document.getElementById('preview-content').textContent = ev.content || '';
+  const ts = new Date(ev.created_at * 1000).toLocaleString();
+  document.getElementById('preview-meta').innerHTML =
+    `<span class="meta-tag">kind:${ev.kind}</span>
+     <span class="meta-tag">${ts}</span>
+     <span class="meta-tag">${(ev.pubkey||'').slice(0,8)}…</span>
+     <span class="meta-tag">sig:${ev.sig.slice(0,8)}…</span>`;
+  buildRelayList();
+  showStep('publish');
+}
 }
 
 function buildRelayList() {
@@ -960,13 +970,17 @@ function startQRScanner(video, onFound, onStatus) {
   // Compact QR format: id_hex(64) + sig_hex(128) = exactly 192 lowercase hex chars
   // Detected by length === 192 and all-hex content (no JSON braces)
   function decodeCompactQR(raw, unsignedEvent) {
-    if(raw.length !== 192) return null;
-    if(raw[0] === '{') return null;           // looks like JSON, skip
-    if(!/^[0-9a-f]{192}$/.test(raw)) return null;
+    if (raw.length !== 192) return null;
+    if (raw[0] === '{') return null;
+    if (!/^[0-9a-f]{192}$/.test(raw)) return null;
     const id  = raw.slice(0, 64);
     const sig = raw.slice(64);
-    if(!unsignedEvent) return null;
-    return Object.assign({}, unsignedEvent, { id, sig });
+    // Reconstruct from unsignedEvent if available, otherwise build minimal event
+    const base = unsignedEvent
+      ? Object.assign({}, unsignedEvent)
+      : { kind: 1, content: '', tags: [], created_at: Math.floor(Date.now()/1000),
+          pubkey: state.pubkeyHex || '0'.repeat(64) };
+    return Object.assign(base, { id, sig });
   }
 
 </script>
