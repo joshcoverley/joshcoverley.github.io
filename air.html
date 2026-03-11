@@ -507,7 +507,24 @@ footer strong { color: var(--muted); }
 
 <div id="toast"></div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js"></script>
+<script>
+// Load jsQR with fallback CDN — must complete before scanning starts
+window._jsQRReady = new Promise((resolve, reject) => {
+  function tryLoad(urls) {
+    if (!urls.length) { reject(new Error('jsQR failed to load from all CDNs')); return; }
+    const s = document.createElement('script');
+    s.src = urls[0];
+    s.onload  = () => resolve();
+    s.onerror = () => { console.warn('jsQR CDN failed:', urls[0]); tryLoad(urls.slice(1)); };
+    document.head.appendChild(s);
+  }
+  tryLoad([
+    'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js',
+    'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+    'https://unpkg.com/jsqr@1.4.0/dist/jsQR.js',
+  ]);
+});
+</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
 const RELAYS = [
@@ -851,10 +868,6 @@ function startQRScanner(video, onFound, onStatus) {
   dbg('video.readyState: ' + video.readyState);
   dbg('video size: ' + video.videoWidth + 'x' + video.videoHeight);
 
-  function stop() {
-    stopped = true;
-  }
-
   // ── Path 1: BarcodeDetector (iOS Safari uses Apple Vision — very reliable) ──
   if ('BarcodeDetector' in window) {
     if (onStatus) onStatus('SCANNING · NATIVE DECODER');
@@ -883,14 +896,18 @@ function startQRScanner(video, onFound, onStatus) {
   }
 
   // ── Path 2: jsQR fallback ─────────────────────────────────────────────────
-  if (onStatus) onStatus('SCANNING · jsQR');
-  dbg('Using jsQR');
-  dbg('jsQR loaded: ' + (typeof jsQR !== 'undefined' ? 'YES' : 'NO'));
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   let tickCount = 0;
+  let timer = null;
 
-  const timer = setInterval(() => {
+  (window._jsQRReady || Promise.resolve()).then(() => {
+    if (stopped) return;
+    if (typeof jsQR === 'undefined') { dbg('jsQR STILL undefined after load — CDN blocked?'); return; }
+    dbg('jsQR ready — starting decode loop');
+    if (onStatus) onStatus('SCANNING · jsQR');
+
+  timer = setInterval(() => {
     if (stopped) { clearInterval(timer); return; }
     tickCount++;
     if (video.readyState < 2 || !video.videoWidth) {
@@ -930,7 +947,9 @@ function startQRScanner(video, onFound, onStatus) {
 
     if (tickCount <= 3 || tickCount % 10 === 0) dbg('tick ' + tickCount + ': no QR found');
   }, 250);
+  }); // end _jsQRReady.then()
 
+  function stop() { stopped = true; if (timer) clearInterval(timer); }
   return stop;
 }
 
