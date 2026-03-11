@@ -624,9 +624,9 @@ async function startScan() {
   video.srcObject = stream;
   await new Promise(r => { video.onloadedmetadata = r; });
 
-  const stopFn = await buildScanner(
+  const stopFn = startQRScanner(
     video,
-    (data) => { if (typeof stopFn === 'function') stopFn(); gotSignedQR(data); },
+    (data) => { stopFn(); gotSignedQR(data); },
     (msg)  => { if (statusEl) statusEl.textContent = msg; }
   );
   state.scanTimer = stopFn;
@@ -835,128 +835,76 @@ function showToast(msg){
   toastTimer=setTimeout(()=>t.classList.remove('show'),2800);
 }
 
-// ── Robust multi-scale QR scanner ──────────────────────────────────────────
-// Handles the 65x65px QR on SHARP 128x128 display viewed from ~10cm.
-// Strategy:
-//   1. BarcodeDetector (iOS Vision / Android ML) — try first, most capable
-//   2. jsQR with 5 crops: full frame + 4 zoom crops at 2x and 3x upscale
-//      Each crop is run through: raw, contrast-stretched, and inverted passes
-// This gives ~15 decode attempts per frame vs the previous 3.
-
-async function buildScanner(video, onFound, onStatus) {
-  // Always load jsQR as fallback — tiny, loads fast
-  if(typeof jsQR === 'undefined') {
-    await new Promise((res, rej) => {
-      const s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.min.js';
-      s.onload = res; s.onerror = rej;
-      document.head.appendChild(s);
-    });
-  }
-
-  const offscreen = document.createElement('canvas');
-  const ctx = offscreen.getContext('2d', { willReadFrequently: true });
-
-  // Try jsQR on an ImageData with inversion pass
-  function tryJsQR(idata, w, h) {
-    // Pass 1: as-is
-    let code = jsQR(idata.data, w, h, { inversionAttempts: 'attemptBoth' });
-    if(code) return code.data;
-    // Pass 2: contrast stretch + threshold
-    const d = new Uint8ClampedArray(idata.data);
-    let lo = 255, hi = 0;
-    for(let i = 0; i < d.length; i += 4) {
-      const v = (d[i] + d[i+1] + d[i+2]) / 3;
-      if(v < lo) lo = v; if(v > hi) hi = v;
-    }
-    const range = hi - lo || 1;
-    for(let i = 0; i < d.length; i += 4) {
-      const v = Math.round(((d[i] + d[i+1] + d[i+2]) / 3 - lo) / range * 255);
-      const t = v < 128 ? 0 : 255;
-      d[i] = d[i+1] = d[i+2] = t; d[i+3] = 255;
-    }
-    const id2 = new ImageData(d, w, h);
-    code = jsQR(id2.data, w, h, { inversionAttempts: 'attemptBoth' });
-    return code ? code.data : null;
-  }
-
-  // Crop a region of the offscreen canvas, optionally upscaling
-  function tryCrop(sx, sy, sw, sh, upscale) {
-    const ow = Math.round(sw * upscale), oh = Math.round(sh * upscale);
-    const c2 = document.createElement('canvas');
-    c2.width = ow; c2.height = oh;
-    const cx = c2.getContext('2d', { willReadFrequently: true });
-    cx.drawImage(offscreen, sx, sy, sw, sh, 0, 0, ow, oh);
-    const idata = cx.getImageData(0, 0, ow, oh);
-    return tryJsQR(idata, ow, oh);
-  }
-
-  let scanTimer = null;
-  let bdDetector = null;
-  let bdTimer = null;
+// ── QR Scanner ────────────────────────────────────────────────────────────
+function startQRScanner(video, onFound, onStatus) {
   let stopped = false;
-  let frameCount = 0;
 
-  // BarcodeDetector path (iOS Safari / Android Chrome)
-  if('BarcodeDetector' in window) {
-    try {
-      bdDetector = new BarcodeDetector({ formats: ['qr_code'] });
-      bdTimer = setInterval(async () => {
-        if(stopped) return;
-        try {
-          const codes = await bdDetector.detect(video);
-          if(codes.length > 0 && codes[0].rawValue) {
-            onFound(codes[0].rawValue);
-          }
-        } catch(e) {}
-      }, 250);
-      if(onStatus) onStatus('SCANNING · NATIVE DECODER ACTIVE');
-    } catch(e) {
-      bdDetector = null;
-    }
+  function stop() {
+    stopped = true;
   }
 
-  // jsQR path — runs in parallel (or as sole decoder if no BarcodeDetector)
-  scanTimer = setInterval(() => {
-    if(stopped || video.readyState !== video.HAVE_ENOUGH_DATA) return;
-    const vw = video.videoWidth, vh = video.videoHeight;
-    if(!vw || !vh) return;
-    offscreen.width = vw; offscreen.height = vh;
+  // ── Path 1: BarcodeDetector (iOS Safari uses Apple Vision — very reliable) ──
+  if ('BarcodeDetector' in window) {
+    if (onStatus) onStatus('SCANNING · NATIVE DECODER');
+    let detecting = false;
+    const bd = new BarcodeDetector({ formats: ['qr_code'] });
+    const timer = setInterval(async () => {
+      if (stopped) { clearInterval(timer); return; }
+      if (detecting) return;
+      detecting = true;
+      try {
+        const codes = await bd.detect(video);
+        if (codes.length > 0 && codes[0].rawValue) {
+          clearInterval(timer);
+          stopped = true;
+          onFound(codes[0].rawValue);
+        }
+      } catch(e) {}
+      detecting = false;
+    }, 300);
+    return stop;
+  }
+
+  // ── Path 2: jsQR fallback ─────────────────────────────────────────────────
+  if (onStatus) onStatus('SCANNING · jsQR');
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+  const timer = setInterval(() => {
+    if (stopped) { clearInterval(timer); return; }
+    if (video.readyState < 2 || !video.videoWidth) return;
+
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
-    frameCount++;
 
-    // Crop regions: full, center-half, and 4 quadrant-zooms
-    const crops = [
-      // [sx, sy, sw, sh, upscale]
-      [0, 0, vw, vh, 1],                                    // full frame
-      [vw/4, vh/4, vw/2, vh/2, 2],                          // center 2x
-      [vw/3, vh/3, vw/3, vh/3, 3],                          // center 3x
-      [0,    0,    vw/2, vh/2, 2],                          // top-left 2x
-      [vw/2, 0,    vw/2, vh/2, 2],                          // top-right 2x
-      [0,    vh/2, vw/2, vh/2, 2],                          // bottom-left 2x
-      [vw/2, vh/2, vw/2, vh/2, 2],                          // bottom-right 2x
-    ];
+    // Full frame — raw
+    let idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
+    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
 
-    // Alternate which crops we try each frame to spread CPU load
-    const start = (frameCount % 3 === 0) ? 0 : (frameCount % 3 === 1) ? 1 : 3;
-    const batch = (start === 0) ? crops.slice(0, 3) : crops.slice(start, start + 3);
-
-    for(const [sx, sy, sw, sh, up] of batch) {
-      const result = tryCrop(sx, sy, sw, sh, up);
-      if(result) {
-        onFound(result);
-        return;
-      }
+    // Full frame — hard threshold (helps white-on-black QR)
+    const d = new Uint8ClampedArray(idata.data);
+    for (let i = 0; i < d.length; i += 4) {
+      const v = (d[i] + d[i+1] + d[i+2]) / 3 < 128 ? 0 : 255;
+      d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
     }
-  }, 200);
+    code = jsQR(d, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
+    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
 
-  if(onStatus && !bdDetector) onStatus('SCANNING · HOLD CLOSE TO DEVICE SCREEN');
+    // Center crop 2x upscale
+    const cw = Math.floor(canvas.width / 2),  ch = Math.floor(canvas.height / 2);
+    const cx = Math.floor(canvas.width / 4),  cy = Math.floor(canvas.height / 4);
+    const c2 = document.createElement('canvas');
+    c2.width = cw * 2; c2.height = ch * 2;
+    c2.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw*2, ch*2);
+    idata = c2.getContext('2d').getImageData(0, 0, c2.width, c2.height);
+    code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
+    if (code) { clearInterval(timer); stopped = true; onFound(code.data); return; }
 
-  return function stop() {
-    stopped = true;
-    if(scanTimer)  { clearInterval(scanTimer);  scanTimer = null; }
-    if(bdTimer)    { clearInterval(bdTimer);    bdTimer = null; }
-  };
+  }, 250);
+
+  return stop;
 }
 
 
