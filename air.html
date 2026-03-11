@@ -670,8 +670,18 @@ async function startScan() {
 
   const stopFn = startQRScanner(
     video,
-    (data) => { stopFn(); gotSignedQR(data); },
-    (msg)  => { if (statusEl) statusEl.textContent = msg; }
+    (data) => {
+      // Quick pre-validate before stopping the scanner
+      const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
+      const isJSON    = data.startsWith('{') && data.endsWith('}');
+      if (!isCompact && !isJSON) {
+        dbg('ignoring: len=' + data.length + ' not compact or JSON, keeps scanning');
+        return; // don't stop scanner, keep trying
+      }
+      stopFn();
+      gotSignedQR(data);
+    },
+    (msg) => { if (statusEl) statusEl.textContent = msg; }
   );
   state.scanTimer = stopFn;
 }
@@ -701,7 +711,9 @@ function gotSignedQR(json) {
     if (!ev.sig || !ev.id) throw new Error('Missing sig/id');
   } catch(e) {
     dbg('parse error: ' + (e.message || e));
-    document.getElementById('scan-status-text').textContent = '// PARSE ERROR — ' + (e.message || 'unknown');
+    // Don't give up — restart scan so user can try again
+    document.getElementById('scan-status-text').textContent = '// BAD READ — HOLD STEADY AND RETRY';
+    setTimeout(() => startScan(), 1500);
     return;
   }
 
@@ -959,29 +971,50 @@ function startQRScanner(video, onFound, onStatus) {
     canvas.height = video.videoHeight;
     ctx.drawImage(video, 0, 0);
 
-    // Full frame — raw
-    let idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    let code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; dbg('jsQR full raw: FOUND'); onFound(code.data); return; }
-
-    // Full frame — hard threshold
-    const d = new Uint8ClampedArray(idata.data);
-    for (let i = 0; i < d.length; i += 4) {
-      const v = (d[i] + d[i+1] + d[i+2]) / 3 < 128 ? 0 : 255;
-      d[i] = d[i+1] = d[i+2] = v; d[i+3] = 255;
+    // Helper — try jsQR and extract data even if code.data is empty (jsQR ECC bug)
+    function attempt(imageData, w, h, opts, label) {
+      const code = jsQR(imageData, w, h, opts);
+      if (!code) return false;
+      // Try code.data first
+      if (code.data && code.data.length > 0) {
+        dbg(label + ': FOUND len=' + code.data.length);
+        clearInterval(timer); stopped = true; onFound(code.data); return true;
+      }
+      // Fallback: reconstruct from chunks (jsQR bug workaround)
+      if (code.chunks) {
+        const text = code.chunks.map(c => {
+          if (c.type === 'byte') return new TextDecoder().decode(new Uint8Array(c.bytes));
+          return c.text || '';
+        }).join('');
+        if (text.length > 0) {
+          dbg(label + ': FOUND via chunks len=' + text.length);
+          clearInterval(timer); stopped = true; onFound(text); return true;
+        }
+      }
+      dbg(label + ': empty result (ECC bug)');
+      return false;
     }
-    code = jsQR(d, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; dbg('jsQR threshold: FOUND'); onFound(code.data); return; }
 
-    // Center crop 2x upscale
-    const cw = Math.floor(canvas.width / 2),  ch = Math.floor(canvas.height / 2);
-    const cx = Math.floor(canvas.width / 4),  cy = Math.floor(canvas.height / 4);
+    const idata = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // Pass 1: full frame, attemptBoth
+    if (attempt(idata.data, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' }, 'raw')) return;
+
+    // Pass 2: hard threshold (helps white-on-black)
+    const td = new Uint8ClampedArray(idata.data);
+    for (let i = 0; i < td.length; i += 4) {
+      const v = (td[i] + td[i+1] + td[i+2]) / 3 < 128 ? 0 : 255;
+      td[i] = td[i+1] = td[i+2] = v; td[i+3] = 255;
+    }
+    if (attempt(td, canvas.width, canvas.height, { inversionAttempts: 'attemptBoth' }, 'threshold')) return;
+
+    // Pass 3: center crop 2x
+    const cw = Math.floor(canvas.width / 2), ch = Math.floor(canvas.height / 2);
     const c2 = document.createElement('canvas');
     c2.width = cw * 2; c2.height = ch * 2;
-    c2.getContext('2d').drawImage(canvas, cx, cy, cw, ch, 0, 0, cw*2, ch*2);
-    idata = c2.getContext('2d').getImageData(0, 0, c2.width, c2.height);
-    code = jsQR(idata.data, idata.width, idata.height, { inversionAttempts: 'attemptBoth' });
-    if (code) { clearInterval(timer); stopped = true; dbg('jsQR crop: FOUND'); onFound(code.data); return; }
+    c2.getContext('2d').drawImage(canvas, Math.floor(canvas.width/4), Math.floor(canvas.height/4), cw, ch, 0, 0, cw*2, ch*2);
+    const id2 = c2.getContext('2d').getImageData(0, 0, c2.width, c2.height);
+    if (attempt(id2.data, c2.width, c2.height, { inversionAttempts: 'attemptBoth' }, 'crop2x')) return;
 
     if (tickCount <= 3 || tickCount % 10 === 0) dbg('tick ' + tickCount + ': no QR found');
   }, 250);
