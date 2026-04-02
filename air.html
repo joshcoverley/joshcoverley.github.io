@@ -859,7 +859,7 @@ function generateQR() {
   el.innerHTML = '';
   (window._qrReady || Promise.resolve()).then(() => {
     if (typeof QRCode === 'undefined') { el.textContent = 'QR library failed to load — check console'; return; }
-    new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:256, height:256, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
+    new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:320, height:320, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
   });
   showStep('qr');
   document.getElementById('pill-compose').className = 'step-pill done';
@@ -1512,7 +1512,7 @@ async function zapBuild() {
   try {
     lnurlData = await resolveLud16(profile.lud16);
   } catch(e) {
-    zapSetStatus('LNURL error: ' + e.message);
+    zapSetStatus('LNURL resolve error: ' + e.message);
     return;
   }
 
@@ -1563,7 +1563,7 @@ async function zapBuild() {
   qrEl.innerHTML = '';
   new QRCode(qrEl, {
     text: json,
-    width: 240, height: 240,
+    width: 320, height: 320,
     colorDark: '#000000', colorLight: '#ffffff',
     correctLevel: QRCode.CorrectLevel.L
   });
@@ -1710,11 +1710,13 @@ async function zapGotSignedEvent(data) {
     'amount=' + amount +
     '&nostr=' + encodeURIComponent(JSON.stringify(signedJson));
 
+  document.getElementById('zap-invoice-status').textContent = 'Calling: ' + callbackUrl.slice(0,60) + '...';
   try {
     const resp = await fetch(callbackUrl);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' from callback');
     const result = await resp.json();
     if (result.status === 'ERROR') throw new Error(result.reason);
-    if (!result.pr) throw new Error('No invoice in response');
+    if (!result.pr) throw new Error('No invoice — got: ' + JSON.stringify(result).slice(0,100));
 
     const invoice = result.pr;
     document.getElementById('zap-invoice-text').textContent = invoice;
