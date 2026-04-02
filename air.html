@@ -1281,16 +1281,63 @@ function startQRScanner(video, onFound, onStatus) {
       tickCount++;
       decoding = true;
       try {
-        canvas.width  = video.videoWidth;
-        canvas.height = video.videoHeight;
-        ctx.drawImage(video, 0, 0);
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        canvas.width  = vw;
+        canvas.height = vh;
 
-        const results = await zxing.readBarcodesFromImageData(imageData, {
+        // Draw raw frame
+        ctx.drawImage(video, 0, 0);
+
+        // Boost contrast for screen scanning — screens have glare and
+        // auto-exposure fights with the display brightness
+        const imageData = ctx.getImageData(0, 0, vw, vh);
+        const d = imageData.data;
+        for (let i = 0; i < d.length; i += 4) {
+          // Convert to grayscale
+          const gray = 0.299*d[i] + 0.587*d[i+1] + 0.114*d[i+2];
+          // Apply contrast stretch — push toward black or white
+          const contrast = 1.8;
+          const factor = (259 * (contrast * 255 + 255)) / (255 * (259 - contrast * 255));
+          const val = Math.min(255, Math.max(0, factor * (gray - 128) + 128));
+          d[i] = d[i+1] = d[i+2] = val;
+        }
+        ctx.putImageData(imageData, 0, 0);
+        const enhanced = ctx.getImageData(0, 0, vw, vh);
+
+        // Try enhanced first, then raw
+        let results = await zxing.readBarcodesFromImageData(enhanced, {
           formats: ['QRCode'],
           tryHarder: true,
           maxSymbols: 1,
         });
+
+        // If enhanced failed, try raw frame as fallback
+        if (!results || results.length === 0) {
+          ctx.drawImage(video, 0, 0);
+          const raw = ctx.getImageData(0, 0, vw, vh);
+          results = await zxing.readBarcodesFromImageData(raw, {
+            formats: ['QRCode'],
+            tryHarder: true,
+            maxSymbols: 1,
+          });
+        }
+
+        // Try inverted — screen QRs sometimes decode better inverted
+        if (!results || results.length === 0) {
+          ctx.drawImage(video, 0, 0);
+          const inv = ctx.getImageData(0, 0, vw, vh);
+          for (let i = 0; i < inv.data.length; i += 4) {
+            inv.data[i] = 255 - inv.data[i];
+            inv.data[i+1] = 255 - inv.data[i+1];
+            inv.data[i+2] = 255 - inv.data[i+2];
+          }
+          ctx.putImageData(inv, 0, 0);
+          results = await zxing.readBarcodesFromImageData(
+            ctx.getImageData(0, 0, vw, vh),
+            { formats: ['QRCode'], tryHarder: true, maxSymbols: 1 }
+          );
+        }
 
         if (results && results.length > 0) {
           const text = (results[0].text || results[0].rawValue || '').trim();
@@ -1305,7 +1352,7 @@ function startQRScanner(video, onFound, onStatus) {
         }
       } catch(e) {}
       decoding = false;
-    }, 300);
+    }, 150);
   });
 
   function stop() { stopped = true; if (timer) { clearInterval(timer); timer = null; } }
