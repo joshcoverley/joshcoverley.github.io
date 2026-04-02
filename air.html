@@ -1338,7 +1338,11 @@ const zapState = {
 };
 
 function zapSetStatus(msg) {
-  document.getElementById('zap-status').textContent = msg;
+  const el = document.getElementById('zap-status');
+  el.textContent = msg;
+  el.style.color = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('invalid')
+    ? 'var(--color-text-danger, #c0392b)' : 'var(--color-text-secondary)';
+  console.log('[ZAP]', msg);
 }
 
 function zapShowStep(id) {
@@ -1553,11 +1557,18 @@ async function resolveLud16(lud16) {
   const [name, domain] = lud16.split('@');
   if (!name || !domain) throw new Error('Invalid lud16');
   const url = 'https://' + domain + '/.well-known/lnurlp/' + name;
-  const resp = await fetch(url);
+  zapSetStatus('Fetching ' + url + '...');
+  let resp;
+  try {
+    resp = await fetch(url);
+  } catch(e) {
+    // CORS blocked — try via corsproxy
+    zapSetStatus('Direct fetch failed, trying proxy...');
+    resp = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+  }
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const data = await resp.json();
   if (data.status === 'ERROR') throw new Error(data.reason);
-  // Store original lnurl encoded form
   data.lnurl = lud16ToLnurl(url);
   return data;
 }
