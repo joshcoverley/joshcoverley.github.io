@@ -882,9 +882,9 @@ async function startCameraScanner() {
     (data) => {
       const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
       const isJSON    = data.startsWith('{') && data.endsWith('}');
-      if (!isCompact && !isJSON) {
-        dbg('ignoring: len=' + data.length + ' not compact or JSON, keeps scanning');
-        setTimeout(() => { if (!stopped) startCameraScanner(); }, 800);  // restart after bad read
+      const isURL     = data.includes('?e=') && data.length > 192;
+      if (!isCompact && !isJSON && !isURL) {
+        dbg('ignoring: len=' + data.length + ' not compact, JSON, or URL format');
         return;
       }
       stopFn();
@@ -911,8 +911,15 @@ function gotSignedQR(json) {
 
   let ev = null;
   try {
-    ev = decodeCompactQR(json, state.unsignedEvent);
-    if (!ev) ev = JSON.parse(json);
+    // Handle URL format: https://...?e=<id64><sig128>
+    let data = json;
+    if (json.includes('?e=')) {
+      const eParam = json.split('?e=')[1];
+      if (eParam && eParam.length >= 192) data = eParam.slice(0, 192);
+      dbg('URL format detected, extracted hex: ' + data.slice(0, 16) + '...');
+    }
+    ev = decodeCompactQR(data, state.unsignedEvent);
+    if (!ev) ev = JSON.parse(data);
     if (!ev.sig || !ev.id) throw new Error('Missing sig/id');
   } catch(e) {
     dbg('parse error: ' + (e.message || e));
