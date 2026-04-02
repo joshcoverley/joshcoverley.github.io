@@ -695,7 +695,8 @@ async function startPubkeyScan() {
       if (!isNpub && !isHex) {
         // Not a pubkey QR — keep scanning
         statusEl.textContent = 'NOT A PUBKEY — KEEP SCANNING…';
-        return false;  // keep scanning
+        setTimeout(() => { state.pubkeyScanStop = null; startPubkeyScan(); }, 800);
+        return;
       }
 
       closePubkeyScan();
@@ -883,10 +884,11 @@ async function startCameraScanner() {
       const isJSON    = data.startsWith('{') && data.endsWith('}');
       if (!isCompact && !isJSON) {
         dbg('ignoring: len=' + data.length + ' not compact or JSON, keeps scanning');
-        return false;  // keep scanning
+        setTimeout(() => { if (!stopped) startCameraScanner(); }, 800);  // restart after bad read
+        return;
       }
+      stopFn();
       gotSignedQR(data);
-      // return undefined (truthy-ish for stop logic) — scanner stops via accepted !== false
     },
     (msg) => { if (statusEl) statusEl.textContent = msg; }
   );
@@ -1194,14 +1196,11 @@ function startQRScanner(video, onFound, onStatus) {
           const text = (results[0].text || results[0].rawValue || '').trim();
           if (text.length > 0) {
             dbg('FOUND: len=' + text.length + ' starts=' + text.slice(0, 20));
-            // Let onFound decide whether to stop — return true to stop, falsy to keep scanning
-            const accepted = onFound(text);
-            if (accepted !== false) {
-              clearInterval(timer);
-              stopped = true;
-              decoding = false;
-              return;
-            }
+            clearInterval(timer);
+            stopped = true;
+            onFound(text);
+            decoding = false;
+            return;
           }
         }
       } catch(e) {}
