@@ -435,10 +435,10 @@ footer strong { color: var(--muted); }
       <span class="card-title">Write Note</span>
     </div>
     <div class="card-body">
-      <textarea id="compose-area" rows="4" placeholder="Transmit message…" maxlength="60"
+      <textarea id="compose-area" rows="4" placeholder="Transmit message…" maxlength="460"
         oninput="onComposeInput()"></textarea>
       <div class="compose-footer">
-        <span class="char-count" id="char-count">0 / 60 · airgap limit</span>
+        <span class="char-count" id="char-count">0 / 460 · airgap limit</span>
         <button class="btn-primary" id="gen-qr-btn" onclick="generateQR()" disabled>Generate QR</button>
       </div>
     </div>
@@ -744,7 +744,7 @@ function onComposeInput() {
   const val = document.getElementById('compose-area').value;
   const len = val.length;
   const cc = document.getElementById('char-count');
-  cc.textContent = len + ' / 60';
+  cc.textContent = len + ' / 460';
   cc.className = 'char-count' + (len > 55 ? ' warn' : '');
   document.getElementById('gen-qr-btn').disabled = !val.trim() || len > 60;
 }
@@ -1008,7 +1008,7 @@ function resetAll() {
   state.unsignedEvent=null;state.signedEvent=null;
   document.getElementById('compose-area').value='';
   document.getElementById('gen-qr-btn').disabled=true;
-  document.getElementById('char-count').textContent='0 / 60 · airgap limit';
+  document.getElementById('char-count').textContent='0 / 460 · airgap limit';
   document.getElementById('pill-compose').className='step-pill active';
   document.getElementById('publish-btn').disabled=false;
   document.getElementById('publish-btn').textContent='Publish to Relays';
