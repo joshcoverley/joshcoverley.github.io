@@ -527,6 +527,107 @@ footer strong { color: var(--muted); }
     </div>
   </div>
 
+
+  <!-- Zap Section -->
+  <div class="sec" style="margin-top:32px;">Zap</div>
+  <div class="card" id="card-zap">
+    <div class="card-header">
+      <span class="step-pill active">ZAP</span>
+      <span class="card-title">Send Lightning Zap</span>
+    </div>
+    <div class="card-body">
+
+      <div class="zap-step" id="zap-step-build">
+        <div class="field-label">Recipient npub or hex pubkey</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input id="zap-recipient" type="text" placeholder="npub1... or 64-char hex" style="flex:1;font-size:11px;font-family:var(--font-mono);">
+          <button onclick="zapScanRecipient()" style="white-space:nowrap;font-size:11px;">⬡ SCAN</button>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+          <div>
+            <div class="field-label">Amount (sats)</div>
+            <input id="zap-amount" type="number" value="21" min="1" style="width:100%;">
+          </div>
+          <div>
+            <div class="field-label">Relay</div>
+            <select id="zap-relay" style="width:100%;font-size:11px;">
+              <option>wss://relay.damus.io</option>
+              <option>wss://nos.lol</option>
+              <option>wss://relay.nsec.app</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <div class="field-label">Note ID to zap (optional)</div>
+          <input id="zap-noteid" type="text" placeholder="note1... or hex event ID" style="width:100%;font-size:11px;font-family:var(--font-mono);">
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <div class="field-label">Comment (optional)</div>
+          <input id="zap-comment" type="text" placeholder="⚡" maxlength="100" style="width:100%;">
+        </div>
+
+        <button onclick="zapBuild()" style="width:100%;">BUILD ZAP REQUEST</button>
+        <div id="zap-status" style="margin-top:10px;font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);min-height:18px;"></div>
+      </div>
+
+      <div class="zap-step" id="zap-step-qr" style="display:none;">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+          <div>
+            <div class="field-label" style="margin-bottom:6px;">Scan with device to sign</div>
+            <div id="zap-qr-canvas" style="background:#fff;padding:8px;display:inline-block;line-height:0;"></div>
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <div class="field-label">Zap details</div>
+            <div id="zap-details" style="font-size:11px;font-family:var(--font-mono);line-height:2;color:var(--color-text-secondary);"></div>
+            <button onclick="zapStartScan()" style="margin-top:12px;width:100%;">SCAN SIGNED ZAP ↗</button>
+            <button onclick="zapReset()" style="margin-top:6px;width:100%;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">← BACK</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="zap-step" id="zap-step-scan" style="display:none;">
+        <div class="field-label" style="margin-bottom:8px;">Point camera at device screen</div>
+        <div style="position:relative;background:#000;border-radius:4px;overflow:hidden;margin-bottom:10px;">
+          <video id="zap-scan-video" autoplay playsinline muted style="width:100%;display:block;max-height:260px;object-fit:cover;"></video>
+          <div id="zap-scan-overlay" style="position:absolute;inset:0;display:flex;align-items:flex-end;justify-content:center;padding-bottom:10px;">
+            <span id="zap-scan-status" style="font-size:11px;font-family:var(--font-mono);color:#0f0;background:rgba(0,0,0,0.7);padding:4px 10px;border-radius:3px;">SCANNING</span>
+          </div>
+        </div>
+        <button onclick="zapCancelScan()" style="width:100%;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">CANCEL</button>
+      </div>
+
+      <div class="zap-step" id="zap-step-invoice" style="display:none;">
+        <div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">
+          <div>
+            <div class="field-label" style="margin-bottom:6px;">Lightning Invoice — scan with wallet</div>
+            <div id="zap-invoice-qr" style="background:#fff;padding:8px;display:inline-block;line-height:0;"></div>
+          </div>
+          <div style="flex:1;min-width:160px;">
+            <div class="field-label">Invoice</div>
+            <div id="zap-invoice-text" style="font-size:10px;font-family:var(--font-mono);word-break:break-all;color:var(--color-text-secondary);margin-bottom:10px;max-height:80px;overflow:auto;"></div>
+            <button onclick="copyInvoice()" style="width:100%;margin-bottom:6px;">COPY INVOICE</button>
+            <button onclick="zapReset()" style="width:100%;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">← NEW ZAP</button>
+          </div>
+        </div>
+        <div id="zap-invoice-status" style="margin-top:10px;font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Zap recipient scan modal -->
+  <div id="zap-recipient-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:100;align-items:center;justify-content:center;">
+    <div style="background:var(--color-background-primary);border-radius:8px;padding:20px;width:min(360px,90vw);">
+      <div class="field-label" style="margin-bottom:8px;">Scan recipient npub from device</div>
+      <video id="zap-recipient-video" autoplay playsinline muted style="width:100%;border-radius:4px;max-height:220px;object-fit:cover;background:#000;"></video>
+      <div id="zap-recipient-scan-status" style="font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);margin:8px 0;text-align:center;"></div>
+      <button onclick="zapCloseRecipientScan()" style="width:100%;margin-top:4px;">CANCEL</button>
+    </div>
+  </div>
+
   <!-- Feed -->
   <div class="feed-section">
     <div class="feed-header">
@@ -1223,6 +1324,371 @@ function decodeCompactQR(raw, unsignedEvent) {
         pubkey: state.pubkeyHex || '0'.repeat(64) };
   return Object.assign(base, { id, sig });
 }
+
+// ── Zap ──────────────────────────────────────────────────────────────────
+
+const zapState = {
+  recipientHex: null,
+  recipientProfile: null,
+  lnurlData: null,
+  unsignedEvent: null,
+  signedEvent: null,
+  zapStopScan: null,
+  zapRecipientStopScan: null,
+};
+
+function zapSetStatus(msg) {
+  document.getElementById('zap-status').textContent = msg;
+}
+
+function zapShowStep(id) {
+  ['zap-step-build','zap-step-qr','zap-step-scan','zap-step-invoice'].forEach(s => {
+    document.getElementById(s).style.display = s === id ? '' : 'none';
+  });
+}
+
+function zapReset() {
+  zapState.recipientHex = null;
+  zapState.recipientProfile = null;
+  zapState.lnurlData = null;
+  zapState.unsignedEvent = null;
+  zapState.signedEvent = null;
+  if (zapState.zapStopScan) { zapState.zapStopScan(); zapState.zapStopScan = null; }
+  document.getElementById('zap-qr-canvas').innerHTML = '';
+  document.getElementById('zap-invoice-qr').innerHTML = '';
+  document.getElementById('zap-invoice-text').textContent = '';
+  zapSetStatus('');
+  zapShowStep('zap-step-build');
+}
+
+// ── Recipient scan ────────────────────────────────────────────────────────
+async function zapScanRecipient() {
+  const modal = document.getElementById('zap-recipient-modal');
+  modal.style.display = 'flex';
+  const video = document.getElementById('zap-recipient-video');
+  const statusEl = document.getElementById('zap-recipient-scan-status');
+  statusEl.textContent = 'STARTING CAMERA...';
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+  let stream = null;
+  for (const c of attempts) {
+    try { stream = await navigator.mediaDevices.getUserMedia(c); break; } catch(e) {}
+  }
+  if (!stream) { statusEl.textContent = 'CAMERA FAILED'; return; }
+  video.srcObject = stream;
+  await video.play();
+  statusEl.textContent = 'SCANNING — POINT AT NPUB QR';
+  zapState.zapRecipientStopScan = startQRScanner(video, (data) => {
+    const trimmed = data.trim();
+    const isNpub = trimmed.startsWith('npub1');
+    const isHex = /^[0-9a-f]{64}$/i.test(trimmed);
+    if (!isNpub && !isHex) return false;
+    zapState.zapRecipientStopScan = null;
+    zapCloseRecipientScan();
+    const hex = isNpub ? bech32ToHex(trimmed) : trimmed.toLowerCase();
+    document.getElementById('zap-recipient').value = data.trim();
+    zapState.recipientHex = hex;
+    zapSetStatus('Recipient set: ' + hex.slice(0,16) + '...');
+  }, (msg) => { statusEl.textContent = msg; });
+}
+
+function zapCloseRecipientScan() {
+  if (zapState.zapRecipientStopScan) { zapState.zapRecipientStopScan(); zapState.zapRecipientStopScan = null; }
+  stopCameraStream(document.getElementById('zap-recipient-video'));
+  document.getElementById('zap-recipient-modal').style.display = 'none';
+}
+
+// ── bech32 decode (npub → hex) ────────────────────────────────────────────
+function bech32ToHex(npub) {
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const b = npub.toLowerCase();
+  const sepIdx = b.lastIndexOf('1');
+  const data = b.slice(sepIdx + 1, -6);
+  const vals = Array.from(data).map(c => CHARSET.indexOf(c));
+  let bits = 0, value = 0;
+  const bytes = [];
+  for (const v of vals) {
+    value = (value << 5) | v; bits += 5;
+    if (bits >= 8) { bits -= 8; bytes.push((value >> bits) & 0xff); }
+  }
+  return bytes.slice(0, 32).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── Build zap request ─────────────────────────────────────────────────────
+async function zapBuild() {
+  const recipientInput = document.getElementById('zap-recipient').value.trim();
+  const amountSats = parseInt(document.getElementById('zap-amount').value) || 21;
+  const relay = document.getElementById('zap-relay').value;
+  const noteId = document.getElementById('zap-noteid').value.trim();
+  const comment = document.getElementById('zap-comment').value.trim() || '⚡';
+
+  if (!recipientInput) { zapSetStatus('Enter recipient npub or pubkey'); return; }
+
+  // Parse recipient
+  let recipientHex;
+  if (recipientInput.startsWith('npub1')) {
+    try { recipientHex = bech32ToHex(recipientInput); }
+    catch(e) { zapSetStatus('Invalid npub'); return; }
+  } else if (/^[0-9a-f]{64}$/i.test(recipientInput)) {
+    recipientHex = recipientInput.toLowerCase();
+  } else {
+    zapSetStatus('Invalid recipient — use npub1... or 64-char hex');
+    return;
+  }
+
+  zapState.recipientHex = recipientHex;
+  zapSetStatus('Fetching profile...');
+
+  // Fetch recipient profile from relay
+  let profile;
+  try {
+    profile = await fetchProfileOnce(recipientHex, relay);
+  } catch(e) {
+    zapSetStatus('Profile fetch failed: ' + e.message);
+    return;
+  }
+
+  if (!profile || !profile.lud16) {
+    zapSetStatus('No lud16 in profile — recipient may not support zaps');
+    return;
+  }
+
+  zapSetStatus('Resolving LNURL...');
+  let lnurlData;
+  try {
+    lnurlData = await resolveLud16(profile.lud16);
+  } catch(e) {
+    zapSetStatus('LNURL error: ' + e.message);
+    return;
+  }
+
+  const maxSendable = Math.floor(lnurlData.maxSendable / 1000);
+  const minSendable = Math.ceil(lnurlData.minSendable / 1000);
+  if (amountSats < minSendable || amountSats > maxSendable) {
+    zapSetStatus('Amount out of range: ' + minSendable + '–' + maxSendable + ' sats');
+    return;
+  }
+
+  zapState.lnurlData = lnurlData;
+  zapState.recipientProfile = profile;
+
+  // Build kind 9734
+  const senderPubkey = state.pubkeyHex || '0'.repeat(64);
+  const tags = [
+    ['relays', relay],
+    ['amount', String(amountSats * 1000)],
+    ['lnurl', lnurlData.lnurl],
+    ['p', recipientHex],
+  ];
+  if (noteId) {
+    const noteHex = noteId.startsWith('note1') ? bech32ToHex(noteId) : noteId;
+    tags.push(['e', noteHex]);
+  }
+
+  const event = {
+    kind: 9734,
+    content: comment,
+    tags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey: senderPubkey,
+  };
+
+  zapState.unsignedEvent = event;
+  const json = JSON.stringify(event);
+
+  zapSetStatus('');
+
+  // Show QR
+  document.getElementById('zap-details').innerHTML =
+    'To: ' + (profile.name || recipientHex.slice(0,16)+'...') + '<br>' +
+    'Amount: ' + amountSats + ' sats<br>' +
+    'Via: ' + profile.lud16 + '<br>' +
+    'Payload: ' + json.length + ' bytes';
+
+  const qrEl = document.getElementById('zap-qr-canvas');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, {
+    text: json,
+    width: 240, height: 240,
+    colorDark: '#000000', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.L
+  });
+
+  zapShowStep('zap-step-qr');
+}
+
+// ── Fetch profile from relay (one-shot) ───────────────────────────────────
+function fetchProfileOnce(pubkeyHex, relayUrl) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(relayUrl);
+    const timer = setTimeout(() => { ws.close(); reject(new Error('Timeout')); }, 8000);
+    const sub = 'zap-prof-' + Math.random().toString(36).slice(2,8);
+    ws.onopen = () => {
+      ws.send(JSON.stringify(['REQ', sub, { kinds:[0], authors:[pubkeyHex], limit:1 }]));
+    };
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub) {
+          clearTimeout(timer);
+          ws.close();
+          const profile = JSON.parse(msg[2].content || '{}');
+          resolve(profile);
+        } else if (msg[0] === 'EOSE') {
+          clearTimeout(timer);
+          ws.close();
+          resolve(null);
+        }
+      } catch(e) {}
+    };
+    ws.onerror = () => { clearTimeout(timer); reject(new Error('WebSocket error')); };
+  });
+}
+
+// ── Resolve lud16 → lnurl data ────────────────────────────────────────────
+async function resolveLud16(lud16) {
+  const [name, domain] = lud16.split('@');
+  if (!name || !domain) throw new Error('Invalid lud16');
+  const url = 'https://' + domain + '/.well-known/lnurlp/' + name;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  const data = await resp.json();
+  if (data.status === 'ERROR') throw new Error(data.reason);
+  // Store original lnurl encoded form
+  data.lnurl = lud16ToLnurl(url);
+  return data;
+}
+
+function lud16ToLnurl(url) {
+  // Encode URL as bech32 lnurl
+  const CHARSET = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+  const bytes = new TextEncoder().encode(url);
+  // Convert bytes to 5-bit groups
+  const vals = [];
+  let acc = 0, bits = 0;
+  for (const b of bytes) {
+    acc = ((acc << 8) | b); bits += 8;
+    while (bits >= 5) { bits -= 5; vals.push((acc >> bits) & 31); }
+  }
+  if (bits > 0) vals.push((acc << (5 - bits)) & 31);
+  // Compute checksum
+  function polymod(v) {
+    const GEN = [0x3b6a57b2,0x26508e6d,0x1ea119fa,0x3d4233dd,0x2a1462b3];
+    let chk = 1;
+    for (const x of v) {
+      const top = chk >> 25;
+      chk = ((chk & 0x1ffffff) << 5) ^ x;
+      for (let i=0;i<5;i++) if ((top>>i)&1) chk ^= GEN[i];
+    }
+    return chk;
+  }
+  const hrp = 'lnurl';
+  const hrpExpanded = [...hrp].map(c=>c.charCodeAt(0)>>5).concat([0],...[...hrp].map(c=>c.charCodeAt(0)&31));
+  const checksum = polymod([...hrpExpanded,...vals,...[0,0,0,0,0,0]]) ^ 1;
+  const checksumVals = [0,1,2,3,4,5].map(i=>(checksum>>(5*(5-i)))&31);
+  return hrp+'1'+[...vals,...checksumVals].map(v=>CHARSET[v]).join('');
+}
+
+// ── Scan signed zap ───────────────────────────────────────────────────────
+async function zapStartScan() {
+  zapShowStep('zap-step-scan');
+  const video = document.getElementById('zap-scan-video');
+  const statusEl = document.getElementById('zap-scan-status');
+  statusEl.textContent = 'STARTING...';
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+  let stream = null;
+  for (const c of attempts) {
+    try { stream = await navigator.mediaDevices.getUserMedia(c); break; } catch(e) {}
+  }
+  if (!stream) { statusEl.textContent = 'CAMERA FAILED'; return; }
+  video.srcObject = stream;
+  await video.play();
+  statusEl.textContent = 'SCANNING · POINT AT DEVICE SCREEN';
+  zapState.zapStopScan = startQRScanner(video, (data) => {
+    const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
+    const isJSON = data.startsWith('{') && data.endsWith('}');
+    if (!isCompact && !isJSON) return false;
+    zapState.zapStopScan = null;
+    stopCameraStream(video);
+    zapGotSignedEvent(data);
+  }, (msg) => { statusEl.textContent = msg; });
+}
+
+function zapCancelScan() {
+  if (zapState.zapStopScan) { zapState.zapStopScan(); zapState.zapStopScan = null; }
+  stopCameraStream(document.getElementById('zap-scan-video'));
+  zapShowStep('zap-step-qr');
+}
+
+// ── Got signed zap event ──────────────────────────────────────────────────
+async function zapGotSignedEvent(data) {
+  zapShowStep('zap-step-invoice');
+  document.getElementById('zap-invoice-status').textContent = 'Sending to LNURL endpoint...';
+
+  let signedJson;
+  try {
+    if (data.length === 192 && /^[0-9a-f]{192}$/.test(data)) {
+      signedJson = decodeCompactQR(data, zapState.unsignedEvent);
+    } else {
+      signedJson = JSON.parse(data);
+    }
+    if (!signedJson || !signedJson.sig) throw new Error('Missing sig');
+  } catch(e) {
+    document.getElementById('zap-invoice-status').textContent = 'Bad signed event: ' + e.message;
+    return;
+  }
+
+  // Send to lnurl callback
+  const amount = parseInt(zapState.unsignedEvent.tags.find(t=>t[0]==='amount')?.[1] || '21000');
+  const callbackUrl = zapState.lnurlData.callback +
+    (zapState.lnurlData.callback.includes('?') ? '&' : '?') +
+    'amount=' + amount +
+    '&nostr=' + encodeURIComponent(JSON.stringify(signedJson));
+
+  try {
+    const resp = await fetch(callbackUrl);
+    const result = await resp.json();
+    if (result.status === 'ERROR') throw new Error(result.reason);
+    if (!result.pr) throw new Error('No invoice in response');
+
+    const invoice = result.pr;
+    document.getElementById('zap-invoice-text').textContent = invoice;
+    document.getElementById('zap-invoice-status').textContent = 'Invoice ready — scan with Lightning wallet';
+
+    const qrEl = document.getElementById('zap-invoice-qr');
+    qrEl.innerHTML = '';
+    new QRCode(qrEl, {
+      text: invoice.toUpperCase(),
+      width: 240, height: 240,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.L
+    });
+  } catch(e) {
+    document.getElementById('zap-invoice-status').textContent = 'LNURL error: ' + e.message;
+  }
+}
+
+function copyInvoice() {
+  const inv = document.getElementById('zap-invoice-text').textContent;
+  if (inv) navigator.clipboard.writeText(inv).then(() => {
+    document.getElementById('zap-invoice-status').textContent = 'Copied to clipboard';
+  });
+}
+
+function stopCameraStream(video) {
+  if (video && video.srcObject) {
+    video.srcObject.getTracks().forEach(t => t.stop());
+    video.srcObject = null;
+  }
+}
+
 </script>
 </body>
 </html>
