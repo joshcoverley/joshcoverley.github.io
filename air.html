@@ -340,6 +340,15 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .relay-chip .chip-dot { width: 5px; height: 5px; background: var(--dim); }
 .relay-chip.connected { border-color: var(--acid2); color: var(--acid2); }
 .relay-chip.connected .chip-dot { background: var(--acid2); }
+
+.feed-tab {
+  background: none; border: 1px solid var(--border2); color: var(--dim);
+  font-family: var(--mono); font-size: 9px; padding: 5px 12px;
+  cursor: pointer; letter-spacing: 0.15em; text-transform: uppercase;
+  transition: all 0.15s;
+}
+.feed-tab:hover { border-color: var(--muted); color: var(--text); }
+.feed-tab.active { border-color: var(--acid2); color: var(--acid2); background: var(--panel); }
 .feed-loading {
   display: flex; align-items: center; gap: 10px;
   font-size: 10px; color: var(--dim); letter-spacing: 0.12em;
@@ -645,13 +654,25 @@ footer strong { color: var(--muted); }
   <!-- Feed -->
   <div class="feed-section">
     <div class="feed-header">
-      <span class="feed-title">Global Feed</span>
+      <span class="feed-title" id="feed-title">Global Feed</span>
       <div class="feed-line"></div>
     </div>
     <div class="relay-chips" id="relay-chips"></div>
+
+    <!-- Feed mode tabs -->
+    <div id="feed-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+      <button class="feed-tab active" id="tab-following" onclick="setFeedMode('following')">FOLLOWING</button>
+      <button class="feed-tab" id="tab-global" onclick="setFeedMode('global')">GLOBAL</button>
+      <button class="feed-tab" id="tab-mentions" onclick="setFeedMode('mentions')">MENTIONS</button>
+      <button class="feed-tab" id="tab-mine" onclick="setFeedMode('mine')">MY NOTES</button>
+    </div>
+
+    <!-- Following status -->
+    <div id="follow-status" style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:8px;min-height:14px;"></div>
+
     <div id="feed-loading" class="feed-loading">
       <div class="pulse"></div>
-      Connecting to relays…
+      <span id="feed-loading-text">Connecting to relays…</span>
     </div>
     <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
     <div id="feed"></div>
@@ -693,17 +714,12 @@ footer strong { color: var(--muted); }
 
 <div id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@noble/secp256k1@1.7.1/lib/index.js" crossorigin="anonymous"></script>
-<script>
-// Expose noble secp256k1 to NWC functions
-window.addEventListener('load', function() {
-  if (typeof nobleSecp256k1 !== 'undefined') {
-    window.nobleSecp256k1 = nobleSecp256k1;
-  } else if (typeof secp !== 'undefined') {
-    window.nobleSecp256k1 = secp;
-  }
-});
+<script type="module">
+import * as secp from "https://cdn.jsdelivr.net/npm/@noble/secp256k1@2.1.0/+esm";
+window.nobleSecp256k1 = secp;
+console.log("[noble] secp256k1 v2 loaded");
 </script>
+
 <script>
 window._zxingReady = new Promise((resolve, reject) => {
   function tryLoad(urls) {
@@ -759,6 +775,24 @@ const state = {
   scanStream: null, scanTimer: null,
   pubkeyScanStream: null, pubkeyScanStop: null,
 };
+
+// ── Feed state ───────────────────────────────────────────────────────────
+const feedState = {
+  mode: 'global',           // 'following' | 'global' | 'mentions' | 'mine'
+  followList: [],           // array of hex pubkeys from kind 3
+  followListLoaded: false,
+};
+
+// Load cached follow list
+(function() {
+  const saved = localStorage.getItem('follow_list');
+  if (saved) {
+    try {
+      feedState.followList = JSON.parse(saved);
+      feedState.followListLoaded = true;
+    } catch(e) {}
+  }
+})();
 
 (function boot() {
   if(state.pubkeyHex) {
@@ -851,8 +885,18 @@ function onPubkeyInput() {
   const val = document.getElementById('pubkey-input').value.trim();
   const hex = npubToHex(val) || (isHex64(val) ? val : '');
   state.pubkeyHex = hex;
-  if(hex) { LS.set('kv_pubkey', hex); updatePubkeyHint(hex); }
-  else { LS.del('kv_pubkey'); document.getElementById('pubkey-hint').textContent = 'Scan the npub QR from your FAVILLA Key, or enter manually. Leave blank to post anonymously.'; }
+  if(hex) {
+    LS.set('kv_pubkey', hex);
+    updatePubkeyHint(hex);
+    // Fetch follow list and switch to following mode
+    feedState.followListLoaded = false;
+    fetchFollowList(hex);
+    setFeedMode('following');
+  } else {
+    LS.del('kv_pubkey');
+    document.getElementById('pubkey-hint').textContent = 'Scan the npub QR from your FAVILLA Key, or enter manually. Leave blank to post anonymously.';
+    setFeedMode('global');
+  }
 }
 function clearPubkey() {
   document.getElementById('pubkey-input').value = '';
@@ -1149,16 +1193,147 @@ function showStep(name){
   });
 }
 
+// feedState moved before boot
+
+function setFeedMode(mode) {
+  feedState.mode = mode;
+  // Update tab styles
+  ['following','global','mentions','mine'].forEach(m => {
+    document.getElementById('tab-' + m).className = 'feed-tab' + (m === mode ? ' active' : '');
+  });
+  const titles = { following: 'Following', global: 'Global Feed', mentions: 'Mentions', mine: 'My Notes' };
+  document.getElementById('feed-title').textContent = titles[mode];
+
+  // Clear feed and refilter existing notes
+  document.getElementById('feed').innerHTML = '';
+  state.knownIds.clear();
+
+  // Re-render notes that match the new mode
+  const toShow = state.notes.filter(ev => noteMatchesMode(ev, mode));
+  if (toShow.length === 0) {
+    document.getElementById('feed-empty').style.display = 'block';
+  } else {
+    document.getElementById('feed-empty').style.display = 'none';
+    document.getElementById('feed-loading').style.display = 'none';
+    toShow.slice(0, 50).forEach(ev => {
+      state.knownIds.add(ev.id);
+      renderNote(ev, false);
+    });
+  }
+
+  // Resubscribe with new filter
+  resubscribeAll();
+}
+
+function noteMatchesMode(ev, mode) {
+  if (ev.kind !== 1) return false;
+  switch(mode) {
+    case 'global':    return true;
+    case 'following': return feedState.followList.includes(ev.pubkey) || ev.pubkey === state.pubkeyHex;
+    case 'mentions':  return ev.tags.some(t => t[0] === 'p' && t[1] === state.pubkeyHex);
+    case 'mine':      return ev.pubkey === state.pubkeyHex;
+    default:          return true;
+  }
+}
+
+function resubscribeAll() {
+  RELAYS.forEach(url => {
+    const ws = state.sockets[url];
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(['CLOSE', 'feed']));
+      ws.send(JSON.stringify(['REQ', 'feed', buildFeedFilter()]));
+    }
+  });
+}
+
+function buildFeedFilter() {
+  const base = { kinds:[1], limit:50 };
+  switch(feedState.mode) {
+    case 'following':
+      if (feedState.followList.length > 0) {
+        const authors = [...feedState.followList];
+        if (state.pubkeyHex) authors.push(state.pubkeyHex);
+        return { ...base, authors };
+      }
+      return base; // fallback to global if no follow list
+    case 'mentions':
+      if (state.pubkeyHex) return { ...base, '#p': [state.pubkeyHex] };
+      return base;
+    case 'mine':
+      if (state.pubkeyHex) return { ...base, authors: [state.pubkeyHex] };
+      return base;
+    default:
+      return base;
+  }
+}
+
+async function fetchFollowList(pubkeyHex) {
+  const statusEl = document.getElementById('follow-status');
+  statusEl.textContent = '// Fetching follow list...';
+  let found = false;
+  for (const url of RELAYS) {
+    try {
+      const follows = await fetchFollowListFromRelay(pubkeyHex, url);
+      if (follows && follows.length > 0) {
+        feedState.followList = follows;
+        feedState.followListLoaded = true;
+        localStorage.setItem('follow_list', JSON.stringify(follows));
+        statusEl.textContent = '// Following ' + follows.length + ' accounts';
+        found = true;
+        // If in following mode, resubscribe now we have the list
+        if (feedState.mode === 'following') resubscribeAll();
+        break;
+      }
+    } catch(e) {}
+  }
+  if (!found) statusEl.textContent = '// No follow list found — showing global';
+}
+
+function fetchFollowListFromRelay(pubkeyHex, relayUrl) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(relayUrl);
+    const timer = setTimeout(() => { ws.close(); reject(new Error('Timeout')); }, 6000);
+    const sub = 'fl-' + Math.random().toString(36).slice(2,8);
+    ws.onopen = () => {
+      ws.send(JSON.stringify(['REQ', sub, { kinds:[3], authors:[pubkeyHex], limit:1 }]));
+    };
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]?.kind === 3) {
+          clearTimeout(timer);
+          ws.close();
+          const follows = (msg[2].tags || [])
+            .filter(t => t[0] === 'p' && t[1] && /^[0-9a-f]{64}$/.test(t[1]))
+            .map(t => t[1]);
+          resolve(follows);
+        } else if (msg[0] === 'EOSE') {
+          clearTimeout(timer);
+          ws.close();
+          resolve([]);
+        }
+      } catch(e) {}
+    };
+    ws.onerror = () => { clearTimeout(timer); reject(new Error('WS error')); };
+  });
+}
+
 function connectRelays(){
   renderRelayChips();
   RELAYS.forEach(url=>openRelay(url));
+  // Default to following mode if pubkey set, otherwise global
+  const initialMode = state.pubkeyHex ? 'following' : 'global';
+  setFeedMode(initialMode);
+  // Fetch follow list if pubkey available
+  if (state.pubkeyHex) fetchFollowList(state.pubkeyHex);
 }
+
 function openRelay(url){
   try{
     const ws=new WebSocket(url);state.sockets[url]=ws;
     ws.onopen=()=>{
       updateChip(url,true);
-      ws.send(JSON.stringify(['REQ','global',{kinds:[1],limit:30}]));
+      ws.send(JSON.stringify(['REQ','feed',buildFeedFilter()]));
     };
     ws.onmessage=e=>{
       try{const msg=JSON.parse(e.data);if(msg[0]==='EVENT'&&msg[2])handleNote(msg[2]);}catch(er){}
@@ -1167,10 +1342,18 @@ function openRelay(url){
     ws.onerror=()=>{};
   }catch(e){}
 }
+
 function handleNote(ev){
-  if(ev.kind!==1||state.knownIds.has(ev.id))return;
-  state.knownIds.add(ev.id);state.notes.unshift(ev);
-  if(state.notes.length>100)state.notes.pop();
+  if(ev.kind!==1)return;
+  // Store all notes regardless of mode
+  if(!state.knownIds.has(ev.id)){
+    state.notes.unshift(ev);
+    if(state.notes.length>200)state.notes.pop();
+  }
+  // Only render if matches current mode
+  if(!noteMatchesMode(ev, feedState.mode))return;
+  if(state.knownIds.has(ev.id))return;
+  state.knownIds.add(ev.id);
   renderNote(ev,true);
   document.getElementById('feed-loading').style.display='none';
   document.getElementById('feed-empty').style.display='none';
