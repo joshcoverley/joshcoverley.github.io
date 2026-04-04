@@ -1713,22 +1713,29 @@ async function zapGotSignedEvent(data) {
     '&nostr=' + encodeURIComponent(JSON.stringify(signedJson));
 
   const statusEl = document.getElementById('zap-invoice-status');
-  statusEl.textContent = 'Signed event decoded. Requesting invoice...';
+  const proxyPayload = {
+    callbackUrl: zapState.lnurlData.callback,
+    signedEvent: signedJson,
+    amount: amount
+  };
+  statusEl.textContent = 'Sending to proxy. amount=' + amount + ' callback=' + (zapState.lnurlData.callback||'').slice(0,40);
+  await new Promise(r => setTimeout(r, 2000));
   try {
     const resp = await fetch(ZAP_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        callbackUrl: zapState.lnurlData.callback,
-        signedEvent: signedJson,
-        amount: amount
-      })
+      body: JSON.stringify(proxyPayload)
     });
-    if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status);
-    const result = await resp.json();
+    statusEl.textContent = 'Proxy response: HTTP ' + resp.status + ' ' + resp.headers.get('content-type');
+    await new Promise(r => setTimeout(r, 2000));
+    const rawText = await resp.text();
+    statusEl.textContent = 'Raw: ' + rawText.slice(0, 120);
+    await new Promise(r => setTimeout(r, 3000));
+    if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status + ': ' + rawText.slice(0,80));
+    const result = JSON.parse(rawText);
     if (result.error) throw new Error(result.error);
     if (result.status === 'ERROR') throw new Error(result.reason);
-    if (!result.pr) throw new Error('No invoice — got: ' + JSON.stringify(result).slice(0,100));
+    if (!result.pr) throw new Error('No invoice — got: ' + rawText.slice(0,100));
 
     const invoice = result.pr;
     document.getElementById('zap-invoice-text').value = invoice;
