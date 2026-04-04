@@ -431,6 +431,48 @@ footer a { color: var(--muted); text-decoration: none; }
 footer a:hover { color: var(--acid2); }
 footer strong { color: var(--muted); }
 
+/* ── Floating nav ── */
+#spark-nav {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 5000;
+  background: rgba(4,5,3,0.96);
+  border-top: 1px solid var(--border2);
+  backdrop-filter: blur(12px);
+  display: flex; align-items: stretch;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.nav-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: center; gap: 3px;
+  padding: 8px 4px; cursor: pointer;
+  border: none; background: none;
+  color: var(--dim); font-family: var(--mono);
+  font-size: 7px; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: color 0.15s; border-top: 2px solid transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+.nav-item svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.5; }
+.nav-item:hover { color: var(--muted); }
+.nav-item.active { color: var(--acid); border-top-color: var(--acid); }
+.nav-item.active svg { stroke: var(--acid); }
+
+/* ── Sections ── */
+.app-section { display: none; padding-bottom: 80px; }
+.app-section.active { display: block; }
+.section-header {
+  padding: 16px 0 12px;
+  border-bottom: 1px solid var(--border2);
+  margin-bottom: 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.section-title {
+  font-family: var(--display); font-size: 11px; font-weight: 700;
+  letter-spacing: 0.3em; color: var(--acid2); text-transform: uppercase;
+}
+.section-title::before { content: '-- '; color: var(--acid3); }
+
+/* wrap needs bottom padding for nav */
+.wrap { padding-bottom: 80px; }
+
 #toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(10px);
   background: var(--panel2); border: 1px solid var(--acid2);
@@ -448,58 +490,52 @@ footer strong { color: var(--muted); }
 <body>
 <div class="wrap">
 
-  <header>
-    <div class="header-top">FAVILLA KEY · BUILT-IN EXCLUSIVE</div>
-    <div class="header-title">SPARK</div>
-    <div class="header-sub">Airgap Nostr Signing Portal</div>
-    <div class="header-badge">● No Key Online · Airgap Mode</div>
+  <!-- Compact header -->
+  <header style="padding:14px 0 10px;border-bottom:1px solid var(--border2);margin-bottom:0;flex-direction:row;align-items:center;justify-content:space-between;">
+    <div>
+      <div class="header-top" style="margin-bottom:2px;">FAVILLA KEY · AIRGAP</div>
+      <div class="header-title" style="font-size:clamp(24px,6vw,36px);letter-spacing:0.3em;">SPARK</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="pubkey-hint" style="font-size:9px;color:var(--dim);letter-spacing:0.06em;text-align:right;"></div>
+      <button class="btn-sm-accent" onclick="openPubkeyScan()" title="Scan npub QR">⬡</button>
+    </div>
   </header>
 
-  <div class="sec">Protocol</div>
-  <div class="how">
-    <div class="how-step">
-      <div class="how-num">01</div>
-      <div class="how-label">Write note, generate unsigned QR</div>
+  <!-- Hidden pubkey input — managed by profile section -->
+  <input type="text" id="pubkey-input" style="display:none"
+    oninput="onPubkeyInput()" autocomplete="off" autocorrect="off" spellcheck="false">
+
+  <!-- ── FEED section ── -->
+  <div class="app-section active" id="section-feed">
+    <div class="section-header">
+      <span class="section-title" id="feed-title">Feed</span>
+      <div style="display:flex;gap:6px;">
+        <button class="feed-tab active" id="tab-following" onclick="setFeedMode('following')" style="font-size:8px;padding:4px 8px;">FOLLOWING</button>
+        <button class="feed-tab" id="tab-global" onclick="setFeedMode('global')" style="font-size:8px;padding:4px 8px;">GLOBAL</button>
+        <button class="feed-tab" id="tab-mentions" onclick="setFeedMode('mentions')" style="font-size:8px;padding:4px 8px;">MENTIONS</button>
+        <button class="feed-tab" id="tab-mine" onclick="setFeedMode('mine')" style="font-size:8px;padding:4px 8px;">MINE</button>
+      </div>
     </div>
-    <div class="how-step">
-      <div class="how-num">02</div>
-      <div class="how-label">Device signs offline, shows signed QR</div>
+    <div class="relay-chips" id="relay-chips"></div>
+    <div id="follow-status" style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:8px;min-height:14px;"></div>
+    <div id="feed-loading" class="feed-loading">
+      <div class="pulse"></div>
+      <span id="feed-loading-text">Connecting to relays…</span>
     </div>
-    <div class="how-step">
-      <div class="how-num">03</div>
-      <div class="how-label">Scan back → broadcast to relays</div>
-    </div>
+    <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
+    <div id="feed"></div>
   </div>
 
-  <!-- Pubkey — with Scan QR button -->
-  <div class="pubkey-section">
-    <div class="field-label"><span class="dot"></span>Your Pubkey (optional)</div>
-    <div class="pubkey-row">
-      <input type="text" id="pubkey-input" placeholder="npub1… or hex pubkey"
-        oninput="onPubkeyInput()" autocomplete="off" autocorrect="off" spellcheck="false">
-      <button class="btn-sm-accent" onclick="openPubkeyScan()" title="Scan npub QR from device">⬡ SCAN</button>
-      <button class="btn-sm" onclick="clearPubkey()">Clear</button>
+  <!-- ── NOTES section (compose + sign) ── -->
+  <div class="app-section" id="section-notes">
+    <div class="section-header">
+      <span class="section-title">Notes</span>
+      <div style="font-size:9px;color:var(--dim);letter-spacing:0.06em;">// Airgap signing</div>
     </div>
-    <div class="pubkey-hint" id="pubkey-hint">Scan the npub QR from your FAVILLA Key, or enter manually. Leave blank to post anonymously.</div>
-  </div>
 
-  <!-- NWC Wallet Connect -->
-  <div style="margin-bottom:16px;">
-    <div class="sec-label" style="font-size:9px;letter-spacing:0.2em;color:var(--color-text-secondary);margin-bottom:6px;">⚡ LIGHTNING WALLET (NWC)</div>
-    <div style="display:flex;gap:8px;align-items:center;">
-      <input id="nwc-string" type="text" placeholder="nostr+walletconnect://... paste your NWC connection string"
-        autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false"
-        style="flex:1;font-size:11px;font-family:var(--font-mono);"
-        oninput="nwcOnInput()">
-      <button onclick="nwcSave()" style="white-space:nowrap;font-size:11px;">SAVE</button>
-      <button onclick="nwcClear()" style="white-space:nowrap;font-size:11px;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">CLEAR</button>
-    </div>
-    <div id="nwc-status" style="font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-top:4px;min-height:16px;"></div>
-  </div>
-
-  <hr class="sec-line">
-
-  <!-- Step 1 -->
+    <!-- Step 1 -->
+<!-- Step 1 -->
   <div class="card active" id="card-compose">
     <div class="card-header">
       <span class="step-pill active" id="pill-compose">STEP 01</span>
@@ -601,7 +637,16 @@ footer strong { color: var(--muted); }
   </div>
 
 
-  <!-- Zap Section -->
+  
+  </div>
+
+  <!-- ── ZAP section ── -->
+  <div class="app-section" id="section-zap">
+    <div class="section-header">
+      <span class="section-title">Zap</span>
+      <div style="font-size:9px;color:var(--dim);letter-spacing:0.06em;">// Lightning payment</div>
+    </div>
+<!-- Zap Section -->
   <div class="sec" style="margin-top:32px;">Zap</div>
   <div class="card active" id="card-zap">
     <div class="card-header">
@@ -702,31 +747,59 @@ footer strong { color: var(--muted); }
     </div>
   </div>
 
-  <!-- Feed -->
-  <div class="feed-section">
-    <div class="feed-header">
-      <span class="feed-title" id="feed-title">Global Feed</span>
-      <div class="feed-line"></div>
-    </div>
-    <div class="relay-chips" id="relay-chips"></div>
 
-    <!-- Feed mode tabs -->
-    <div id="feed-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-      <button class="feed-tab active" id="tab-following" onclick="setFeedMode('following')">FOLLOWING</button>
-      <button class="feed-tab" id="tab-global" onclick="setFeedMode('global')">GLOBAL</button>
-      <button class="feed-tab" id="tab-mentions" onclick="setFeedMode('mentions')">MENTIONS</button>
-      <button class="feed-tab" id="tab-mine" onclick="setFeedMode('mine')">MY NOTES</button>
-    </div>
+  </div>
 
-    <!-- Following status -->
-    <div id="follow-status" style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:8px;min-height:14px;"></div>
-
-    <div id="feed-loading" class="feed-loading">
-      <div class="pulse"></div>
-      <span id="feed-loading-text">Connecting to relays…</span>
+  <!-- ── MESSAGES section (placeholder) ── -->
+  <div class="app-section" id="section-messages">
+    <div class="section-header">
+      <span class="section-title">Messages</span>
     </div>
-    <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
-    <div id="feed"></div>
+    <div style="font-size:11px;color:var(--dim);letter-spacing:0.08em;padding:40px 0;text-align:center;line-height:2;">
+      // Encrypted DMs (NIP-17)<br>// Coming soon
+    </div>
+  </div>
+
+  <!-- ── PROFILE section ── -->
+  <div class="app-section" id="section-profile">
+    <div class="section-header">
+      <span class="section-title">Profile</span>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="field-label"><span class="dot"></span>Your Pubkey</div>
+      <div class="pubkey-row">
+        <input type="text" id="pubkey-input-visible" placeholder="npub1… or hex pubkey"
+          oninput="onPubkeyInputVisible()" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn-sm-accent" onclick="openPubkeyScan()">⬡ SCAN</button>
+        <button class="btn-sm" onclick="clearPubkey()">CLEAR</button>
+      </div>
+      <div class="pubkey-hint" id="pubkey-hint-profile">Scan from device or enter manually.</div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div class="field-label"><span class="dot"></span>Lightning Wallet (NWC)</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="nwc-string" type="text" placeholder="nostr+walletconnect://..."
+          autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false"
+          style="flex:1;" oninput="nwcOnInput()">
+        <button class="btn-sm-accent" onclick="nwcSave()">SAVE</button>
+        <button class="btn-sm" onclick="nwcClear()">CLEAR</button>
+      </div>
+      <div id="nwc-status" style="font-size:10px;color:var(--muted);margin-top:4px;min-height:14px;letter-spacing:0.06em;"></div>
+    </div>
+    <div id="relay-status-profile" style="font-size:10px;color:var(--dim);letter-spacing:0.06em;margin-bottom:16px;"></div>
+  </div>
+
+  <!-- ── LISTS section ── -->
+  <div class="app-section" id="section-lists">
+    <div class="section-header">
+      <span class="section-title">Lists</span>
+    </div>
+    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:14px;">
+      // Follow list — <span id="lists-count">0 accounts</span>
+    </div>
+    <button onclick="showOnboarding()" class="btn-outline" style="width:100%;margin-bottom:10px;">⬡ REBUILD FROM INTERESTS</button>
+    <button onclick="exportFollowList()" class="btn-sm" style="width:100%;margin-bottom:6px;">EXPORT FOLLOW LIST</button>
+    <div id="follow-list-display" style="margin-top:16px;"></div>
   </div>
 
   <!-- QR fullscreen overlay -->
@@ -755,7 +828,7 @@ footer strong { color: var(--muted); }
     </div>
   </div>
 
-  <!-- Like / reaction confirmation modal -->
+  <!-- Like modal -->
   <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(4,5,3,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
     <div style="background:var(--panel);border:1px solid var(--acid2);width:min(400px,100%);">
       <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
@@ -764,12 +837,10 @@ footer strong { color: var(--muted); }
       </div>
       <div style="padding:14px;">
         <div id="like-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--acid3);padding:6px 10px;margin-bottom:14px;line-height:1.6;"></div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:0.06em;">// Reaction: + (default) — device will sign kind 7</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:0.06em;">// Reaction: + · device signs kind 7</div>
         <button onclick="likeSubmit()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE LIKE QR</button>
         <div id="like-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
-        <div id="like-qr" style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;">
-          <!-- QR renders here with white padding wrapper applied in JS -->
-        </div>
+        <div id="like-qr" style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;"></div>
         <button id="like-fullscreen-btn" onclick="likeShowFullscreen()" style="display:none;width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--acid3);color:var(--acid2);font-family:var(--mono);font-size:9px;padding:6px;cursor:pointer;letter-spacing:0.15em;">⛶ FULLSCREEN</button>
       </div>
     </div>
@@ -784,19 +855,43 @@ footer strong { color: var(--muted); }
       </div>
       <div style="padding:16px;">
         <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:16px;line-height:1.7;">
-          // No follow list found. Select your interests to seed your feed.<br>
-          // You can update this anytime from settings.
+          // No follow list found. Select your interests to seed your feed.
         </div>
-
         <div id="interest-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;"></div>
-
-        <div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:10px;" id="onboard-count">// 0 accounts selected</div>
-
+        <div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:10px;" id="onboard-count">// 0 topics selected</div>
         <button onclick="onboardApply()" id="onboard-apply-btn" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;text-transform:uppercase;">→ BUILD MY FEED</button>
         <div id="onboard-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;letter-spacing:0.06em;"></div>
       </div>
     </div>
   </div>
+
+  <!-- Floating nav -->
+  <nav id="spark-nav">
+    <button class="nav-item active" id="nav-feed" onclick="showSection('feed')">
+      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      FEED
+    </button>
+    <button class="nav-item" id="nav-notes" onclick="showSection('notes')">
+      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+      NOTES
+    </button>
+    <button class="nav-item" id="nav-zap" onclick="showSection('zap')">
+      <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+      ZAP
+    </button>
+    <button class="nav-item" id="nav-messages" onclick="showSection('messages')">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      MSG
+    </button>
+    <button class="nav-item" id="nav-profile" onclick="showSection('profile')">
+      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      PROFILE
+    </button>
+    <button class="nav-item" id="nav-lists" onclick="showSection('lists')">
+      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+      LISTS
+    </button>
+  </nav>
 
   <footer>
     Your signing key never leaves your FAVILLA Key hardware.<br>
@@ -2896,6 +2991,100 @@ function markZappedOptimistic(eventId, sats) {
   statsCache[eventId].zapTotal += sats;
   statsCache[eventId].zappedByMe = true;
   updateNoteStats(eventId);
+}
+
+
+
+// ── Navigation ────────────────────────────────────────────────────────────
+
+function showSection(name) {
+  // Hide all sections
+  document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+
+  // Show target
+  const section = document.getElementById('section-' + name);
+  const btn = document.getElementById('nav-' + name);
+  if (section) section.classList.add('active');
+  if (btn) btn.classList.add('active');
+
+  // Section-specific init
+  if (name === 'profile') initProfileSection();
+  if (name === 'lists') initListsSection();
+  if (name === 'notes') {
+    // Reset to compose step if no active signing
+    if (!state.unsignedEvent) showStep('compose');
+  }
+
+  // Scroll to top
+  window.scrollTo(0, 0);
+}
+
+function initProfileSection() {
+  const visibleInput = document.getElementById('pubkey-input-visible');
+  if (visibleInput) {
+    const hex = state.pubkeyHex;
+    if (hex) {
+      // Try to show npub from the hidden input
+      const npubVal = document.getElementById('pubkey-input').value;
+      visibleInput.value = npubVal || hex;
+    }
+  }
+  const hint = document.getElementById('pubkey-hint-profile');
+  if (hint) {
+    hint.textContent = state.pubkeyHex
+      ? '// Set — ' + state.pubkeyHex.slice(0,8) + '…' + state.pubkeyHex.slice(-6)
+      : '// No key set — scan your npub QR from the device';
+  }
+}
+
+function onPubkeyInputVisible() {
+  const val = document.getElementById('pubkey-input-visible').value;
+  // Mirror to hidden input and trigger normal pubkey logic
+  document.getElementById('pubkey-input').value = val;
+  onPubkeyInput();
+  // Update profile hint
+  const hint = document.getElementById('pubkey-hint-profile');
+  if (hint && state.pubkeyHex) {
+    hint.textContent = '// Set — ' + state.pubkeyHex.slice(0,8) + '…' + state.pubkeyHex.slice(-6);
+  }
+}
+
+function initListsSection() {
+  const count = feedState.followList.length;
+  const countEl = document.getElementById('lists-count');
+  if (countEl) countEl.textContent = count + ' account' + (count !== 1 ? 's' : '');
+
+  const display = document.getElementById('follow-list-display');
+  if (!display) return;
+  if (count === 0) {
+    display.innerHTML = '<div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;">// No follow list. Select interests to build one.</div>';
+    return;
+  }
+  // Show first 20 with profiles
+  display.innerHTML = feedState.followList.slice(0, 20).map(hex => {
+    const p = state.profiles[hex] || {};
+    const name = p.name || p.display_name || hex.slice(0,12) + '…';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);">
+      <div style="width:28px;height:28px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);flex-shrink:0;overflow:hidden;">
+        ${p.picture ? `<img src="${p.picture}" style="width:100%;height:100%;object-fit:cover;">` : name[0] || '?'}
+      </div>
+      <div style="flex:1;min-width:0;">
+        <div style="color:var(--acid);font-size:10px;">${name}</div>
+        <div style="font-size:8px;color:var(--dim);">${hex.slice(0,16)}…</div>
+      </div>
+    </div>`;
+  }).join('') + (count > 20 ? `<div style="font-size:10px;color:var(--dim);padding:10px 0;letter-spacing:0.08em;">// + ${count - 20} more</div>` : '');
+}
+
+function exportFollowList() {
+  if (!feedState.followList.length) return;
+  const data = JSON.stringify(feedState.followList, null, 2);
+  const blob = new Blob([data], {type: 'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url;
+  a.download = 'follow-list.json'; a.click();
+  URL.revokeObjectURL(url);
 }
 
 
