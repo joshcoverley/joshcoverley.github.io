@@ -372,6 +372,17 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .note-pubkey { font-size: 8px; color: var(--dim); letter-spacing: 0.04em; }
 .note-time { font-size: 9px; color: var(--dim); margin-left: auto; letter-spacing: 0.04em; white-space: nowrap; }
 .note-content { font-size: 13px; color: var(--text); line-height: 1.6; word-break: break-word; }
+.note-actions { display: flex; gap: 4px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.note-action {
+  background: none; border: 1px solid var(--border); color: var(--dim);
+  font-family: var(--mono); font-size: 9px; padding: 4px 10px;
+  cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase;
+  transition: all 0.15s; flex: 1;
+}
+.note-action:hover { border-color: var(--muted); color: var(--text); }
+.note-action.like:hover { border-color: var(--acid2); color: var(--acid2); }
+.note-action.zap:hover { border-color: var(--orange); color: var(--orange); }
+.note-action.reply:hover { border-color: var(--acid); color: var(--acid); }
 
 footer {
   margin-top: 48px; padding: 20px 0;
@@ -676,6 +687,42 @@ footer strong { color: var(--muted); }
     </div>
     <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
     <div id="feed"></div>
+  </div>
+
+  <!-- Reply modal -->
+  <div id="reply-modal" style="display:none;position:fixed;inset:0;background:rgba(4,5,3,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--panel);border:1px solid var(--acid2);width:min(500px,100%);max-height:90vh;overflow-y:auto;">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--acid2);">↩ REPLY</span>
+        <button onclick="closeReplyModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:14px;">
+        <div id="reply-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--acid3);padding:6px 10px;margin-bottom:12px;line-height:1.6;"></div>
+        <textarea id="reply-compose" rows="4" placeholder="Your reply…" maxlength="460"
+          style="width:100%;resize:none;background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:13px;padding:10px;box-sizing:border-box;"
+          oninput="this.nextElementSibling.textContent=this.value.length+' / 460'"></textarea>
+        <div style="font-size:10px;color:var(--dim);margin:4px 0 12px;letter-spacing:0.08em;">0 / 460</div>
+        <button onclick="replySubmit()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE REPLY QR</button>
+        <div id="reply-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Like / reaction confirmation modal -->
+  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(4,5,3,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--panel);border:1px solid var(--acid2);width:min(400px,100%);">
+      <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--acid2);">♥ LIKE</span>
+        <button onclick="closeLikeModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+      </div>
+      <div style="padding:14px;">
+        <div id="like-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--acid3);padding:6px 10px;margin-bottom:14px;line-height:1.6;"></div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:0.06em;">// Reaction: + (default) — device will sign kind 7</div>
+        <button onclick="likeSubmit()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE LIKE QR</button>
+        <div id="like-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
+        <div id="like-qr" style="margin-top:12px;display:flex;justify-content:center;"></div>
+      </div>
+    </div>
   </div>
 
   <!-- Onboarding interest picker modal -->
@@ -1393,6 +1440,7 @@ function renderNote(ev,prepend=false){
   const profile=state.profiles[ev.pubkey]||{};
   const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
   const div=document.createElement('div');div.className='note-card';div.id=id;
+  const evJson = JSON.stringify(ev).replace(/'/g, "\'");
   div.innerHTML=`
     <div class="note-header">
       <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
@@ -1400,7 +1448,12 @@ function renderNote(ev,prepend=false){
       <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div></div>
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
-    <div class="note-content">${escHtml(ev.content||'')}</div>`;
+    <div class="note-content">${escHtml(ev.content||'')}</div>
+    <div class="note-actions">
+      <button class="note-action reply" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})">↩ REPLY</button>
+      <button class="note-action like" onclick="noteLike('${ev.id}','${ev.pubkey}')">♥ LIKE</button>
+      <button class="note-action zap" onclick="noteZap('${ev.id}','${ev.pubkey}')">⚡ ZAP</button>
+    </div>`;
   if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
   else feed.appendChild(div);
   while(feed.children.length>50)feed.removeChild(feed.lastChild);
@@ -2396,6 +2449,145 @@ async function onboardApply() {
       '// Seeded with ' + pubkeys.size + ' accounts · ' + Array.from(onboardState.selected).join(', ');
     setFeedMode('following');
   }, 600);
+}
+
+
+
+// ── Note actions: reply, like, zap ───────────────────────────────────────
+
+const noteActionState = {
+  targetId: null,
+  targetPubkey: null,
+  targetContent: null,
+};
+
+// ── REPLY ─────────────────────────────────────────────────────────────────
+function noteReply(eventId, pubkey, contentPreview) {
+  noteActionState.targetId = eventId;
+  noteActionState.targetPubkey = pubkey;
+  const profile = state.profiles[pubkey] || {};
+  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
+  document.getElementById('reply-quoting').textContent = name + ': ' + (contentPreview || '').slice(0, 120);
+  document.getElementById('reply-compose').value = '';
+  document.getElementById('reply-status').textContent = '';
+  document.getElementById('like-qr').innerHTML = '';
+  document.getElementById('reply-modal').style.display = 'flex';
+}
+
+function closeReplyModal() {
+  document.getElementById('reply-modal').style.display = 'none';
+}
+
+function replySubmit() {
+  const text = document.getElementById('reply-compose').value.trim();
+  if (!text) { document.getElementById('reply-status').textContent = '// Enter reply text'; return; }
+
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const event = {
+    kind: 1,
+    content: text,
+    tags: [
+      ['e', noteActionState.targetId, '', 'reply'],
+      ['p', noteActionState.targetPubkey],
+    ],
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
+  };
+
+  // Use the existing signing flow
+  state.unsignedEvent = event;
+  closeReplyModal();
+
+  // Show QR for device to sign
+  const el = document.getElementById('qr-canvas');
+  el.innerHTML = '';
+  (window._qrReady || Promise.resolve()).then(() => {
+    new QRCode(el, {
+      text: JSON.stringify(event),
+      width: 320, height: 320,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+  showStep('qr');
+  document.getElementById('pill-compose').className = 'step-pill done';
+  document.getElementById('reply-status').textContent = '';
+}
+
+// ── LIKE ──────────────────────────────────────────────────────────────────
+function noteLike(eventId, pubkey) {
+  noteActionState.targetId = eventId;
+  noteActionState.targetPubkey = pubkey;
+  const profile = state.profiles[pubkey] || {};
+  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
+  // Find the note content
+  const note = state.notes.find(n => n.id === eventId);
+  document.getElementById('like-quoting').textContent = name + ': ' + (note?.content || '').slice(0, 100);
+  document.getElementById('like-status').textContent = '';
+  document.getElementById('like-qr').innerHTML = '';
+  document.getElementById('like-modal').style.display = 'flex';
+}
+
+function closeLikeModal() {
+  document.getElementById('like-modal').style.display = 'none';
+}
+
+function likeSubmit() {
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const event = {
+    kind: 7,
+    content: '+',
+    tags: [
+      ['e', noteActionState.targetId],
+      ['p', noteActionState.targetPubkey],
+      ['k', '1'],
+    ],
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
+  };
+
+  state.unsignedEvent = event;
+
+  // Show QR in like modal itself
+  const qrEl = document.getElementById('like-qr');
+  qrEl.innerHTML = '';
+  document.getElementById('like-status').textContent = '// Scan QR with device to sign, then scan back to publish';
+
+  (window._qrReady || Promise.resolve()).then(() => {
+    new QRCode(qrEl, {
+      text: JSON.stringify(event),
+      width: 240, height: 240,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+
+  // After user scans signed QR back, we need to handle it
+  // Switch button to "scan signed QR"
+  document.querySelector('#like-modal button[onclick="likeSubmit()"]').outerHTML =
+    '<button onclick="likeStartScan()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">↩ SCAN SIGNED LIKE</button>';
+}
+
+function likeStartScan() {
+  closeLikeModal();
+  // Reuse existing scan flow
+  startScan();
+}
+
+// ── ZAP from note ─────────────────────────────────────────────────────────
+function noteZap(eventId, pubkey) {
+  // Pre-fill zap form and scroll to it
+  document.getElementById('zap-recipient').value = pubkey;
+  document.getElementById('zap-noteid').value = eventId;
+  zapState.recipientHex = pubkey;
+
+  // Scroll to zap section
+  document.getElementById('card-zap').scrollIntoView({ behavior: 'smooth' });
+
+  // Flash the zap card
+  const card = document.getElementById('card-zap');
+  card.style.borderColor = 'var(--orange)';
+  setTimeout(() => { card.style.borderColor = ''; }, 1000);
 }
 
 
