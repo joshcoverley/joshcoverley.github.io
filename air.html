@@ -1493,19 +1493,34 @@ async function zapBuild() {
   }
 
   zapState.recipientHex = recipientHex;
-  zapSetStatus('Fetching profile...');
-
-  // Fetch recipient profile from relay
+  zapSetStatus('Fetching profile from ' + relay + '...');
   let profile;
   try {
     profile = await fetchProfileOnce(recipientHex, relay);
+    zapSetStatus('Got: ' + JSON.stringify(profile).slice(0,120));
+    await new Promise(r => setTimeout(r, 2000));
   } catch(e) {
-    zapSetStatus('Profile fetch failed: ' + e.message);
+    zapSetStatus('Fetch failed: ' + e.message);
     return;
   }
 
+  // Try fallback relays if lud16 not found
   if (!profile || !profile.lud16) {
-    zapSetStatus('No lud16 in profile — recipient may not support zaps');
+    const fallbacks = ['wss://relay.damus.io','wss://nos.lol','wss://relay.nostr.band','wss://nostr.mom'];
+    for (const fb of fallbacks) {
+      if (fb === relay) continue;
+      try {
+        zapSetStatus('No lud16, trying ' + fb + '...');
+        const p2 = await fetchProfileOnce(recipientHex, fb);
+        zapSetStatus('Got: ' + JSON.stringify(p2).slice(0,120));
+        await new Promise(r => setTimeout(r, 1500));
+        if (p2 && p2.lud16) { profile = p2; break; }
+      } catch(e) {}
+    }
+  }
+
+  if (!profile || !profile.lud16) {
+    zapSetStatus('No lud16 found on any relay. Raw profile: ' + JSON.stringify(profile));
     return;
   }
 
