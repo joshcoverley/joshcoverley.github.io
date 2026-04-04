@@ -952,19 +952,28 @@ footer strong { color: var(--muted); }
   </div>
 
   <!-- Like modal -->
-  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(4,5,3,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:var(--panel);border:1px solid var(--acid2);width:min(400px,100%);">
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--acid2);">♥ LIKE</span>
-        <button onclick="closeLikeModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-end;justify-content:center;">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px 16px 0 0;width:100%;max-width:480px;">
+      <div style="padding:16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Scan to like</span>
+        <button onclick="closeLikeModal()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
       </div>
-      <div style="padding:14px;">
-        <div id="like-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--acid3);padding:6px 10px;margin-bottom:14px;line-height:1.6;"></div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:0.06em;">// Reaction: + · device signs kind 7</div>
-        <button onclick="likeSubmit()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE LIKE QR</button>
-        <div id="like-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
-        <div id="like-qr" style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;"></div>
-        <button id="like-fullscreen-btn" onclick="likeShowFullscreen()" style="display:none;width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--acid3);color:var(--acid2);font-family:var(--mono);font-size:9px;padding:6px;cursor:pointer;letter-spacing:0.15em;">⛶ FULLSCREEN</button>
+      <div style="padding:16px;">
+        <div id="like-quoting" style="font-size:14px;color:var(--muted);border-left:2px solid var(--border2);padding:6px 12px;margin-bottom:16px;line-height:1.5;"></div>
+        <div style="display:flex;justify-content:center;margin-bottom:12px;">
+          <div id="like-qr" style="background:#fff;padding:12px;border-radius:12px;line-height:0;"></div>
+        </div>
+        <div id="like-status" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;min-height:16px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="likeShowFullscreen()" id="like-fullscreen-btn"
+            style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+            ⛶ Fullscreen
+          </button>
+          <button onclick="likeStartScan()"
+            style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
+            Scan signed
+          </button>
+        </div>
       </div>
     </div>
   </div>
@@ -2824,6 +2833,8 @@ function noteLike(eventId) {
   document.getElementById('like-status').textContent = '';
   document.getElementById('like-qr').innerHTML = '';
   document.getElementById('like-modal').style.display = 'flex';
+  // Generate QR immediately — no button tap needed
+  likeSubmit();
 }
 
 function closeLikeModal() {
