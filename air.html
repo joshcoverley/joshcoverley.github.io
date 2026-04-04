@@ -2234,96 +2234,99 @@ async function schnorrSign(msgHex, privkeyHex) {
 
 // ── Onboarding interest picker ────────────────────────────────────────────
 
-const INTEREST_SEEDS = {
+// Curators: well-known accounts whose follow lists seed each topic
+const INTEREST_CURATORS = {
   'Bitcoin': {
     emoji: '₿',
-    pubkeys: [
+    desc: 'Bitcoiners, developers and advocates',
+    curators: [
+      '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d', // fiatjaf
       '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2', // jack
       'c4eabae1be3cf657bc1855ee05e69de9f059cb7a059227168b80b89761cbc4e0', // odell
       'e88a691e98d9987c964521dff60025f60700378a4879180dcbbb4a5027850411', // nvk
-      '50d94fc2d8580c682b071a542f8b1e31a200b0508bab95a33bef0855df281d63', // pier
-      '126103bfddc8df256b6e0abfd7f3797c80dcc4ea88f7c2f87dd4104220b4d65', // bitko
-      'de7ecd1e2976a6adb2ffa5f4db81a7d812c8bb6698aa00dcf1e76adb55efd645', // american hodl
-      'f728d9e6e7048358e70930f5ca64b097770d989ccd86854fe322efe3f82f2104', // shinobi
+      '7bdef7be22dd8e59f4600e044aa53a1cf975a9dc7d27df5833bc77db784a96bc', // gigi
       'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f7', // pablof7z
-    ]
+    ],
   },
   'Nostr Dev': {
     emoji: '⚡',
-    pubkeys: [
+    desc: 'Protocol developers and builders',
+    curators: [
       '3bf0c63fcb93463407af97a5e5ee64fa883d107ef9e558472c4eb9aaaefa459d', // fiatjaf
       '32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245', // jb55
-      '7bdef7be22dd8e59f4600e044aa53a1cf975a9dc7d27df5833bc77db784a96bc', // gigi
-      'a341f45ff9758f570a21b000c17d4e53a3a497c8397f26c0e6d61e5acffc7a98', // verbiricha
       '84dee6e676e5bb67b4ad4e042cf70cbd8681155db535942fcc6a0533858a7240', // vitor
-      'bf2376e17ba4ec269d10fcc996a4746b451152be9031fa48e74553dde5526bce', // coracle dev
-    ]
+      'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f7', // pablof7z
+    ],
   },
   'Lightning': {
     emoji: '🌩',
-    pubkeys: [
-      'e9e4276490374a0daf7759fd5f475deff6a9610a2b1d6ac28b82d63ec488c88b', // stacker news
-      'b708f7392f588406212c3882e7b3bc0d9b08d62f95fa170d099127ece2770057', // wallet of satoshi
-      'c49d52a573366792b9a6e4851587c28042fb24fa5625c6d67b8c95c8751abb86', // opennode
-      '69ef7c42ba95534f6d027fc4d384ded1c6a7e78ff82f54e3b39c83e89f6e4d8', // voltage
-    ]
+    desc: 'Lightning Network builders and educators',
+    curators: [
+      '32e1827635450ebb3c5a7d12c1f8e7b2b514439ac10a67eef3d9fd9c5c68e245', // jb55
+      'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f7', // pablof7z
+      'e88a691e98d9987c964521dff60025f60700378a4879180dcbbb4a5027850411', // nvk
+    ],
   },
   'Freedom Tech': {
     emoji: '🔐',
-    pubkeys: [
-      '5c10ed0678805156d39ef1ef6d46110fe7rl455ae70e837a7b4a9e5c0f5f8c6a', // placeholder
+    desc: 'Privacy, security and open source',
+    curators: [
       'e88a691e98d9987c964521dff60025f60700378a4879180dcbbb4a5027850411', // nvk
-      'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f7', // pablof7z
+      'f728d9e6e7048358e70930f5ca64b097770d989ccd86854fe322efe3f82f2104', // shinobi
       '7bdef7be22dd8e59f4600e044aa53a1cf975a9dc7d27df5833bc77db784a96bc', // gigi
-    ]
+    ],
   },
   'Markets': {
     emoji: '📈',
-    pubkeys: [
-      
-      '91c9a5e1a9744114c6fe2d61ae4de82629eaaa0fb52f48288093c7e7e036f832', // mark yusko
+    desc: 'Finance, macro and markets',
+    curators: [
       '50d94fc2d8580c682b071a542f8b1e31a200b0508bab95a33bef0855df281d63', // pier
-    ]
-  },
-  'Privacy': {
-    emoji: '🕵',
-    pubkeys: [
-      'f728d9e6e7048358e70930f5ca64b097770d989ccd86854fe322efe3f82f2104', // shinobi
-      'de7ecd1e2976a6adb2ffa5f4db81a7d812c8bb6698aa00dcf1e76adb55efd645', // american hodl
-      '126103bfddc8df256b6e0abfd7f3797c80dcc4ea88f7c2f87dd4104220b4d65', // bitko
-    ]
-  },
-  'Memes & Culture': {
-    emoji: '🐸',
-    pubkeys: [
       'c4eabae1be3cf657bc1855ee05e69de9f059cb7a059227168b80b89761cbc4e0', // odell
       '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2', // jack
-      '7bdef7be22dd8e59f4600e044aa53a1cf975a9dc7d27df5833bc77db784a96bc', // gigi
-    ]
+    ],
   },
-  'Art & Music': {
+  'Art & Culture': {
     emoji: '🎨',
-    pubkeys: [
+    desc: 'Artists, musicians and creators',
+    curators: [
       '3f770d65d3a764a9c5cb503ae123e62ec7598ad035d836e2a810f3877a745b24', // stpanos
+      '82341f882b6eabcd2ba7f1ef90aad961cf074af15b9ef44a09f9d2a8fbfbe6a2', // jack
       'fa984bd7dbb282f07e16e7ae87b26a2a7b9b90b7246a44771f0cf5ae58018f7', // pablof7z
-    ]
-  }
+    ],
+  },
 };
+
+// Cache fetched follow lists keyed by pubkey
+const curatorFollowCache = {};
+
+async function fetchCuratorFollows(pubkeyHex) {
+  if (curatorFollowCache[pubkeyHex]) return curatorFollowCache[pubkeyHex];
+  try {
+    const follows = await fetchFollowListFromRelay(pubkeyHex, 'wss://relay.damus.io');
+    curatorFollowCache[pubkeyHex] = follows || [];
+    return curatorFollowCache[pubkeyHex];
+  } catch(e) {
+    curatorFollowCache[pubkeyHex] = [];
+    return [];
+  }
+}
+
 
 const onboardState = { selected: new Set() };
 
 function showOnboarding() {
   const grid = document.getElementById('interest-grid');
   grid.innerHTML = '';
-  Object.entries(INTEREST_SEEDS).forEach(([topic, data]) => {
+  Object.entries(INTEREST_CURATORS).forEach(([topic, data]) => {
     const btn = document.createElement('button');
-    btn.id = 'interest-' + topic.replace(/\s+/g,'');
+    btn.id = 'interest-' + topic.replace(/[^a-zA-Z0-9]/g,'');
     btn.style.cssText = 'background:var(--bg2);border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);font-size:10px;padding:10px 12px;cursor:pointer;letter-spacing:0.1em;text-align:left;transition:all 0.15s;';
-    btn.innerHTML = data.emoji + ' ' + topic;
+    btn.innerHTML = data.emoji + ' ' + topic + '<br><span style="font-size:9px;color:var(--dim);">' + data.desc + '</span>';
     btn.onclick = () => toggleInterest(topic, data, btn);
     grid.appendChild(btn);
   });
   document.getElementById('onboard-modal').style.display = 'flex';
+  document.getElementById('onboard-status').textContent = '// Select topics — we fetch real follow lists from Nostr';
 }
 
 function toggleInterest(topic, data, btn) {
@@ -2338,13 +2341,9 @@ function toggleInterest(topic, data, btn) {
     btn.style.color = 'var(--acid)';
     btn.style.background = 'var(--panel)';
   }
-  // Count unique pubkeys across selected topics
-  const allPubkeys = new Set();
-  onboardState.selected.forEach(t => {
-    INTEREST_SEEDS[t].pubkeys.forEach(p => allPubkeys.add(p));
-  });
+  const count = onboardState.selected.size;
   document.getElementById('onboard-count').textContent = 
-    '// ' + allPubkeys.size + ' accounts selected across ' + onboardState.selected.size + ' topic' + (onboardState.selected.size !== 1 ? 's' : '');
+    '// ' + count + ' topic' + (count !== 1 ? 's' : '') + ' selected — accounts will be fetched from Nostr';
 }
 
 function onboardSkip() {
@@ -2353,33 +2352,50 @@ function onboardSkip() {
   setFeedMode('global');
 }
 
-function onboardApply() {
+async function onboardApply() {
   if (onboardState.selected.size === 0) {
     document.getElementById('onboard-status').textContent = '// Select at least one topic';
     return;
   }
 
-  // Collect unique pubkeys from selected topics
-  const pubkeys = new Set();
+  const statusEl = document.getElementById('onboard-status');
+  const btn = document.getElementById('onboard-apply-btn');
+  btn.disabled = true;
+  btn.textContent = '// Fetching follow lists...';
+
+  // Collect all curator pubkeys from selected topics
+  const allCurators = new Set();
   onboardState.selected.forEach(topic => {
-    INTEREST_SEEDS[topic].pubkeys.forEach(p => {
-      if (/^[0-9a-f]{64}$/.test(p)) pubkeys.add(p);
-    });
+    INTEREST_CURATORS[topic].curators.forEach(p => allCurators.add(p));
   });
+
+  // Always include the curators themselves as follows
+  const pubkeys = new Set(allCurators);
+
+  // Fetch each curator's follow list from relay
+  let fetched = 0;
+  const curatorArr = Array.from(allCurators);
+  for (const curator of curatorArr) {
+    statusEl.textContent = '// Fetching ' + (++fetched) + '/' + curatorArr.length + ' follow lists...';
+    const follows = await fetchCuratorFollows(curator);
+    follows.forEach(p => pubkeys.add(p));
+  }
+
+  // Remove own pubkey from follow list
+  if (state.pubkeyHex) pubkeys.delete(state.pubkeyHex);
 
   feedState.followList = Array.from(pubkeys);
   feedState.followListLoaded = true;
   localStorage.setItem('follow_list', JSON.stringify(feedState.followList));
 
-  document.getElementById('onboard-status').textContent = 
-    '// Following ' + pubkeys.size + ' accounts — building feed...';
+  statusEl.textContent = '// Following ' + pubkeys.size + ' accounts — building feed...';
 
   setTimeout(() => {
     document.getElementById('onboard-modal').style.display = 'none';
     document.getElementById('follow-status').textContent = 
       '// Seeded with ' + pubkeys.size + ' accounts · ' + Array.from(onboardState.selected).join(', ');
     setFeedMode('following');
-  }, 800);
+  }, 600);
 }
 
 
