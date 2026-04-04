@@ -1503,7 +1503,10 @@ async function zapBuild() {
   const noteId = document.getElementById('zap-noteid').value.trim();
   const comment = document.getElementById('zap-comment').value.trim() || '⚡';
 
+  // Validate required fields
   if (!recipientInput) { zapSetStatus('Enter recipient npub or pubkey'); return; }
+  if (!amountSats || amountSats < 1) { zapSetStatus('Enter a valid amount'); return; }
+  if (!relay || !relay.startsWith('wss://')) { zapSetStatus('Select a relay'); return; }
 
   // Parse recipient
   let recipientHex;
