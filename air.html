@@ -51,7 +51,10 @@ body::after {
     0deg, transparent, transparent 2px,
     rgba(0,0,0,0.12) 2px, rgba(0,0,0,0.12) 4px
   );
+  transition: opacity 0.2s;
 }
+body.qr-fullscreen::after { opacity: 0; }
+body.qr-fullscreen::before { opacity: 0; }
 
 .wrap {
   max-width: 860px; margin: 0 auto;
@@ -384,6 +387,26 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .note-action.zap:hover { border-color: var(--orange); color: var(--orange); }
 .note-action.reply:hover { border-color: var(--acid); color: var(--acid); }
 
+/* QR fullscreen overlay */
+#qr-fullscreen-overlay {
+  display: none;
+  position: fixed; inset: 0; z-index: 10000;
+  background: #ffffff;
+  align-items: center; justify-content: center;
+  flex-direction: column; gap: 16px;
+}
+#qr-fullscreen-overlay.open { display: flex; }
+#qr-fullscreen-canvas { line-height: 0; }
+#qr-fullscreen-hint {
+  font-family: monospace; font-size: 12px; color: #333;
+  letter-spacing: 0.08em; text-align: center; padding: 0 20px;
+}
+#qr-fullscreen-close {
+  font-family: monospace; font-size: 11px;
+  background: #000; color: #fff; border: none;
+  padding: 10px 28px; cursor: pointer; letter-spacing: 0.15em;
+}
+
 footer {
   margin-top: 48px; padding: 20px 0;
   border-top: 1px dashed var(--border2);
@@ -492,11 +515,13 @@ footer strong { color: var(--muted); }
         <div class="qr-instructions">
           Hold QR up to your <strong>FAVILLA Key</strong> camera.<br>
           Select <strong>Menu → Scan QR</strong> on the device.<br>
-          Press BTN1 to approve — device shows signed QR.
+          Press BTN1 to approve — device shows signed QR.<br><br>
+          <strong>Tip:</strong> Use fullscreen for best scan results.
         </div>
       </div>
       <div class="btn-row">
         <button class="btn-primary" onclick="startScan()">Scan Signed QR</button>
+        <button class="btn-primary" onclick="showQRFullscreen(JSON.stringify(state.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX · MENU → SCAN QR')" style="background:var(--bg2);border-color:var(--acid3);">⛶ FULLSCREEN</button>
         <button class="btn-outline" onclick="backToCompose()">← Back</button>
       </div>
     </div>
@@ -617,6 +642,7 @@ footer strong { color: var(--muted); }
             <div class="field-label">Zap details</div>
             <div id="zap-details" style="font-size:11px;font-family:var(--font-mono);line-height:2;color:var(--color-text-secondary);"></div>
             <button onclick="zapStartScan()" style="margin-top:12px;width:100%;">SCAN SIGNED ZAP ↗</button>
+            <button onclick="showQRFullscreen(JSON.stringify(zapState.unsignedEvent), 'HOLD DEVICE CAMERA · BRIGHTNESS MAX · MENU → SCAN QR')" style="margin-top:6px;width:100%;background:var(--bg2);">⛶ FULLSCREEN QR</button>
             <button onclick="zapReset()" style="margin-top:6px;width:100%;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">← BACK</button>
           </div>
         </div>
@@ -687,6 +713,13 @@ footer strong { color: var(--muted); }
     </div>
     <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
     <div id="feed"></div>
+  </div>
+
+  <!-- QR fullscreen overlay -->
+  <div id="qr-fullscreen-overlay">
+    <div id="qr-fullscreen-canvas"></div>
+    <div id="qr-fullscreen-hint">HOLD DEVICE CAMERA UP TO SCREEN · BRIGHTNESS MAX</div>
+    <button id="qr-fullscreen-close" onclick="closeQRFullscreen()">✕ CLOSE</button>
   </div>
 
   <!-- Reply modal -->
@@ -2588,6 +2621,41 @@ function noteZap(eventId, pubkey) {
   const card = document.getElementById('card-zap');
   card.style.borderColor = 'var(--orange)';
   setTimeout(() => { card.style.borderColor = ''; }, 1000);
+}
+
+
+
+// ── QR Fullscreen ─────────────────────────────────────────────────────────
+
+function showQRFullscreen(text, hint) {
+  const el = document.getElementById('qr-fullscreen-canvas');
+  el.innerHTML = '';
+
+  // Calculate max QR size — fill 90% of shortest screen dimension
+  const size = Math.min(window.innerWidth, window.innerHeight) * 0.88;
+  const qrSize = Math.floor(size);
+
+  (window._qrReady || Promise.resolve()).then(() => {
+    new QRCode(el, {
+      text,
+      width: qrSize, height: qrSize,
+      colorDark: '#000000', colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+
+  if (hint) document.getElementById('qr-fullscreen-hint').textContent = hint;
+  document.getElementById('qr-fullscreen-overlay').classList.add('open');
+  document.body.classList.add('qr-fullscreen');
+
+  // Request screen brightness (works on some browsers)
+  try { screen.orientation && screen.orientation.lock && screen.orientation.lock('portrait'); } catch(e) {}
+}
+
+function closeQRFullscreen() {
+  document.getElementById('qr-fullscreen-overlay').classList.remove('open');
+  document.body.classList.remove('qr-fullscreen');
+  document.getElementById('qr-fullscreen-canvas').innerHTML = '';
 }
 
 
