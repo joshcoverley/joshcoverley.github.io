@@ -607,7 +607,7 @@ footer strong { color: var(--muted); }
           </div>
           <div style="flex:1;min-width:160px;">
             <div class="field-label">Invoice</div>
-            <div id="zap-invoice-text" style="font-size:10px;font-family:var(--font-mono);word-break:break-all;color:var(--color-text-secondary);margin-bottom:10px;max-height:80px;overflow:auto;"></div>
+            <input id="zap-invoice-text" readonly type="text" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" style="font-size:10px;font-family:var(--font-mono);word-break:break-all;color:var(--color-text-secondary);margin-bottom:10px;width:100%;box-sizing:border-box;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);padding:6px;border-radius:4px;" value="">
             <button onclick="copyInvoice()" style="width:100%;margin-bottom:6px;">COPY INVOICE</button>
             <button onclick="zapReset()" style="width:100%;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">← NEW ZAP</button>
           </div>
@@ -1710,22 +1710,30 @@ async function zapGotSignedEvent(data) {
     'amount=' + amount +
     '&nostr=' + encodeURIComponent(JSON.stringify(signedJson));
 
-  document.getElementById('zap-invoice-status').textContent = 'Calling: ' + callbackUrl.slice(0,60) + '...';
+  const statusEl = document.getElementById('zap-invoice-status');
+  statusEl.textContent = 'Signed event decoded OK. id=' + (signedJson.id||'').slice(0,16) + '...';
+  await new Promise(r => setTimeout(r, 1500));
+  statusEl.textContent = 'Calling: ' + callbackUrl.slice(0,80) + '...';
+  await new Promise(r => setTimeout(r, 500));
   try {
     const resp = await fetch(callbackUrl);
+    statusEl.textContent = 'Response: HTTP ' + resp.status;
+    await new Promise(r => setTimeout(r, 1000));
     if (!resp.ok) throw new Error('HTTP ' + resp.status + ' from callback');
     const result = await resp.json();
+    statusEl.textContent = 'Got response: ' + JSON.stringify(result).slice(0,100);
+    await new Promise(r => setTimeout(r, 1500));
     if (result.status === 'ERROR') throw new Error(result.reason);
     if (!result.pr) throw new Error('No invoice — got: ' + JSON.stringify(result).slice(0,100));
 
     const invoice = result.pr;
-    document.getElementById('zap-invoice-text').textContent = invoice;
+    document.getElementById('zap-invoice-text').value = invoice;
     document.getElementById('zap-invoice-status').textContent = 'Invoice ready — scan with Lightning wallet';
 
     const qrEl = document.getElementById('zap-invoice-qr');
     qrEl.innerHTML = '';
     new QRCode(qrEl, {
-      text: invoice.toUpperCase(),
+      text: invoice,
       width: 240, height: 240,
       colorDark: '#000000', colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.L
@@ -1736,7 +1744,7 @@ async function zapGotSignedEvent(data) {
 }
 
 function copyInvoice() {
-  const inv = document.getElementById('zap-invoice-text').textContent;
+  const inv = document.getElementById('zap-invoice-text').value;
   if (inv) navigator.clipboard.writeText(inv).then(() => {
     document.getElementById('zap-invoice-status').textContent = 'Copied to clipboard';
   });
