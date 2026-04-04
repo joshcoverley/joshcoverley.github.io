@@ -386,6 +386,12 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .note-action.like:hover { border-color: var(--acid2); color: var(--acid2); }
 .note-action.zap:hover { border-color: var(--orange); color: var(--orange); }
 .note-action.reply:hover { border-color: var(--acid); color: var(--acid); }
+.note-action.liked { border-color: var(--acid2); color: var(--acid2); background: var(--acid3); }
+.note-action.zapped { border-color: var(--orange); color: var(--orange); background: rgba(255,107,0,0.08); }
+.note-stats { display: flex; gap: 10px; font-size: 9px; color: var(--dim); letter-spacing: 0.06em; padding: 4px 0 0; }
+.note-stat { display: flex; align-items: center; gap: 3px; }
+.note-stat.has-value { color: var(--muted); }
+.note-stat.mine { color: var(--acid2); }
 
 /* QR fullscreen overlay */
 #qr-fullscreen-overlay {
@@ -1485,14 +1491,20 @@ function renderNote(ev,prepend=false){
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
     <div class="note-content">${escHtml(ev.content||'')}</div>
+    <div class="note-stats" id="stats-${ev.id}">
+      <span class="note-stat" id="likes-${ev.id}">♥ –</span>
+      <span class="note-stat" id="zaps-${ev.id}">⚡ –</span>
+    </div>
     <div class="note-actions">
-      <button class="note-action reply" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})">↩ REPLY</button>
-      <button class="note-action like" onclick="noteLike('${ev.id}','${ev.pubkey}')">♥ LIKE</button>
-      <button class="note-action zap" onclick="noteZap('${ev.id}','${ev.pubkey}')">⚡ ZAP</button>
+      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})">↩ REPLY</button>
+      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}','${ev.pubkey}')">♥ LIKE</button>
+      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}','${ev.pubkey}')">⚡ ZAP</button>
     </div>`;
   if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
   else feed.appendChild(div);
   while(feed.children.length>50)feed.removeChild(feed.lastChild);
+  // Observe for stats fetching when scrolled into view
+  observeNoteForStats(div);
 }
 function fetchProfile(pubkey){
   state.profiles[pubkey]={};
@@ -2093,6 +2105,11 @@ async function zapGotSignedEvent(data) {
       const paid = await nwcPayInvoice(invoice, invStatusEl);
       if (!paid) {
         invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
+    // Optimistic zap update on note card
+    if (noteActionState.targetId) {
+      const zapSats = Math.floor(amount / 1000);
+      markZappedOptimistic(noteActionState.targetId, zapSats);
+    }
       }
     } else {
       invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
@@ -2594,6 +2611,8 @@ function likeSubmit() {
   const qrEl = document.getElementById('like-qr');
   qrEl.innerHTML = '';
   document.getElementById('like-status').textContent = '// Scan QR with device to sign, then scan back to publish';
+  // Optimistic update
+  markLikedOptimistic(noteActionState.targetId);
 
   // Store event for fullscreen
   likeCurrentEvent = event;
@@ -2624,6 +2643,8 @@ function likeStartScan() {
 
 // ── ZAP from note ─────────────────────────────────────────────────────────
 function noteZap(eventId, pubkey) {
+  // Store event ID for optimistic update after zap completes
+  noteActionState.targetId = eventId;
   // Pre-fill zap form and scroll to it
   document.getElementById('zap-recipient').value = pubkey;
   document.getElementById('zap-noteid').value = eventId;
@@ -2671,6 +2692,159 @@ function closeQRFullscreen() {
   document.getElementById('qr-fullscreen-overlay').classList.remove('open');
   document.body.classList.remove('qr-fullscreen');
   document.getElementById('qr-fullscreen-canvas').innerHTML = '';
+}
+
+
+
+// ── Note stats (likes + zaps) ─────────────────────────────────────────────
+
+const statsCache = {}; // eventId → { likes, likedByMe, zapTotal, zappedByMe }
+const statsFetchQueue = new Set();
+let statsFetchTimer = null;
+
+// IntersectionObserver — fetch stats when note scrolls into view
+const statsObserver = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (!entry.isIntersecting) return;
+    const noteId = entry.target.id.replace('note-', '');
+    if (!statsCache[noteId]) {
+      statsFetchQueue.add(noteId);
+      if (!statsFetchTimer) statsFetchTimer = setTimeout(flushStatsQueue, 300);
+    }
+    statsObserver.unobserve(entry.target);
+  });
+}, { rootMargin: '100px' });
+
+function observeNoteForStats(el) {
+  statsObserver.observe(el);
+}
+
+function flushStatsQueue() {
+  statsFetchTimer = null;
+  const ids = Array.from(statsFetchQueue);
+  statsFetchQueue.clear();
+  if (ids.length === 0) return;
+  fetchStatsForNotes(ids);
+}
+
+function fetchStatsForNotes(eventIds) {
+  // Use first connected relay
+  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
+  if (!ws) return;
+
+  // Init cache entries
+  eventIds.forEach(id => {
+    if (!statsCache[id]) statsCache[id] = { likes: 0, likedByMe: false, zapTotal: 0, zappedByMe: false };
+  });
+
+  const sub = 'stats-' + Math.random().toString(36).slice(2, 8);
+
+  // Subscribe to kind 7 reactions and kind 9735 zap receipts for these events
+  ws.send(JSON.stringify(['REQ', sub, {
+    kinds: [7, 9735],
+    '#e': eventIds,
+    limit: 500,
+  }]));
+
+  const prevMsg = ws.onmessage;
+  ws.onmessage = (e) => {
+    if (prevMsg) prevMsg(e);
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub) {
+        const ev = msg[2];
+        const targetTag = ev.tags.find(t => t[0] === 'e');
+        if (!targetTag) return;
+        const targetId = targetTag[1];
+        if (!statsCache[targetId]) return;
+
+        if (ev.kind === 7) {
+          // Reaction — only count + reactions
+          const reaction = ev.content || '+';
+          if (reaction === '+' || reaction === '❤️' || reaction === '🤙') {
+            statsCache[targetId].likes++;
+            if (state.pubkeyHex && ev.pubkey === state.pubkeyHex) {
+              statsCache[targetId].likedByMe = true;
+            }
+          }
+        } else if (ev.kind === 9735) {
+          // Zap receipt — extract amount from bolt11 description or amount tag
+          const amountTag = ev.tags.find(t => t[0] === 'amount');
+          if (amountTag) {
+            const msats = parseInt(amountTag[1]) || 0;
+            statsCache[targetId].zapTotal += Math.floor(msats / 1000);
+          }
+          // Check if zapper is us by looking at description tag
+          const descTag = ev.tags.find(t => t[0] === 'description');
+          if (descTag && state.pubkeyHex) {
+            try {
+              const zapReq = JSON.parse(descTag[1]);
+              if (zapReq.pubkey === state.pubkeyHex) {
+                statsCache[targetId].zappedByMe = true;
+              }
+            } catch(e) {}
+          }
+        }
+        updateNoteStats(targetId);
+      } else if (msg[0] === 'EOSE' && msg[1] === sub) {
+        // Final update for all fetched notes
+        eventIds.forEach(id => updateNoteStats(id));
+        ws.send(JSON.stringify(['CLOSE', sub]));
+        ws.onmessage = prevMsg;
+      }
+    } catch(e) {}
+  };
+}
+
+function updateNoteStats(eventId) {
+  const s = statsCache[eventId];
+  if (!s) return;
+
+  // Update likes display
+  const likesEl = document.getElementById('likes-' + eventId);
+  if (likesEl) {
+    likesEl.textContent = '♥ ' + (s.likes || 0);
+    likesEl.className = 'note-stat' + 
+      (s.likedByMe ? ' mine' : s.likes > 0 ? ' has-value' : '');
+  }
+
+  // Update zaps display
+  const zapsEl = document.getElementById('zaps-' + eventId);
+  if (zapsEl) {
+    const zapText = s.zapTotal >= 1000 
+      ? '⚡ ' + (s.zapTotal / 1000).toFixed(1) + 'k' 
+      : '⚡ ' + s.zapTotal;
+    zapsEl.textContent = zapText;
+    zapsEl.className = 'note-stat' + 
+      (s.zappedByMe ? ' mine' : s.zapTotal > 0 ? ' has-value' : '');
+  }
+
+  // Update button states
+  const likeBtn = document.getElementById('btn-like-' + eventId);
+  if (likeBtn && s.likedByMe) {
+    likeBtn.className = 'note-action like liked';
+    likeBtn.textContent = '♥ LIKED';
+  }
+  const zapBtn = document.getElementById('btn-zap-' + eventId);
+  if (zapBtn && s.zappedByMe) {
+    zapBtn.className = 'note-action zap zapped';
+    zapBtn.textContent = '⚡ ZAPPED';
+  }
+}
+
+// Update stats optimistically after user likes/zaps
+function markLikedOptimistic(eventId) {
+  if (!statsCache[eventId]) statsCache[eventId] = { likes: 0, likedByMe: false, zapTotal: 0, zappedByMe: false };
+  statsCache[eventId].likes++;
+  statsCache[eventId].likedByMe = true;
+  updateNoteStats(eventId);
+}
+
+function markZappedOptimistic(eventId, sats) {
+  if (!statsCache[eventId]) statsCache[eventId] = { likes: 0, likedByMe: false, zapTotal: 0, zappedByMe: false };
+  statsCache[eventId].zapTotal += sats;
+  statsCache[eventId].zappedByMe = true;
+  updateNoteStats(eventId);
 }
 
 
