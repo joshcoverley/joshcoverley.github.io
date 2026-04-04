@@ -933,21 +933,51 @@ footer strong { color: var(--muted); }
   </div>
 
   <!-- Reply modal -->
-  <div id="reply-modal" style="display:none;position:fixed;inset:0;background:rgba(4,5,3,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:var(--panel);border:1px solid var(--acid2);width:min(500px,100%);max-height:90vh;overflow-y:auto;">
-      <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-family:var(--display);font-size:10px;font-weight:700;letter-spacing:0.2em;color:var(--acid2);">↩ REPLY</span>
-        <button onclick="closeReplyModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+  <div id="reply-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-start;justify-content:center;padding-top:40px;">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;">
+
+      <!-- Header -->
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--panel);border-radius:16px 16px 0 0;">
+        <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Reply</span>
+        <button onclick="closeReplyModal()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
       </div>
-      <div style="padding:14px;">
-        <div id="reply-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--acid3);padding:6px 10px;margin-bottom:12px;line-height:1.6;"></div>
-        <textarea id="reply-compose" rows="4" placeholder="Your reply…" maxlength="460"
-          style="width:100%;resize:none;background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:13px;padding:10px;box-sizing:border-box;"
-          oninput="this.nextElementSibling.textContent=this.value.length+' / 460'"></textarea>
-        <div style="font-size:10px;color:var(--dim);margin:4px 0 12px;letter-spacing:0.08em;">0 / 460</div>
-        <button onclick="replySubmit()" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE REPLY QR</button>
-        <div id="reply-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
+
+      <!-- OP note (Twitter style) -->
+      <div style="display:flex;gap:12px;padding:14px 16px 0;">
+        <!-- Avatar + thread line -->
+        <div style="display:flex;flex-direction:column;align-items:center;gap:0;flex-shrink:0;">
+          <div id="reply-op-avatar" style="width:40px;height:40px;border-radius:50%;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:600;color:var(--muted);overflow:hidden;flex-shrink:0;"></div>
+          <div style="width:2px;flex:1;min-height:20px;background:var(--border2);margin-top:4px;"></div>
+        </div>
+        <div style="flex:1;min-width:0;padding-bottom:8px;">
+          <div id="reply-op-name" style="font-family:var(--sans);font-size:14px;font-weight:700;color:var(--text);margin-bottom:2px;"></div>
+          <div id="reply-quoting" style="font-family:var(--sans);font-size:15px;color:var(--muted);line-height:1.5;word-break:break-word;"></div>
+        </div>
       </div>
+
+      <!-- Reply composer -->
+      <div style="display:flex;gap:12px;padding:8px 16px 0;">
+        <!-- Our avatar placeholder -->
+        <div style="width:40px;height:40px;border-radius:50%;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--muted);flex-shrink:0;">✦</div>
+        <div style="flex:1;min-width:0;">
+          <textarea id="reply-compose" rows="4" placeholder="Post your reply…" maxlength="460"
+            style="width:100%;resize:none;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:16px;color:var(--text);padding:8px 0;line-height:1.6;box-sizing:border-box;"
+            oninput="replyCharCount(this)"></textarea>
+        </div>
+      </div>
+
+      <!-- Bottom bar -->
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px 14px;border-top:1px solid var(--border2);">
+        <span id="reply-char-count" style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">460</span>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div id="reply-status" style="font-family:var(--mono);font-size:11px;color:var(--muted);"></div>
+          <button onclick="replySubmit()"
+            style="background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:8px 20px;border-radius:9999px;cursor:pointer;">
+            Generate QR
+          </button>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -2793,10 +2823,31 @@ function noteReply(eventId) {
   noteActionState.targetPubkey = note.pubkey;
   const profile = state.profiles[note.pubkey] || {};
   const name = profile.name || profile.display_name || note.pubkey.slice(0,12) + '…';
-  document.getElementById('reply-quoting').textContent = name + ': ' + (note.content || '').slice(0, 120);
+
+  // Populate OP
+  const avatarEl = document.getElementById('reply-op-avatar');
+  if (profile.picture) {
+    avatarEl.innerHTML = '<img src="' + escHtml(profile.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
+  } else {
+    avatarEl.textContent = name[0] || '?';
+  }
+  document.getElementById('reply-op-name').textContent = name;
+  document.getElementById('reply-quoting').textContent = note.content || '';
+
   document.getElementById('reply-compose').value = '';
+  document.getElementById('reply-char-count').textContent = '460';
   document.getElementById('reply-status').textContent = '';
   document.getElementById('reply-modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('reply-compose').focus(), 100);
+}
+
+function replyCharCount(el) {
+  const remaining = 460 - el.value.length;
+  const cc = document.getElementById('reply-char-count');
+  if (cc) {
+    cc.textContent = remaining;
+    cc.style.color = remaining < 20 ? 'var(--orange)' : 'var(--muted)';
+  }
 }
 
 function closeReplyModal() {
