@@ -401,6 +401,57 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .note-action.zapped span.count { color: var(--orange); }
 .note-action.liked svg, .note-action.zapped svg { opacity: 1; }
 
+/* Thread view */
+#thread-modal {
+  display: none; position: fixed; inset: 0; z-index: 3000;
+  background: rgba(4,5,3,0.98);
+  flex-direction: column;
+}
+#thread-modal.open { display: flex; }
+#thread-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px; border-bottom: 1px solid var(--border2);
+  background: var(--bg2); flex-shrink: 0;
+}
+#thread-title {
+  font-family: var(--display); font-size: 10px; font-weight: 700;
+  letter-spacing: 0.2em; color: var(--acid2); flex: 1;
+}
+.thread-back-btn {
+  background: none; border: 1px solid var(--border2); color: var(--muted);
+  font-family: var(--mono); font-size: 9px; padding: 5px 12px;
+  cursor: pointer; letter-spacing: 0.1em;
+}
+.thread-back-btn:hover { border-color: var(--muted); color: var(--text); }
+#thread-body {
+  flex: 1; overflow-y: auto; padding: 14px 16px;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 80px;
+}
+.thread-root {
+  border: 1px solid var(--acid3); background: var(--panel);
+  padding: 12px 14px; margin-bottom: 8px;
+}
+.thread-reply {
+  border-left: 2px solid var(--acid3); border-right: 1px solid var(--border);
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  background: var(--panel); padding: 10px 14px;
+  margin-bottom: 4px; margin-left: 12px;
+}
+.thread-note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
+.thread-avatar {
+  width: 26px; height: 26px; background: var(--bg2);
+  border: 1px solid var(--border2); display: flex; align-items: center;
+  justify-content: center; font-size: 10px; color: var(--muted);
+  flex-shrink: 0; overflow: hidden;
+}
+.thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.thread-name { font-size: 11px; color: var(--acid); letter-spacing: 0.04em; }
+.thread-time { font-size: 9px; color: var(--dim); margin-left: auto; white-space: nowrap; }
+.thread-content { font-size: 13px; color: var(--text); line-height: 1.6; word-break: break-word; }
+.thread-loading { font-size: 10px; color: var(--dim); padding: 20px 0; letter-spacing: 0.1em; }
+.thread-empty { font-size: 10px; color: var(--dim); padding: 12px 0; letter-spacing: 0.1em; }
+
 /* QR fullscreen overlay */
 #qr-fullscreen-overlay {
   display: none;
@@ -862,6 +913,21 @@ footer strong { color: var(--muted); }
         <button onclick="onboardApply()" id="onboard-apply-btn" style="width:100%;background:var(--panel2);color:var(--acid);border:1px solid var(--acid2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;text-transform:uppercase;">→ BUILD MY FEED</button>
         <div id="onboard-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;letter-spacing:0.06em;"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- Thread modal -->
+  <div id="thread-modal">
+    <div id="thread-header">
+      <button class="thread-back-btn" onclick="closeThread()">← BACK</button>
+      <div id="thread-title">THREAD</div>
+      <div id="thread-reply-count" style="font-size:9px;color:var(--dim);letter-spacing:0.08em;"></div>
+    </div>
+    <div id="thread-body">
+      <div id="thread-root-note"></div>
+      <div id="thread-replies-label" style="font-size:9px;color:var(--dim);letter-spacing:0.15em;padding:12px 0 8px;display:none;">// REPLIES</div>
+      <div id="thread-loading" class="thread-loading">// Fetching replies…</div>
+      <div id="thread-replies"></div>
     </div>
   </div>
 
@@ -1423,16 +1489,20 @@ function setFeedMode(mode) {
   document.getElementById('feed').innerHTML = '';
   state.knownIds.clear();
 
-  // Re-render notes that match the new mode
-  const toShow = state.notes.filter(ev => noteMatchesMode(ev, mode));
+  // Re-render notes newest first
+  const toShow = state.notes
+    .filter(ev => noteMatchesMode(ev, mode))
+    .sort((a, b) => b.created_at - a.created_at);
+
   if (toShow.length === 0) {
     document.getElementById('feed-empty').style.display = 'block';
   } else {
     document.getElementById('feed-empty').style.display = 'none';
     document.getElementById('feed-loading').style.display = 'none';
-    toShow.slice(0, 50).forEach(ev => {
+    // Render oldest first so newest ends up at top when appending
+    toShow.slice(0, 50).reverse().forEach(ev => {
       state.knownIds.add(ev.id);
-      renderNote(ev, false);
+      renderNote(ev, true); // prepend — newest ends up at top
     });
   }
 
@@ -1573,7 +1643,7 @@ function handleNote(ev){
   if(!noteMatchesMode(ev, feedState.mode))return;
   if(state.knownIds.has(ev.id))return;
   state.knownIds.add(ev.id);
-  renderNote(ev,true);
+  insertNoteInOrder(ev);
   document.getElementById('feed-loading').style.display='none';
   document.getElementById('feed-empty').style.display='none';
   if(!state.profiles[ev.pubkey])fetchProfile(ev.pubkey);
@@ -1586,6 +1656,8 @@ function renderNote(ev,prepend=false){
   const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
   const div=document.createElement('div');div.className='note-card';div.id=id;
   const evJson = JSON.stringify(ev).replace(/'/g, "\'");
+  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button')) openThread(ev.id); };
+  div.style.cursor = 'pointer';
   div.innerHTML=`
     <div class="note-header">
       <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
@@ -1616,6 +1688,38 @@ function renderNote(ev,prepend=false){
   // Observe for stats fetching when scrolled into view
   observeNoteForStats(div);
 }
+function insertNoteInOrder(ev) {
+  const feed = document.getElementById('feed');
+  const id = 'note-' + ev.id;
+  if (document.getElementById(id)) return;
+
+  // Build the note card
+  renderNote(ev, false); // appends to end first
+  const newEl = document.getElementById(id);
+  if (!newEl) return;
+
+  // Find correct position — newest (highest created_at) at top
+  const cards = Array.from(feed.querySelectorAll('.note-card'));
+  let insertBefore = null;
+  for (const card of cards) {
+    if (card.id === id) continue; // skip the one we just added
+    const cardId = card.id.replace('note-', '');
+    const cardNote = state.notes.find(n => n.id === cardId);
+    if (cardNote && cardNote.created_at < ev.created_at) {
+      insertBefore = card;
+      break;
+    }
+  }
+
+  if (insertBefore) {
+    feed.insertBefore(newEl, insertBefore);
+  }
+  // else it stays at bottom (oldest position) — correct
+
+  // Trim excess
+  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+}
+
 function fetchProfile(pubkey){
   state.profiles[pubkey]={};
   const ws=Object.values(state.sockets).find(w=>w&&w.readyState===WebSocket.OPEN);
@@ -3085,6 +3189,143 @@ function exportFollowList() {
   const a = document.createElement('a'); a.href = url;
   a.download = 'follow-list.json'; a.click();
   URL.revokeObjectURL(url);
+}
+
+
+
+// ── Thread view ───────────────────────────────────────────────────────────
+
+const threadState = { rootId: null, stopScan: null };
+
+async function openThread(eventId) {
+  const root = state.notes.find(n => n.id === eventId);
+  if (!root) return;
+
+  threadState.rootId = eventId;
+
+  // Render root note
+  const rootEl = document.getElementById('thread-root-note');
+  rootEl.innerHTML = '';
+  rootEl.appendChild(buildThreadNote(root, true));
+
+  // Clear replies
+  document.getElementById('thread-replies').innerHTML = '';
+  document.getElementById('thread-loading').style.display = 'block';
+  document.getElementById('thread-replies-label').style.display = 'none';
+  document.getElementById('thread-reply-count').textContent = '';
+
+  // Open modal
+  document.getElementById('thread-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  // Fetch replies from relay
+  fetchThreadReplies(eventId);
+}
+
+function closeThread() {
+  document.getElementById('thread-modal').classList.remove('open');
+  document.body.style.overflow = '';
+  threadState.rootId = null;
+}
+
+function buildThreadNote(ev, isRoot) {
+  const profile = state.profiles[ev.pubkey] || {};
+  const name = profile.name || profile.display_name || ev.pubkey.slice(0,8) + '…';
+  const div = document.createElement('div');
+  div.className = isRoot ? 'thread-root' : 'thread-reply';
+  div.innerHTML = `
+    <div class="thread-note-header">
+      <div class="thread-avatar">${profile.picture
+        ? `<img src="${escHtml(profile.picture)}" alt="">`
+        : escHtml(name[0] || '?')}
+      </div>
+      <div>
+        <div class="thread-name">${escHtml(name)}</div>
+        <div style="font-size:8px;color:var(--dim);">${ev.pubkey.slice(0,12)}…</div>
+      </div>
+      <div class="thread-time">${timeAgo(ev.created_at)}</div>
+    </div>
+    <div class="thread-content">${escHtml(ev.content || '')}</div>
+    <div class="note-actions" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">
+      <button class="note-action reply" onclick="noteReply('${ev.id}')" title="Reply">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span class="count" id="likes-${ev.id}"></span>
+      </button>
+      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span class="count" id="zaps-${ev.id}"></span>
+      </button>
+    </div>`;
+
+  // Add to state.notes if not already there so actions work
+  if (!state.notes.find(n => n.id === ev.id)) {
+    state.notes.push(ev);
+  }
+  if (!state.profiles[ev.pubkey]) fetchProfile(ev.pubkey);
+
+  return div;
+}
+
+function fetchThreadReplies(eventId) {
+  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
+  if (!ws) {
+    document.getElementById('thread-loading').textContent = '// No relay connected';
+    return;
+  }
+
+  const sub = 'thread-' + Math.random().toString(36).slice(2, 8);
+  const replies = [];
+
+  ws.send(JSON.stringify(['REQ', sub, {
+    kinds: [1],
+    '#e': [eventId],
+    limit: 100,
+  }]));
+
+  const prev = ws.onmessage;
+  ws.onmessage = (e) => {
+    if (prev) prev(e);
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        const ev = msg[2];
+        // Only show direct replies (must have e tag pointing to our root)
+        const eTag = ev.tags.find(t => t[0] === 'e' && t[1] === eventId);
+        if (eTag && ev.id !== eventId) {
+          replies.push(ev);
+        }
+      } else if (msg[0] === 'EOSE' && msg[1] === sub) {
+        ws.send(JSON.stringify(['CLOSE', sub]));
+        ws.onmessage = prev;
+
+        // Only render if still viewing same thread
+        if (threadState.rootId !== eventId) return;
+
+        document.getElementById('thread-loading').style.display = 'none';
+
+        if (replies.length === 0) {
+          document.getElementById('thread-replies').innerHTML =
+            '<div class="thread-empty">// No replies yet</div>';
+          return;
+        }
+
+        // Sort oldest first
+        replies.sort((a, b) => a.created_at - b.created_at);
+
+        document.getElementById('thread-replies-label').style.display = 'block';
+        document.getElementById('thread-reply-count').textContent =
+          replies.length + ' repl' + (replies.length === 1 ? 'y' : 'ies');
+
+        const container = document.getElementById('thread-replies');
+        replies.forEach(ev => {
+          container.appendChild(buildThreadNote(ev, false));
+        });
+      }
+    } catch(err) {}
+  };
 }
 
 
