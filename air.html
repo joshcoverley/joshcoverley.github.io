@@ -958,7 +958,8 @@ footer strong { color: var(--muted); }
         <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Scan to like</span>
         <button onclick="closeLikeModal()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
       </div>
-      <div style="padding:16px;">
+      <!-- QR view -->
+      <div id="like-view-qr" style="padding:16px;">
         <div id="like-quoting" style="display:none;"></div>
         <div style="display:flex;justify-content:center;margin-bottom:12px;">
           <div id="like-qr" style="background:#fff;padding:12px;border-radius:12px;line-height:0;"></div>
@@ -969,11 +970,28 @@ footer strong { color: var(--muted); }
             style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
             ⛶ Fullscreen
           </button>
-          <button onclick="likeStartScan()"
+          <button onclick="likeStartScanInline()"
             style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
             Scan signed
           </button>
         </div>
+      </div>
+      <!-- Camera view -->
+      <div id="like-view-camera" style="display:none;padding:16px;">
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px;">Scan device screen</div>
+        <div style="position:relative;background:#000;border-radius:10px;overflow:hidden;margin-bottom:12px;">
+          <video id="like-scan-video" autoplay playsinline muted style="width:100%;display:block;max-height:240px;object-fit:cover;"></video>
+          <div style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%);">
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.6);padding:5px 12px;border-radius:9999px;">
+              <div class="pulse"></div>
+              <span id="like-scan-status" style="font-family:var(--mono);font-size:10px;color:var(--acid2);">Scanning…</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="likeCancelScan()"
+          style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+          ← Back
+        </button>
       </div>
     </div>
   </div>
@@ -2838,6 +2856,11 @@ function noteLike(eventId) {
 }
 
 function closeLikeModal() {
+  const video = document.getElementById('like-scan-video');
+  if (video && video._stopScan) { video._stopScan(); video._stopScan = null; }
+  stopCameraStream(video);
+  document.getElementById('like-view-camera').style.display = 'none';
+  document.getElementById('like-view-qr').style.display = 'block';
   document.getElementById('like-modal').style.display = 'none';
 }
 
@@ -2874,9 +2897,49 @@ function likeSubmit() {
   });
 }
 
+function likeStartScanInline() {
+  document.getElementById('like-view-qr').style.display = 'none';
+  document.getElementById('like-view-camera').style.display = 'block';
+  const video = document.getElementById('like-scan-video');
+  const statusEl = document.getElementById('like-scan-status');
+  statusEl.textContent = 'Starting camera…';
+  const attempts = [
+    { video: { facingMode: { exact: 'environment' }, width: { ideal: 1280 } } },
+    { video: { facingMode: 'environment' } },
+    { video: true },
+  ];
+  let stream = null;
+  (async () => {
+    for (const c of attempts) {
+      try { stream = await navigator.mediaDevices.getUserMedia(c); break; } catch(e) {}
+    }
+    if (!stream) { statusEl.textContent = 'Camera error'; return; }
+    video.srcObject = stream;
+    await video.play();
+    statusEl.textContent = 'Scanning…';
+    const stopFn = startQRScanner(video, (data) => {
+      const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
+      const isJSON = data.startsWith('{') && data.endsWith('}');
+      if (!isCompact && !isJSON) return;
+      stopFn();
+      stopCameraStream(video);
+      closeLikeModal();
+      gotSignedQR(data);
+    }, (msg) => { statusEl.textContent = msg; });
+    video._stopScan = stopFn;
+  })();
+}
+
+function likeCancelScan() {
+  const video = document.getElementById('like-scan-video');
+  if (video._stopScan) { video._stopScan(); video._stopScan = null; }
+  stopCameraStream(video);
+  document.getElementById('like-view-camera').style.display = 'none';
+  document.getElementById('like-view-qr').style.display = 'block';
+}
+
 function likeStartScan() {
-  closeLikeModal();
-  startScan();
+  likeStartScanInline();
 }
 
 // ── REPOST — CHANGE 2: navigate to notes section then show QR ─────────────
