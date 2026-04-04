@@ -375,23 +375,31 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 .note-pubkey { font-size: 8px; color: var(--dim); letter-spacing: 0.04em; }
 .note-time { font-size: 9px; color: var(--dim); margin-left: auto; letter-spacing: 0.04em; white-space: nowrap; }
 .note-content { font-size: 13px; color: var(--text); line-height: 1.6; word-break: break-word; }
-.note-actions { display: flex; gap: 4px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
-.note-action {
-  background: none; border: 1px solid var(--border); color: var(--dim);
-  font-family: var(--mono); font-size: 9px; padding: 4px 10px;
-  cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase;
-  transition: all 0.15s; flex: 1;
+.note-actions {
+  display: flex; align-items: center; gap: 16px;
+  margin-top: 10px; padding-top: 8px;
+  border-top: 1px solid var(--border);
 }
-.note-action:hover { border-color: var(--muted); color: var(--text); }
-.note-action.like:hover { border-color: var(--acid2); color: var(--acid2); }
-.note-action.zap:hover { border-color: var(--orange); color: var(--orange); }
-.note-action.reply:hover { border-color: var(--acid); color: var(--acid); }
-.note-action.liked { border-color: var(--acid2); color: var(--acid2); background: var(--acid3); }
-.note-action.zapped { border-color: var(--orange); color: var(--orange); background: rgba(255,107,0,0.08); }
-.note-stats { display: flex; gap: 10px; font-size: 9px; color: var(--dim); letter-spacing: 0.06em; padding: 4px 0 0; }
-.note-stat { display: flex; align-items: center; gap: 3px; }
-.note-stat.has-value { color: var(--muted); }
-.note-stat.mine { color: var(--acid2); }
+.note-action {
+  background: none; border: none; color: var(--dim);
+  font-size: 13px; padding: 0;
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  transition: color 0.15s; font-family: var(--mono);
+  letter-spacing: 0.04em;
+}
+.note-action span.count {
+  font-size: 10px; color: var(--dim);
+}
+.note-action:hover { color: var(--muted); }
+.note-action.reply:hover { color: var(--acid); }
+.note-action.like:hover { color: #e05; }
+.note-action.zap:hover { color: var(--orange); }
+.note-action.repost:hover { color: var(--acid2); }
+.note-action.liked { color: #e05; }
+.note-action.liked span.count { color: #e05; }
+.note-action.zapped { color: var(--orange); }
+.note-action.zapped span.count { color: var(--orange); }
+.note-action.liked svg, .note-action.zapped svg { opacity: 1; }
 
 /* QR fullscreen overlay */
 #qr-fullscreen-overlay {
@@ -1491,14 +1499,21 @@ function renderNote(ev,prepend=false){
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
     <div class="note-content">${escHtml(ev.content||'')}</div>
-    <div class="note-stats" id="stats-${ev.id}">
-      <span class="note-stat" id="likes-${ev.id}">♥ –</span>
-      <span class="note-stat" id="zaps-${ev.id}">⚡ –</span>
-    </div>
     <div class="note-actions">
-      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})">↩ REPLY</button>
-      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}','${ev.pubkey}')">♥ LIKE</button>
-      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}','${ev.pubkey}')">⚡ ZAP</button>
+      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})" title="Reply">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+      </button>
+      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}','${ev.pubkey}')" title="Like">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span class="count" id="likes-${ev.id}"></span>
+      </button>
+      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}','${ev.pubkey}')" title="Zap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span class="count" id="zaps-${ev.id}"></span>
+      </button>
+      <button class="note-action repost" onclick="noteRepost('${ev.id}','${ev.pubkey}')" title="Repost">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      </button>
     </div>`;
   if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
   else feed.appendChild(div);
@@ -2612,7 +2627,7 @@ function likeSubmit() {
   qrEl.innerHTML = '';
   document.getElementById('like-status').textContent = '// Scan QR with device to sign, then scan back to publish';
   // Optimistic update
-  markLikedOptimistic(noteActionState.targetId);
+  if (noteActionState.targetId) markLikedOptimistic(noteActionState.targetId);
 
   // Store event for fullscreen
   likeCurrentEvent = event;
@@ -2639,6 +2654,36 @@ function likeStartScan() {
   closeLikeModal();
   // Reuse existing scan flow
   startScan();
+}
+
+// ── REPOST ───────────────────────────────────────────────────────────────
+function noteRepost(eventId, pubkey) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
+  const senderPubkey = state.pubkeyHex || '0'.repeat(64);
+  const event = {
+    kind: 6,
+    content: JSON.stringify(note),
+    tags: [
+      ['e', eventId, '', 'mention'],
+      ['p', pubkey],
+    ],
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey: senderPubkey,
+  };
+  state.unsignedEvent = event;
+  const el = document.getElementById('qr-canvas');
+  el.innerHTML = '';
+  (window._qrReady || Promise.resolve()).then(() => {
+    new QRCode(el, {
+      text: JSON.stringify(event),
+      width: 320, height: 320,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
+  showStep('qr');
+  document.getElementById('pill-compose').className = 'step-pill done';
 }
 
 // ── ZAP from note ─────────────────────────────────────────────────────────
@@ -2800,35 +2845,35 @@ function updateNoteStats(eventId) {
   const s = statsCache[eventId];
   if (!s) return;
 
-  // Update likes display
+  // Update like count span
   const likesEl = document.getElementById('likes-' + eventId);
   if (likesEl) {
-    likesEl.textContent = '♥ ' + (s.likes || 0);
-    likesEl.className = 'note-stat' + 
-      (s.likedByMe ? ' mine' : s.likes > 0 ? ' has-value' : '');
+    likesEl.textContent = s.likes > 0 ? s.likes : '';
   }
 
-  // Update zaps display
+  // Update zap count span
   const zapsEl = document.getElementById('zaps-' + eventId);
   if (zapsEl) {
-    const zapText = s.zapTotal >= 1000 
-      ? '⚡ ' + (s.zapTotal / 1000).toFixed(1) + 'k' 
-      : '⚡ ' + s.zapTotal;
-    zapsEl.textContent = zapText;
-    zapsEl.className = 'note-stat' + 
-      (s.zappedByMe ? ' mine' : s.zapTotal > 0 ? ' has-value' : '');
+    zapsEl.textContent = s.zapTotal > 0
+      ? (s.zapTotal >= 1000 ? (s.zapTotal/1000).toFixed(1)+'k' : s.zapTotal)
+      : '';
   }
 
-  // Update button states
+  // Update like button state
   const likeBtn = document.getElementById('btn-like-' + eventId);
-  if (likeBtn && s.likedByMe) {
-    likeBtn.className = 'note-action like liked';
-    likeBtn.textContent = '♥ LIKED';
+  if (likeBtn) {
+    likeBtn.className = 'note-action like' + (s.likedByMe ? ' liked' : '');
+    // Fill heart if liked
+    const svg = likeBtn.querySelector('svg path');
+    if (svg) svg.setAttribute('fill', s.likedByMe ? 'currentColor' : 'none');
   }
+
+  // Update zap button state
   const zapBtn = document.getElementById('btn-zap-' + eventId);
-  if (zapBtn && s.zappedByMe) {
-    zapBtn.className = 'note-action zap zapped';
-    zapBtn.textContent = '⚡ ZAPPED';
+  if (zapBtn) {
+    zapBtn.className = 'note-action zap' + (s.zappedByMe ? ' zapped' : '');
+    const svg = zapBtn.querySelector('svg polygon');
+    if (svg) svg.setAttribute('fill', s.zappedByMe ? 'currentColor' : 'none');
   }
 }
 
