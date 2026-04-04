@@ -5,29 +5,86 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>SPARK — FAVILLA KEY AIRGAP PORTAL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=JetBrains+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
+/* ── Design tokens ── */
 :root {
-  --bg:      #111009;
-  --bg2:     #16140d;
-  --panel:   #1c1a12;
-  --panel2:  #201e15;
-  --border:  #2a2720;
-  --border2: #332f26;
-  --gold:    #c9a84c;
-  --gold2:   #a07830;
-  --gold3:   #5a4420;
-  --amber:   #e8b84b;
-  --stone:   #8a7e68;
-  --stone2:  #6a5f4c;
-  --dim:     #3d3828;
-  --muted:   #5a5240;
-  --danger:  #c0392b;
-  --text:    #c4b89a;
-  --text2:   #e8dfc8;
-  --mono:    'JetBrains Mono', 'Courier New', monospace;
-  --sans:    'DM Sans', system-ui, sans-serif;
-  --serif:   'DM Serif Display', Georgia, serif;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Consolas', monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Accent — one colour, used sparingly */
+  --accent:       #b5873a;
+  --accent-light: #d4a855;
+  --accent-dim:   #7a5a22;
+  --accent-bg:    rgba(181,135,58,0.08);
+
+  /* Semantic action colours */
+  --like-color:   #e0536a;
+  --zap-color:    #e07d2a;
+  --reply-color:  var(--accent);
+  --danger:       #dc3545;
+}
+
+/* ── Light mode (default) ── */
+:root, html[data-theme="light"] {
+  --bg:          #ffffff;
+  --bg2:         #f7f7f7;
+  --panel:       #ffffff;
+  --panel2:      #f3f3f3;
+  --border:      #e8e8e8;
+  --border2:     #d8d8d8;
+  --text:        #0f0f0f;
+  --text2:       #1a1a1a;
+  --text-muted:  #536471;
+  --text-dim:    #8b98a5;
+  --nav-bg:      rgba(255,255,255,0.92);
+  --modal-bg:    rgba(0,0,0,0.4);
+  --input-bg:    #f7f7f7;
+  --hover-bg:    #f7f7f7;
+  --thread-line: #cfd9de;
+  --tag-bg:      #eff3f4;
+}
+
+/* ── Dark mode ── */
+html[data-theme="dark"] {
+  --bg:          #000000;
+  --bg2:         #0d0d0d;
+  --panel:       #000000;
+  --panel2:      #141414;
+  --border:      #2f3336;
+  --border2:     #3a3d40;
+  --text:        #e7e9ea;
+  --text2:       #ffffff;
+  --text-muted:  #71767b;
+  --text-dim:    #4a4f54;
+  --nav-bg:      rgba(0,0,0,0.88);
+  --modal-bg:    rgba(0,0,0,0.7);
+  --input-bg:    #0d0d0d;
+  --hover-bg:    #080808;
+  --thread-line: #2f3336;
+  --tag-bg:      #1a1a1a;
+}
+
+/* ── System preference fallback ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:          #000000;
+    --bg2:         #0d0d0d;
+    --panel:       #000000;
+    --panel2:      #141414;
+    --border:      #2f3336;
+    --border2:     #3a3d40;
+    --text:        #e7e9ea;
+    --text2:       #ffffff;
+    --text-muted:  #71767b;
+    --text-dim:    #4a4f54;
+    --nav-bg:      rgba(0,0,0,0.88);
+    --modal-bg:    rgba(0,0,0,0.7);
+    --input-bg:    #0d0d0d;
+    --hover-bg:    #080808;
+    --thread-line: #2f3336;
+    --tag-bg:      #1a1a1a;
+  }
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -35,517 +92,373 @@ html, body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--sans);
-  font-size: 14px;
-  line-height: 1.6;
+  font-size: 15px;
+  line-height: 1.5;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  transition: background 0.2s, color 0.2s;
 }
-
-/* Subtle grain texture */
-body::before {
-  content: '';
-  position: fixed; inset: 0; pointer-events: none; z-index: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
-  background-size: 200px 200px;
-  opacity: 0.6;
-}
-body.qr-fullscreen::before { opacity: 0; }
 
 .wrap {
-  max-width: 800px; margin: 0 auto;
-  padding: 0 20px 100px;
-  position: relative; z-index: 1;
+  max-width: 620px;
+  margin: 0 auto;
+  padding: 0 0 80px;
+  position: relative;
 }
 
+/* ── Header ── */
 header {
-  padding: 28px 0 20px;
-  border-bottom: 1px solid var(--border2);
-  margin-bottom: 28px;
-  display: flex; flex-direction: column; gap: 6px;
+  position: sticky; top: 0; z-index: 100;
+  background: var(--nav-bg);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 16px;
+  display: flex; align-items: center; justify-content: space-between;
 }
-.header-top {
+.header-wordmark {
   font-family: var(--mono);
-  font-size: 10px; letter-spacing: 0.18em; color: var(--stone2);
-  text-transform: uppercase; font-weight: 300;
+  font-size: 17px; font-weight: 500;
+  letter-spacing: -0.01em; color: var(--text2);
 }
-.header-title {
-  font-family: var(--serif);
-  font-size: clamp(32px,7vw,56px);
-  font-weight: 400; letter-spacing: 0.04em; color: var(--text2);
-  line-height: 1; font-style: italic;
+.header-wordmark span { color: var(--accent); }
+.header-actions { display: flex; align-items: center; gap: 8px; }
+#theme-toggle {
+  background: none; border: 1px solid var(--border);
+  color: var(--text-muted); cursor: pointer;
+  width: 32px; height: 32px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; font-size: 15px;
 }
-.header-sub {
-  font-family: var(--mono);
-  font-size: 10px; letter-spacing: 0.15em; color: var(--muted);
-}
-.header-badge {
-  display: inline-block; font-family: var(--mono); font-size: 9px; letter-spacing: 0.12em;
-  color: var(--gold2); border: 1px solid var(--gold3);
-  padding: 3px 10px; margin-top: 4px;
-}
+#theme-toggle:hover { background: var(--hover-bg); color: var(--text); }
 
-.sec {
-  font-family: var(--mono);
-  font-size: 9px; letter-spacing: 0.2em; color: var(--stone2);
-  text-transform: uppercase; margin-bottom: 10px; font-weight: 400;
-}
-.sec-line {
-  border: none; border-top: 1px solid var(--border);
-  margin: 24px 0;
-}
-
-.how {
-  display: flex; gap: 0; margin-bottom: 28px;
-  border: 1px solid var(--border);
-}
-.how-step {
-  flex: 1; padding: 16px;
-  border-right: 1px solid var(--border);
-}
-.how-step:last-child { border-right: none; }
-.how-num { font-family: var(--serif); font-size: 22px; font-style: italic; color: var(--gold3); line-height: 1; }
-.how-label { font-size: 11px; color: var(--muted); margin-top: 6px; line-height: 1.5; }
-
-.pubkey-section { margin-bottom: 24px; }
+/* ── Field labels ── */
 .field-label {
   font-family: var(--mono);
-  font-size: 9px; letter-spacing: 0.16em; color: var(--stone2);
-  text-transform: uppercase; margin-bottom: 8px;
+  font-size: 10px; letter-spacing: 0.1em; color: var(--text-muted);
+  text-transform: uppercase; margin-bottom: 6px;
   display: flex; align-items: center; gap: 8px;
 }
-.dot { width: 5px; height: 5px; background: var(--gold2); border-radius: 50%; display: inline-block; }
-.pubkey-row { display: flex; gap: 8px; }
-.pubkey-hint { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 6px; }
+.dot { width: 5px; height: 5px; background: var(--accent); border-radius: 50%; display: inline-block; }
+.pubkey-row { display: flex; gap: 6px; }
+.pubkey-hint { font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 5px; }
 
+/* ── Inputs ── */
 input[type=text], input[type=number], textarea, select {
-  background: var(--panel); border: 1px solid var(--border2);
-  color: var(--text2); font-family: var(--mono); font-size: 12px;
+  background: var(--input-bg);
+  border: 1px solid var(--border);
+  color: var(--text2);
+  font-family: var(--sans); font-size: 15px;
   padding: 10px 12px; outline: none; width: 100%;
-  transition: border-color 0.2s;
+  border-radius: 8px;
+  transition: border-color 0.15s;
   -webkit-appearance: none;
 }
 input[type=text]:focus, input[type=number]:focus,
-textarea:focus, select:focus { border-color: var(--gold2); }
-input[type=text]::placeholder, textarea::placeholder { color: var(--dim); }
-select { color: var(--text); }
+textarea:focus, select:focus { border-color: var(--accent); }
+input[type=text]::placeholder, textarea::placeholder { color: var(--text-dim); }
+select { color: var(--text); cursor: pointer; }
+textarea { resize: none; line-height: 1.6; }
 
+/* ── Buttons ── */
 .btn-sm {
-  background: none; border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); font-size: 9px; padding: 0 12px; height: 36px;
-  cursor: pointer; letter-spacing: 0.12em; text-transform: uppercase;
-  white-space: nowrap; transition: all 0.2s;
+  background: none; border: 1px solid var(--border); color: var(--text-muted);
+  font-family: var(--mono); font-size: 10px; padding: 0 12px; height: 32px;
+  border-radius: 6px; cursor: pointer; letter-spacing: 0.06em;
+  white-space: nowrap; transition: all 0.15s;
 }
-.btn-sm:hover { border-color: var(--stone2); color: var(--text); }
-
+.btn-sm:hover { border-color: var(--text-muted); color: var(--text); }
 .btn-sm-accent {
-  background: none; border: 1px solid var(--gold3); color: var(--gold2);
-  font-family: var(--mono); font-size: 9px; padding: 0 12px; height: 36px;
-  cursor: pointer; letter-spacing: 0.12em; text-transform: uppercase;
-  white-space: nowrap; transition: all 0.2s;
+  background: none; border: 1px solid var(--accent-dim); color: var(--accent);
+  font-family: var(--mono); font-size: 10px; padding: 0 12px; height: 32px;
+  border-radius: 6px; cursor: pointer; letter-spacing: 0.06em;
+  white-space: nowrap; transition: all 0.15s;
 }
-.btn-sm-accent:hover { border-color: var(--gold2); color: var(--amber); }
+.btn-sm-accent:hover { border-color: var(--accent); color: var(--accent-light); }
+.btn-primary {
+  background: var(--accent); color: #fff; border: none;
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+  padding: 10px 22px; border-radius: 9999px;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-primary:disabled { opacity: 0.38; cursor: not-allowed; }
+.btn-primary:not(:disabled):hover { background: var(--accent-light); }
+.btn-outline {
+  background: none; color: var(--text-muted); border: 1px solid var(--border);
+  font-family: var(--sans); font-size: 14px; font-weight: 500;
+  padding: 10px 22px; border-radius: 9999px;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-outline:hover { border-color: var(--text-muted); color: var(--text); }
+.btn-ghost {
+  background: none; color: var(--text-muted); border: 1px solid var(--border);
+  font-family: var(--sans); font-size: 13px;
+  padding: 8px 16px; border-radius: 8px;
+  cursor: pointer; transition: all 0.15s; margin-top: 10px;
+}
+.btn-ghost:hover { border-color: var(--text-muted); color: var(--text); background: var(--hover-bg); }
+.btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
 
-.card {
-  background: var(--panel); border: 1px solid var(--border2);
-  margin-bottom: 16px; display: none;
+/* ── Sections ── */
+.app-section { display: none; }
+.app-section.active { display: block; }
+.section-header {
+  position: sticky; top: 53px; z-index: 90;
+  background: var(--nav-bg); backdrop-filter: blur(12px);
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  margin-bottom: 0;
+  display: flex; align-items: center; justify-content: space-between;
 }
+.section-title { font-size: 17px; font-weight: 700; color: var(--text2); letter-spacing: -0.01em; }
+
+/* ── Feed tabs ── */
+.feed-tabs {
+  display: flex; border-bottom: 1px solid var(--border);
+  overflow-x: auto; scrollbar-width: none;
+}
+.feed-tabs::-webkit-scrollbar { display: none; }
+.feed-tab {
+  flex: 1; min-width: 80px;
+  background: none; border: none; color: var(--text-muted);
+  font-family: var(--sans); font-size: 14px; font-weight: 500;
+  padding: 14px 8px; cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s; white-space: nowrap;
+}
+.feed-tab:hover { color: var(--text); background: var(--hover-bg); }
+.feed-tab.active { color: var(--text2); border-bottom-color: var(--accent); font-weight: 700; }
+
+/* ── Relay chips ── */
+.relay-chips {
+  display: flex; gap: 6px; flex-wrap: wrap;
+  padding: 8px 16px; border-bottom: 1px solid var(--border);
+}
+.relay-chip {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 9px; color: var(--text-dim);
+  background: var(--tag-bg); border: 1px solid var(--border);
+  padding: 2px 8px; border-radius: 9999px;
+}
+.relay-chip .chip-dot { width: 5px; height: 5px; background: var(--text-dim); border-radius: 50%; }
+.relay-chip.connected { border-color: var(--accent-dim); color: var(--accent); }
+.relay-chip.connected .chip-dot { background: var(--accent); }
+
+/* ── Feed ── */
+.feed-loading {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 14px; color: var(--text-muted); padding: 32px 16px;
+}
+.feed-loading .pulse { width: 8px; height: 8px; background: var(--accent); border-radius: 50%; animation: blink 1s ease-in-out infinite; flex-shrink: 0; }
+.feed-empty { font-size: 14px; color: var(--text-muted); padding: 32px 16px; }
+
+/* ── Note cards ── */
+.note-card {
+  display: flex; gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; transition: background 0.15s;
+  animation: fadeIn 0.2s ease;
+}
+.note-card:hover { background: var(--hover-bg); }
+.note-avatar {
+  width: 40px; height: 40px; flex-shrink: 0;
+  background: var(--bg2); border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 600; color: var(--text-muted);
+}
+.note-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.note-body { flex: 1; min-width: 0; }
+.note-header { display: flex; align-items: baseline; gap: 6px; margin-bottom: 2px; flex-wrap: wrap; }
+.note-name { font-size: 15px; font-weight: 700; color: var(--text2); }
+.note-pubkey { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+.note-time { font-size: 13px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+.note-content { font-size: 15px; color: var(--text); line-height: 1.6; word-break: break-word; margin-bottom: 8px; }
+.note-actions { display: flex; align-items: center; margin-top: 4px; margin-left: -8px; gap: 0; }
+.note-action {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  padding: 6px 8px; border-radius: 9999px;
+  transition: all 0.15s; font-family: var(--sans); font-size: 13px;
+}
+.note-action span.count { font-size: 13px; }
+.note-action.reply:hover { color: var(--accent); background: var(--accent-bg); }
+.note-action.reply.has-replies { color: var(--accent); }
+.note-action.reply.has-replies span.count { color: var(--accent); }
+.note-action.like:hover { color: #e0536a; background: rgba(224,83,106,0.1); }
+.note-action.like:hover span.count { color: #e0536a; }
+.note-action.liked { color: #e0536a; }
+.note-action.liked span.count { color: #e0536a; }
+.note-action.zap:hover { color: #e07d2a; background: rgba(224,125,42,0.1); }
+.note-action.zap:hover span.count { color: #e07d2a; }
+.note-action.zapped { color: #e07d2a; }
+.note-action.zapped span.count { color: #e07d2a; }
+.note-action.repost:hover { color: #00ba7c; background: rgba(0,186,124,0.1); }
+.note-action.reposted { color: #00ba7c; }
+.note-action.reposted span.count { color: #00ba7c; }
+
+/* ── Cards (signing steps) ── */
+.card { background: var(--panel); border: 1px solid var(--border); margin: 0 16px 12px; border-radius: 12px; display: none; overflow: hidden; }
 .card.active { display: block; }
 .card-header {
-  display: flex; align-items: center; gap: 12px;
+  display: flex; align-items: center; gap: 10px;
   padding: 12px 16px; border-bottom: 1px solid var(--border);
   background: var(--bg2);
 }
 .step-pill {
-  font-family: var(--mono); font-size: 8px; font-weight: 500;
-  letter-spacing: 0.14em; padding: 3px 9px;
-  border: 1px solid var(--gold3); color: var(--gold2);
-  text-transform: uppercase;
+  font-family: var(--mono); font-size: 9px; font-weight: 500;
+  letter-spacing: 0.1em; padding: 3px 8px; border-radius: 4px;
+  border: 1px solid var(--accent-dim); color: var(--accent); text-transform: uppercase;
 }
-.step-pill.done { border-color: var(--gold2); color: var(--amber); }
-.card-title {
-  font-family: var(--sans); font-size: 13px; font-weight: 500;
-  letter-spacing: 0.01em; color: var(--text2);
-}
-.card-body { padding: 18px; }
+.step-pill.done { background: var(--accent-bg); border-color: var(--accent); }
+.card-title { font-size: 14px; font-weight: 600; color: var(--text2); }
+.card-body { padding: 16px; }
+textarea#compose-area { height: 100px; font-size: 16px; }
+.compose-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.char-count { font-family: var(--mono); font-size: 11px; color: var(--text-muted); }
+.char-count.warn { color: #e07d2a; }
 
-textarea#compose-area { resize: none; height: 88px; line-height: 1.65; font-size: 13px; }
-.compose-footer {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-top: 10px;
-}
-.char-count { font-family: var(--mono); font-size: 10px; color: var(--dim); }
-.char-count.warn { color: #c0853a; }
-
-.btn-primary {
-  background: transparent; color: var(--gold); border: 1px solid var(--gold2);
-  font-family: var(--mono); font-size: 10px; padding: 11px 22px;
-  cursor: pointer; letter-spacing: 0.16em; text-transform: uppercase;
-  transition: all 0.2s;
-}
-.btn-primary:disabled { opacity: 0.28; cursor: not-allowed; }
-.btn-primary:not(:disabled):hover { background: var(--gold2); color: var(--bg); border-color: var(--gold2); }
-.btn-outline {
-  background: none; color: var(--stone2); border: 1px solid var(--border2);
-  font-family: var(--mono); font-size: 10px; padding: 11px 22px;
-  cursor: pointer; letter-spacing: 0.12em; text-transform: uppercase;
-  transition: all 0.2s;
-}
-.btn-outline:hover { border-color: var(--stone2); color: var(--text); }
-.btn-ghost {
-  background: none; color: var(--muted); border: 1px solid var(--border);
-  font-family: var(--mono); font-size: 10px; padding: 9px 16px;
-  cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase;
-  transition: all 0.2s; margin-top: 10px;
-}
-.btn-ghost:hover { border-color: var(--muted); color: var(--text); }
-.btn-row { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
-
+/* ── QR ── */
 .qr-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
-@media(min-width:600px){.qr-wrap{flex-direction:row;align-items:flex-start;}}
-.qr-canvas-container {
-  background: #fff; padding: 12px;
-  border: 1px solid var(--border2); flex-shrink: 0;
-  line-height: 0;
-}
-.qr-instructions { font-size: 12px; color: var(--muted); line-height: 1.85; }
-.qr-instructions strong { color: var(--gold2); font-weight: 500; }
+@media(min-width:540px){.qr-wrap{flex-direction:row;align-items:flex-start;}}
+.qr-canvas-container { background: #fff; padding: 12px; border-radius: 8px; flex-shrink: 0; line-height: 0; }
+.qr-instructions { font-size: 14px; color: var(--text-muted); line-height: 1.8; }
+.qr-instructions strong { color: var(--accent); font-weight: 600; }
 
+/* ── Scan ── */
 .scan-wrap { display: flex; flex-direction: column; align-items: center; }
-.video-container {
-  position: relative; width: 100%; max-width: 380px;
-  background: #000; overflow: hidden;
-}
+.video-container { position: relative; width: 100%; max-width: 380px; background: #000; overflow: hidden; border-radius: 10px; }
 .video-container video { width: 100%; display: block; }
 .scan-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; align-items: center; justify-content: center; }
 .scan-reticle {
-  width: 28px; height: 28px;
-  border: 1px solid var(--gold2);
-  position: relative;
+  width: 32px; height: 32px; border: 2px solid var(--accent); border-radius: 4px; position: relative;
   animation: pulse-ring 2s ease-in-out infinite;
 }
-.scan-reticle::after {
-  content: '';
-  position: absolute; top: 50%; left: 50%;
-  transform: translate(-50%,-50%);
-  width: 4px; height: 4px; background: var(--amber);
-  border-radius: 50%;
-}
-@keyframes pulse-ring {
-  0%, 100% { transform: scale(1); opacity: 0.9; }
-  50%       { transform: scale(1.25); opacity: 0.4; }
-}
-.scan-status {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 10px; color: var(--gold2); margin-top: 10px;
-  letter-spacing: 0.1em; text-transform: uppercase;
-}
-.pulse {
-  width: 6px; height: 6px; background: var(--amber); border-radius: 50%;
-  animation: blink 1s ease-in-out infinite;
-}
-.scan-tip { font-size: 11px; color: var(--dim); text-align: center; margin-top: 6px; }
+.scan-reticle::after { content:''; position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); width:5px; height:5px; background:var(--accent); border-radius:50%; }
+@keyframes pulse-ring { 0%,100%{transform:scale(1);opacity:0.9;} 50%{transform:scale(1.2);opacity:0.5;} }
+.scan-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--accent); margin-top:10px; }
+.pulse { width:7px; height:7px; background:var(--accent); border-radius:50%; animation:blink 1s ease-in-out infinite; }
+.scan-tip { font-size:12px; color:var(--text-dim); text-align:center; margin-top:6px; }
 
-/* ── Pubkey scan modal ── */
+/* ── Pubkey scan modal (bottom sheet) ── */
 #pubkey-scan-modal {
-  display: none;
-  position: fixed; inset: 0; z-index: 1000;
-  background: rgba(17,16,9,0.94);
-  align-items: center; justify-content: center;
-  backdrop-filter: blur(6px);
+  display:none; position:fixed; inset:0; z-index:1000;
+  background:var(--modal-bg); backdrop-filter:blur(4px);
+  align-items:flex-end; justify-content:center;
 }
-#pubkey-scan-modal.open { display: flex; }
-.modal-inner {
-  background: var(--panel); border: 1px solid var(--border2);
-  padding: 0; width: 100%; max-width: 420px; margin: 16px;
-}
-.modal-header {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; border-bottom: 1px solid var(--border);
-  background: var(--bg2);
-}
-.modal-title {
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.14em; color: var(--gold2);
-  text-transform: uppercase;
-}
-.modal-close {
-  background: none; border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); font-size: 9px; padding: 4px 10px;
-  cursor: pointer; letter-spacing: 0.08em;
-}
-.modal-close:hover { border-color: var(--stone2); color: var(--text); }
-.modal-body { padding: 16px; }
-.modal-video-container {
-  position: relative; width: 100%; background: #000; overflow: hidden;
-}
-.modal-video-container video { width: 100%; display: block; }
-#pubkey-scan-status {
-  display: flex; align-items: center; gap: 8px;
-  font-family: var(--mono); font-size: 10px; color: var(--gold2); margin-top: 10px;
-  letter-spacing: 0.1em; text-transform: uppercase;
-}
-#pubkey-scan-hint {
-  font-size: 11px; color: var(--muted); margin-top: 6px; text-align: center;
-}
+#pubkey-scan-modal.open { display:flex; }
+.modal-inner { background:var(--panel); border:1px solid var(--border); border-radius:16px 16px 0 0; width:100%; max-width:520px; overflow:hidden; }
+.modal-header { display:flex; align-items:center; justify-content:space-between; padding:16px; border-bottom:1px solid var(--border); }
+.modal-title { font-size:15px; font-weight:700; color:var(--text2); }
+.modal-close { background:var(--bg2); border:none; color:var(--text-muted); font-size:16px; width:30px; height:30px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.modal-close:hover { background:var(--border); color:var(--text); }
+.modal-body { padding:16px; }
+.modal-video-container { position:relative; width:100%; background:#000; overflow:hidden; border-radius:8px; }
+.modal-video-container video { width:100%; display:block; }
+#pubkey-scan-status { display:flex; align-items:center; gap:8px; font-size:12px; color:var(--accent); margin-top:10px; }
+#pubkey-scan-hint { font-size:13px; color:var(--text-muted); margin-top:6px; text-align:center; }
 
-.publish-wrap { display: flex; flex-direction: column; gap: 16px; }
-.success-block { text-align: center; padding: 12px 0 6px; }
-.success-label {
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.2em; color: var(--gold2);
-  text-transform: uppercase; margin-bottom: 8px;
-}
-.success-title {
-  font-family: var(--serif); font-size: 32px; font-weight: 400; font-style: italic;
-  letter-spacing: 0.02em; color: var(--text2);
-}
-.event-preview {
-  background: var(--bg2); border: 1px solid var(--border);
-  padding: 14px; font-size: 12px; line-height: 1.65;
-}
-.event-preview .content { color: var(--text); margin-bottom: 10px; font-size: 13px; }
-.event-preview .meta { display: flex; gap: 6px; flex-wrap: wrap; }
-.meta-tag {
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; color: var(--stone2);
-  border: 1px solid var(--border2); padding: 2px 7px;
-}
-.relay-list { display: flex; flex-direction: column; gap: 4px; }
-.relay-item {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--mono); font-size: 10px; letter-spacing: 0.06em; color: var(--muted);
-  padding: 8px 12px; background: var(--bg2); border: 1px solid var(--border);
-  transition: all 0.2s;
-}
-.relay-item .relay-dot { width: 5px; height: 5px; background: var(--dim); border-radius: 50%; flex-shrink: 0; }
-.relay-item.sending { border-color: #8a6020; color: #c9943a; }
-.relay-item.sending .relay-dot { background: #c9943a; animation: blink 0.5s ease-in-out infinite; }
-.relay-item.sent { border-color: var(--gold3); color: var(--gold2); }
-.relay-item.sent .relay-dot { background: var(--gold2); }
-.relay-item.failed { border-color: #6a2020; color: #b04040; }
-.relay-item.failed .relay-dot { background: #b04040; }
+/* ── Publish / relay list ── */
+.publish-wrap { display:flex; flex-direction:column; gap:14px; }
+.success-block { text-align:center; padding:8px 0; }
+.success-label { font-family:var(--mono); font-size:10px; letter-spacing:0.12em; color:var(--accent); text-transform:uppercase; margin-bottom:6px; }
+.success-title { font-size:28px; font-weight:700; color:var(--text2); letter-spacing:-0.02em; }
+.event-preview { background:var(--bg2); border:1px solid var(--border); padding:14px; border-radius:8px; font-size:14px; line-height:1.6; }
+.event-preview .content { color:var(--text); margin-bottom:10px; }
+.event-preview .meta { display:flex; gap:6px; flex-wrap:wrap; }
+.meta-tag { font-family:var(--mono); font-size:10px; color:var(--text-muted); background:var(--tag-bg); border:1px solid var(--border); padding:2px 8px; border-radius:4px; }
+.relay-list { display:flex; flex-direction:column; gap:4px; }
+.relay-item { display:flex; align-items:center; gap:10px; font-family:var(--mono); font-size:11px; color:var(--text-muted); padding:9px 12px; background:var(--bg2); border:1px solid var(--border); border-radius:8px; transition:all 0.2s; }
+.relay-item .relay-dot { width:6px; height:6px; background:var(--text-dim); border-radius:50%; flex-shrink:0; }
+.relay-item.sending { border-color:#e07d2a; color:#e07d2a; }
+.relay-item.sending .relay-dot { background:#e07d2a; animation:blink 0.5s ease-in-out infinite; }
+.relay-item.sent { border-color:var(--accent-dim); color:var(--accent); }
+.relay-item.sent .relay-dot { background:var(--accent); }
+.relay-item.failed { border-color:#dc3545; color:#dc3545; }
+.relay-item.failed .relay-dot { background:#dc3545; }
 
-.feed-section { margin-top: 40px; }
-.feed-header { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
-.feed-title { font-family: var(--serif); font-style: italic; font-size: 20px; color: var(--text2); }
-.feed-line { flex: 1; border-top: 1px solid var(--border); }
-.relay-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
-.relay-chip {
-  display: flex; align-items: center; gap: 5px;
-  font-family: var(--mono); font-size: 9px; letter-spacing: 0.08em; color: var(--dim);
-  border: 1px solid var(--border); padding: 3px 8px; transition: all 0.2s;
-}
-.relay-chip .chip-dot { width: 4px; height: 4px; background: var(--dim); border-radius: 50%; }
-.relay-chip.connected { border-color: var(--gold3); color: var(--gold2); }
-.relay-chip.connected .chip-dot { background: var(--gold2); }
+/* ── Thread modal ── */
+#thread-modal { display:none; position:fixed; inset:0; z-index:3000; background:var(--bg); flex-direction:column; }
+#thread-modal.open { display:flex; }
+#thread-header { display:flex; align-items:center; gap:14px; padding:12px 16px; border-bottom:1px solid var(--border); background:var(--nav-bg); backdrop-filter:blur(12px); flex-shrink:0; }
+#thread-title { font-size:17px; font-weight:700; color:var(--text2); flex:1; }
+#thread-reply-count { font-size:13px; color:var(--text-muted); }
+.thread-back-btn { background:none; border:none; color:var(--text-muted); font-size:22px; cursor:pointer; padding:4px; width:34px; height:34px; display:flex; align-items:center; justify-content:center; border-radius:50%; transition:background 0.15s; }
+.thread-back-btn:hover { background:var(--hover-bg); color:var(--text); }
+#thread-body { flex:1; overflow-y:auto; -webkit-overflow-scrolling:touch; padding-bottom:80px; }
+.thread-root { padding:12px 16px; border-bottom:1px solid var(--border); }
+.thread-reply { display:flex; gap:12px; padding:12px 16px; border-bottom:1px solid var(--border); }
+.thread-note-header { display:flex; align-items:baseline; gap:6px; margin-bottom:4px; flex-wrap:wrap; }
+.thread-avatar { width:40px; height:40px; flex-shrink:0; background:var(--bg2); border-radius:50%; overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:600; color:var(--text-muted); }
+.thread-avatar img { width:100%; height:100%; object-fit:cover; }
+.thread-body-inner { flex:1; min-width:0; }
+.thread-name { font-size:15px; font-weight:700; color:var(--text2); }
+.thread-time { font-size:13px; color:var(--text-muted); margin-left:auto; }
+.thread-content { font-size:15px; color:var(--text); line-height:1.6; word-break:break-word; margin-top:4px; }
+.thread-loading { font-size:14px; color:var(--text-muted); padding:24px 16px; }
+.thread-empty { font-size:14px; color:var(--text-muted); padding:16px; font-style:italic; }
 
-.feed-tab {
-  background: none; border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); font-size: 9px; padding: 5px 12px;
-  cursor: pointer; letter-spacing: 0.1em; text-transform: uppercase;
-  transition: all 0.2s;
-}
-.feed-tab:hover { border-color: var(--stone2); color: var(--text); }
-.feed-tab.active { border-color: var(--gold2); color: var(--gold); background: var(--panel); }
-.feed-loading {
-  display: flex; align-items: center; gap: 10px;
-  font-family: var(--mono); font-size: 10px; color: var(--dim); letter-spacing: 0.1em;
-  padding: 24px 0;
-}
-.feed-empty { font-size: 12px; color: var(--dim); padding: 24px 0; font-style: italic; }
-.note-card {
-  padding: 14px 16px; border: 1px solid var(--border);
-  border-bottom: none; background: var(--panel);
-  animation: fadeIn 0.25s ease;
-  transition: background 0.15s;
-}
-.note-card:last-child { border-bottom: 1px solid var(--border); }
-.note-card:hover { background: var(--panel2); }
-.note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
-.note-avatar {
-  width: 30px; height: 30px; background: var(--bg2); border: 1px solid var(--border2);
-  display: flex; align-items: center; justify-content: center;
-  font-family: var(--mono); font-size: 10px; color: var(--muted);
-  flex-shrink: 0; overflow: hidden; border-radius: 2px;
-}
-.note-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.note-name { font-size: 13px; font-weight: 500; color: var(--text2); }
-.note-pubkey { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-top: 1px; }
-.note-time { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-left: auto; white-space: nowrap; }
-.note-content { font-size: 14px; color: var(--text); line-height: 1.65; word-break: break-word; }
-.note-actions {
-  display: flex; align-items: center; gap: 18px;
-  margin-top: 12px; padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-.note-action {
-  background: none; border: none; color: var(--dim);
-  font-size: 13px; padding: 0;
-  cursor: pointer; display: flex; align-items: center; gap: 5px;
-  transition: color 0.2s; font-family: var(--sans);
-}
-.note-action span.count {
-  font-family: var(--mono); font-size: 10px; color: var(--dim);
-}
-.note-action:hover { color: var(--stone); }
-.note-action.reply:hover { color: var(--gold2); }
-.note-action.reply.has-replies { color: var(--stone2); }
-.note-action.reply.has-replies span.count { color: var(--stone2); }
-.note-action.like:hover { color: #b06060; }
-.note-action.zap:hover { color: #c0943a; }
-.note-action.repost:hover { color: var(--gold2); }
-.note-action.reposted { color: var(--gold2); }
-.note-action.reposted span.count { color: var(--gold2); }
-.note-action.liked { color: #b06060; }
-.note-action.liked span.count { color: #b06060; }
-.note-action.zapped { color: #c0943a; }
-.note-action.zapped span.count { color: #c0943a; }
-.note-action.liked svg, .note-action.zapped svg { opacity: 1; }
+/* ── QR fullscreen ── */
+#qr-fullscreen-overlay { display:none; position:fixed; inset:0; z-index:10000; background:#fff; align-items:center; justify-content:center; flex-direction:column; gap:16px; }
+#qr-fullscreen-overlay.open { display:flex; }
+#qr-fullscreen-canvas { line-height:0; }
+#qr-fullscreen-hint { font-family:var(--mono); font-size:11px; color:#444; text-align:center; padding:0 20px; }
+#qr-fullscreen-close { font-family:var(--mono); font-size:11px; background:#111; color:#eee; border:none; padding:10px 28px; cursor:pointer; border-radius:6px; }
 
-/* Thread view */
-#thread-modal {
-  display: none; position: fixed; inset: 0; z-index: 3000;
-  background: rgba(17,16,9,0.99);
-  flex-direction: column;
-}
-#thread-modal.open { display: flex; }
-#thread-header {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-bottom: 1px solid var(--border2);
-  background: var(--bg2); flex-shrink: 0;
-}
-#thread-title {
-  font-family: var(--serif); font-style: italic; font-size: 16px;
-  font-weight: 400; color: var(--text2); flex: 1;
-}
-.thread-back-btn {
-  background: none; border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); font-size: 9px; padding: 5px 12px;
-  cursor: pointer; letter-spacing: 0.08em;
-}
-.thread-back-btn:hover { border-color: var(--stone2); color: var(--text); }
-#thread-body {
-  flex: 1; overflow-y: auto; padding: 16px 18px;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 80px;
-}
-.thread-root {
-  border: 1px solid var(--border2); background: var(--panel);
-  padding: 14px 16px; margin-bottom: 12px;
-  border-left: 2px solid var(--gold2);
-}
-.thread-reply {
-  border-left: 2px solid var(--border2); border-right: 1px solid var(--border);
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  background: var(--panel); padding: 12px 14px;
-  margin-bottom: 4px; margin-left: 14px;
-}
-.thread-note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
-.thread-avatar {
-  width: 28px; height: 28px; background: var(--bg2);
-  border: 1px solid var(--border2); display: flex; align-items: center;
-  justify-content: center; font-family: var(--mono); font-size: 10px; color: var(--muted);
-  flex-shrink: 0; overflow: hidden; border-radius: 2px;
-}
-.thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.thread-name { font-size: 13px; font-weight: 500; color: var(--text2); }
-.thread-time { font-family: var(--mono); font-size: 9px; color: var(--dim); margin-left: auto; white-space: nowrap; }
-.thread-content { font-size: 14px; color: var(--text); line-height: 1.65; word-break: break-word; }
-.thread-loading { font-size: 12px; color: var(--dim); padding: 24px 0; font-style: italic; }
-.thread-empty { font-size: 12px; color: var(--dim); padding: 12px 0; font-style: italic; }
+/* ── Footer ── */
+footer { padding:20px 16px; border-top:1px solid var(--border); font-size:12px; color:var(--text-muted); text-align:center; line-height:2; }
+footer a { color:var(--accent); text-decoration:none; }
+footer strong { color:var(--text-muted); }
 
-/* QR fullscreen overlay */
-#qr-fullscreen-overlay {
-  display: none;
-  position: fixed; inset: 0; z-index: 10000;
-  background: #ffffff;
-  align-items: center; justify-content: center;
-  flex-direction: column; gap: 18px;
-}
-#qr-fullscreen-overlay.open { display: flex; }
-#qr-fullscreen-canvas { line-height: 0; }
-#qr-fullscreen-hint {
-  font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #555;
-  letter-spacing: 0.08em; text-align: center; padding: 0 20px;
-}
-#qr-fullscreen-close {
-  font-family: 'JetBrains Mono', monospace; font-size: 10px;
-  background: #111; color: #ddd; border: none;
-  padding: 10px 28px; cursor: pointer; letter-spacing: 0.14em;
-}
-
-footer {
-  margin-top: 48px; padding: 20px 0;
-  border-top: 1px solid var(--border);
-  font-size: 11px; color: var(--dim); text-align: center;
-  line-height: 2;
-}
-footer a { color: var(--muted); text-decoration: none; }
-footer a:hover { color: var(--gold2); }
-footer strong { color: var(--stone2); }
-
-/* ── Floating nav ── */
+/* ── Nav ── */
 #spark-nav {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 5000;
-  background: rgba(17,16,9,0.96);
-  border-top: 1px solid var(--border2);
-  backdrop-filter: blur(16px);
+  background: var(--nav-bg); border-top: 1px solid var(--border);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
   display: flex; align-items: stretch;
   padding-bottom: env(safe-area-inset-bottom);
 }
 .nav-item {
-  flex: 1; display: flex; flex-direction: column; align-items: center;
-  justify-content: center; gap: 3px;
-  padding: 10px 4px; cursor: pointer;
-  border: none; background: none;
-  color: var(--dim); font-family: var(--mono);
-  font-size: 7px; letter-spacing: 0.1em; text-transform: uppercase;
-  transition: color 0.2s; border-top: 2px solid transparent;
-  -webkit-tap-highlight-color: transparent;
+  flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:center; gap:2px; padding:10px 4px 8px;
+  cursor:pointer; border:none; background:none;
+  color:var(--text-muted); font-family:var(--sans);
+  font-size:10px; font-weight:500;
+  transition:color 0.15s; border-top:2px solid transparent;
+  -webkit-tap-highlight-color:transparent;
 }
-.nav-item svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.5; }
-.nav-item:hover { color: var(--muted); }
-.nav-item.active { color: var(--gold); border-top-color: var(--gold2); }
-.nav-item.active svg { stroke: var(--gold); }
+.nav-item svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.75; }
+.nav-item:hover { color:var(--text); }
+.nav-item.active { color:var(--accent); border-top-color:var(--accent); }
+.nav-item.active svg { stroke:var(--accent); }
 
-/* ── Sections ── */
-.app-section { display: none; padding-bottom: 80px; }
-.app-section.active { display: block; }
-.section-header {
-  padding: 18px 0 14px;
-  border-bottom: 1px solid var(--border2);
-  margin-bottom: 22px;
-  display: flex; align-items: center; justify-content: space-between;
-}
-.section-title {
-  font-family: var(--serif); font-style: italic; font-size: 22px;
-  font-weight: 400; color: var(--text2);
-}
-
-.wrap { padding-bottom: 80px; }
-
+/* ── Toast ── */
 #toast {
-  position: fixed; bottom: 72px; left: 50%; transform: translateX(-50%) translateY(8px);
-  background: var(--panel2); border: 1px solid var(--border2);
-  padding: 9px 18px; font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
-  color: var(--gold2);
-  opacity: 0; transition: all 0.2s; pointer-events: none; z-index: 999;
-  white-space: nowrap;
+  position:fixed; bottom:72px; left:50%; transform:translateX(-50%) translateY(8px);
+  background:var(--text2); color:var(--bg);
+  padding:10px 20px; font-size:13px; font-weight:500; border-radius:9999px;
+  opacity:0; transition:all 0.2s; pointer-events:none; z-index:9999; white-space:nowrap;
 }
-#toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+#toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 
-@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
-@keyframes blink  { 0%,49%{ opacity:1; } 50%,100%{ opacity:0.2; } }
+/* ── Misc ── */
+#follow-status { font-size:12px; color:var(--text-muted); padding:6px 16px; font-family:var(--mono); }
+.sec { font-family:var(--mono); font-size:10px; letter-spacing:0.1em; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px; }
+.sec-line { border:none; border-top:1px solid var(--border); margin:20px 0; }
+.wrap { padding-bottom:80px; }
+
+@keyframes fadeIn { from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;} }
+@keyframes blink  { 0%,49%{opacity:1;} 50%,100%{opacity:0.2;} }
 </style>
 </head>
 <body>
 <div class="wrap">
 
-  <!-- Compact header -->
-  <header style="padding:18px 0 14px;border-bottom:1px solid var(--border2);margin-bottom:0;flex-direction:row;align-items:center;justify-content:space-between;">
-    <div>
-      <div class="header-top" style="margin-bottom:4px;">Favilla Key · Airgap</div>
-      <div class="header-title" style="font-size:clamp(22px,5.5vw,38px);">Spark</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div id="pubkey-hint" style="font-family:var(--mono);font-size:9px;color:var(--dim);text-align:right;"></div>
+  <!-- Header -->
+  <header>
+    <div class="header-wordmark">spark<span>·</span></div>
+    <div class="header-actions">
+      <div id="pubkey-hint" style="font-family:var(--mono);font-size:10px;color:var(--text-dim);"></div>
+      <button id="theme-toggle" onclick="toggleTheme()" title="Toggle theme">☀</button>
       <button class="btn-sm-accent" onclick="openPubkeyScan()" title="Scan npub QR">⬡</button>
     </div>
   </header>
@@ -558,18 +471,18 @@ footer strong { color: var(--stone2); }
   <div class="app-section active" id="section-feed">
     <div class="section-header">
       <span class="section-title" id="feed-title">Feed</span>
-      <div style="display:flex;gap:6px;">
-        <button class="feed-tab active" id="tab-following" onclick="setFeedMode('following')" style="font-size:8px;padding:4px 8px;">Following</button>
-        <button class="feed-tab" id="tab-global" onclick="setFeedMode('global')" style="font-size:8px;padding:4px 8px;">Global</button>
-        <button class="feed-tab" id="tab-mentions" onclick="setFeedMode('mentions')" style="font-size:8px;padding:4px 8px;">Mentions</button>
-        <button class="feed-tab" id="tab-mine" onclick="setFeedMode('mine')" style="font-size:8px;padding:4px 8px;">Mine</button>
-      </div>
+    </div>
+    <div class="feed-tabs">
+      <button class="feed-tab active" id="tab-following" onclick="setFeedMode('following')">Following</button>
+      <button class="feed-tab" id="tab-global" onclick="setFeedMode('global')">Global</button>
+      <button class="feed-tab" id="tab-mentions" onclick="setFeedMode('mentions')">Mentions</button>
+      <button class="feed-tab" id="tab-mine" onclick="setFeedMode('mine')">Mine</button>
     </div>
     <div class="relay-chips" id="relay-chips"></div>
-    <div id="follow-status" style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:8px;min-height:14px;"></div>
+    <div id="follow-status"></div>
     <div id="feed-loading" class="feed-loading">
       <div class="pulse"></div>
-      <span id="feed-loading-text">Connecting to relays…</span>
+      <span id="feed-loading-text" style="font-size:14px;">Connecting to relays…</span>
     </div>
     <div id="feed-empty" class="feed-empty" style="display:none">No notes yet</div>
     <div id="feed"></div>
@@ -579,10 +492,11 @@ footer strong { color: var(--stone2); }
   <div class="app-section" id="section-notes">
     <div class="section-header">
       <span class="section-title">Notes</span>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--stone2);letter-spacing:0.1em;">airgap signing</div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">airgap</span>
     </div>
 
-    <!-- Step 1 -->
+    <div style="padding:12px 0;">
+  <!-- Step 1 -->
   <div class="card active" id="card-compose">
     <div class="card-header">
       <span class="step-pill active" id="pill-compose">STEP 01</span>
@@ -618,7 +532,7 @@ footer strong { color: var(--stone2); }
       </div>
       <div class="btn-row">
         <button class="btn-primary" onclick="startScan()">Scan signed QR</button>
-        <button class="btn-primary" onclick="showQRFullscreen(JSON.stringify(state.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX · MENU → SCAN QR')" style="background:var(--bg2);border-color:var(--gold3);">⛶ FULLSCREEN</button>
+        <button class="btn-primary" onclick="showQRFullscreen(JSON.stringify(state.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX · MENU → SCAN QR')" style="background:var(--bg2);border-color:var(--accent-dim);">⛶ FULLSCREEN</button>
         <button class="btn-outline" onclick="backToCompose()">← Back</button>
       </div>
     </div>
@@ -644,7 +558,7 @@ footer strong { color: var(--stone2); }
             <span id="scan-status-text">STARTING CAMERA…</span>
           </div>
           <p class="scan-tip">Point at the FAVILLA Key screen · hold ~5–10cm away · keep steady</p>
-          <div id="scan-debug" style="width:100%;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--muted);letter-spacing:0.05em;line-height:1.7;text-align:left;min-height:40px;max-height:120px;overflow-y:auto"></div>
+          <div id="scan-debug" style="width:100%;margin-top:8px;padding:8px 10px;background:var(--bg);border:1px solid var(--border);font-size:9px;color:var(--text-muted);letter-spacing:0.05em;line-height:1.7;text-align:left;min-height:40px;max-height:120px;overflow-y:auto"></div>
           <button class="btn-ghost" style="width:100%;margin-top:10px" onclick="showPasteMode()">or paste manually ↓</button>
           <button class="btn-ghost" style="width:100%;margin-top:6px;opacity:0.5" onclick="stopScan()">← Back</button>
         </div>
@@ -689,9 +603,8 @@ footer strong { color: var(--stone2); }
   <div class="app-section" id="section-zap">
     <div class="section-header">
       <span class="section-title">Zap</span>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--stone2);letter-spacing:0.1em;">lightning payment</div>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--text-muted);">lightning</span>
     </div>
-  <div class="sec" style="margin-top:32px;">Zap</div>
   <div class="card active" id="card-zap">
     <div class="card-header">
       <span class="step-pill active">ZAP</span>
@@ -732,7 +645,7 @@ footer strong { color: var(--stone2); }
         </div>
 
         <button onclick="zapBuild()" style="width:100%;">Build zap request</button>
-        <div id="zap-status" style="margin-top:10px;font-size:11px;font-family:var(--mono);color:var(--muted);min-height:18px;"></div>
+        <div id="zap-status" style="margin-top:10px;font-size:11px;font-family:var(--mono);color:var(--text-muted);min-height:18px;"></div>
       </div>
 
       <div class="zap-step" id="zap-step-qr" style="display:none;">
@@ -743,10 +656,10 @@ footer strong { color: var(--stone2); }
           </div>
           <div style="flex:1;min-width:160px;">
             <div class="field-label">Zap details</div>
-            <div id="zap-details" style="font-size:11px;font-family:var(--mono);line-height:2;color:var(--muted);"></div>
+            <div id="zap-details" style="font-size:11px;font-family:var(--mono);line-height:2;color:var(--text-muted);"></div>
             <button onclick="zapStartScan()" style="margin-top:12px;width:100%;">SCAN SIGNED ZAP ↗</button>
             <button onclick="showQRFullscreen(JSON.stringify(zapState.unsignedEvent), 'HOLD DEVICE CAMERA · BRIGHTNESS MAX · MENU → SCAN QR')" style="margin-top:6px;width:100%;background:var(--bg2);">⛶ FULLSCREEN QR</button>
-            <button onclick="zapReset()" style="margin-top:6px;width:100%;background:none;border-color:var(--border2);color:var(--muted);">← Back</button>
+            <button onclick="zapReset()" style="margin-top:6px;width:100%;background:none;border-color:var(--border2);color:var(--text-muted);">← Back</button>
           </div>
         </div>
       </div>
@@ -759,7 +672,7 @@ footer strong { color: var(--stone2); }
             <span id="zap-scan-status" style="font-size:11px;font-family:var(--mono);color:#0f0;background:rgba(0,0,0,0.7);padding:4px 10px;border-radius:3px;">SCANNING</span>
           </div>
         </div>
-        <button onclick="zapCancelScan()" style="width:100%;background:none;border-color:var(--border2);color:var(--muted);">Cancel</button>
+        <button onclick="zapCancelScan()" style="width:100%;background:none;border-color:var(--border2);color:var(--text-muted);">Cancel</button>
       </div>
 
       <div class="zap-step" id="zap-step-invoice" style="display:none;">
@@ -770,23 +683,23 @@ footer strong { color: var(--stone2); }
           </div>
           <div style="flex:1;min-width:160px;">
             <div class="field-label">Invoice</div>
-            <input id="zap-invoice-text" readonly type="text" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" style="font-size:10px;font-family:var(--mono);word-break:break-all;color:var(--muted);margin-bottom:10px;width:100%;box-sizing:border-box;background:var(--bg2);border:0.5px solid var(--border2);padding:6px;border-radius:4px;" value="">
+            <input id="zap-invoice-text" readonly type="text" autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false" style="font-size:10px;font-family:var(--mono);word-break:break-all;color:var(--text-muted);margin-bottom:10px;width:100%;box-sizing:border-box;background:var(--bg2);border:0.5px solid var(--border2);padding:6px;border-radius:4px;" value="">
             <button onclick="copyInvoice()" style="width:100%;margin-bottom:6px;">Copy invoice</button>
-            <button onclick="zapReset()" style="width:100%;background:none;border-color:var(--border2);color:var(--muted);">← New zap</button>
+            <button onclick="zapReset()" style="width:100%;background:none;border-color:var(--border2);color:var(--text-muted);">← New zap</button>
           </div>
         </div>
-        <div id="zap-invoice-status" style="margin-top:10px;font-size:11px;font-family:var(--mono);color:var(--muted);"></div>
+        <div id="zap-invoice-status" style="margin-top:10px;font-size:11px;font-family:var(--mono);color:var(--text-muted);"></div>
       </div>
 
     </div>
   </div>
 
   <!-- Zap recipient scan modal -->
-  <div id="zap-recipient-modal" style="display:none;position:fixed;inset:0;background:rgba(17,16,9,0.88);z-index:100;align-items:center;justify-content:center;">
+  <div id="zap-recipient-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:100;align-items:center;justify-content:center;">
     <div style="background:var(--panel);border-radius:8px;padding:20px;width:min(360px,90vw);">
       <div class="field-label" style="margin-bottom:8px;">Scan recipient npub from device</div>
       <video id="zap-recipient-video" autoplay playsinline muted style="width:100%;border-radius:4px;max-height:220px;object-fit:cover;background:#000;"></video>
-      <div id="zap-recipient-scan-status" style="font-size:11px;font-family:var(--mono);color:var(--muted);margin:8px 0;text-align:center;"></div>
+      <div id="zap-recipient-scan-status" style="font-size:11px;font-family:var(--mono);color:var(--text-muted);margin:8px 0;text-align:center;"></div>
       <button onclick="zapCloseRecipientScan()" style="width:100%;margin-top:4px;">Cancel</button>
     </div>
   </div>
@@ -795,19 +708,16 @@ footer strong { color: var(--stone2); }
 
   <!-- ── MESSAGES section (placeholder) ── -->
   <div class="app-section" id="section-messages">
-    <div class="section-header">
-      <span class="section-title">Messages</span>
-    </div>
-    <div style="font-size:11px;color:var(--dim);letter-spacing:0.08em;padding:40px 0;text-align:center;line-height:2;">
-      Encrypted DMs (NIP-17)<br>Coming soon
+    <div class="section-header"><span class="section-title">Messages</span></div>
+    <div style="font-size:15px;color:var(--text-muted);padding:48px 16px;text-align:center;line-height:2;">
+      Encrypted DMs (NIP-17)<br><span style="font-size:13px;">Coming soon</span>
     </div>
   </div>
 
   <!-- ── Profile section ── -->
   <div class="app-section" id="section-profile">
-    <div class="section-header">
-      <span class="section-title">Profile</span>
-    </div>
+    <div class="section-header"><span class="section-title">Profile</span></div>
+    <div style="padding:16px;">
     <div style="margin-bottom:16px;">
       <div class="field-label"><span class="dot"></span>Your Pubkey</div>
       <div class="pubkey-row">
@@ -816,7 +726,7 @@ footer strong { color: var(--stone2); }
         <button class="btn-sm-accent" onclick="openPubkeyScan()">⬡ SCAN</button>
         <button class="btn-sm" onclick="clearPubkey()">CLEAR</button>
       </div>
-      <div class="pubkey-hint" id="pubkey-hint-profile">Scan from device or enter manually.</div>
+      <div class="pubkey-hint" id="pubkey-hint-profile" style="color:var(--text-muted);">Scan from device or enter manually.</div>
     </div>
     <div style="margin-bottom:16px;">
       <div class="field-label"><span class="dot"></span>Lightning Wallet (NWC)</div>
@@ -827,21 +737,20 @@ footer strong { color: var(--stone2); }
         <button class="btn-sm-accent" onclick="nwcSave()">SAVE</button>
         <button class="btn-sm" onclick="nwcClear()">CLEAR</button>
       </div>
-      <div id="nwc-status" style="font-size:10px;color:var(--muted);margin-top:4px;min-height:14px;letter-spacing:0.06em;"></div>
+      <div id="nwc-status" style="font-size:10px;color:var(--text-muted);margin-top:4px;min-height:14px;letter-spacing:0.06em;"></div>
     </div>
-    <div id="relay-status-profile" style="font-size:10px;color:var(--dim);letter-spacing:0.06em;margin-bottom:16px;"></div>
+    <div id="relay-status-profile" style="font-size:10px;color:var(--text-dim);letter-spacing:0.06em;margin-bottom:16px;"></div>
   </div>
 
   <!-- ── Lists section ── -->
   <div class="app-section" id="section-lists">
-    <div class="section-header">
-      <span class="section-title">Lists</span>
+    <div class="section-header"><span class="section-title">Lists</span></div>
+    <div style="padding:16px;">
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;">Following <span id="lists-count" style="font-weight:700;color:var(--text2);">0 accounts</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:16px;">
+    <button onclick="showOnboarding()" class="btn-outline" style="flex:1;">⬡ Rebuild from interests</button>
+    <button onclick="exportFollowList()" class="btn-sm">Export</button>
     </div>
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:14px;">
-      // Follow list — <span id="lists-count">0 accounts</span>
-    </div>
-    <button onclick="showOnboarding()" class="btn-outline" style="width:100%;margin-bottom:10px;">⬡ Rebuild from interests</button>
-    <button onclick="exportFollowList()" class="btn-sm" style="width:100%;margin-bottom:6px;">Export follow list</button>
     <div id="follow-list-display" style="margin-top:16px;"></div>
   </div>
 
@@ -853,57 +762,57 @@ footer strong { color: var(--stone2); }
   </div>
 
   <!-- Reply modal -->
-  <div id="reply-modal" style="display:none;position:fixed;inset:0;background:rgba(17,16,9,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:var(--panel);border:1px solid var(--gold2);width:min(500px,100%);max-height:90vh;overflow-y:auto;">
+  <div id="reply-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--panel);border:1px solid var(--accent);width:min(500px,100%);max-height:90vh;overflow-y:auto;">
       <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
         <span style="font-family:var(--serif);font-style:italic;font-size:16px;font-weight:400;color:var(--text2);">↩ REPLY</span>
-        <button onclick="closeReplyModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+        <button onclick="closeReplyModal()" style="background:none;border:1px solid var(--border2);color:var(--text-dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
       </div>
       <div style="padding:14px;">
-        <div id="reply-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--gold3);padding:6px 10px;margin-bottom:12px;line-height:1.6;"></div>
+        <div id="reply-quoting" style="font-size:11px;color:var(--text-dim);border-left:2px solid var(--accent-dim);padding:6px 10px;margin-bottom:12px;line-height:1.6;"></div>
         <textarea id="reply-compose" rows="4" placeholder="Your reply…" maxlength="460"
-          style="width:100%;resize:none;background:var(--bg2);border:1px solid var(--border2);color:var(--text);font-family:var(--mono);font-size:13px;padding:10px;box-sizing:border-box;"
+          style="width:100%;resize:none;background:var(--input-bg);border:1px solid var(--border);color:var(--text2);font-family:var(--sans);font-size:15px;padding:10px;border-radius:8px;box-sizing:border-box;"
           oninput="this.nextElementSibling.textContent=this.value.length+' / 460'"></textarea>
-        <div style="font-size:10px;color:var(--dim);margin:4px 0 12px;letter-spacing:0.08em;">0 / 460</div>
-        <button onclick="replySubmit()" style="width:100%;background:transparent;color:var(--gold2);border:1px solid var(--gold2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE REPLY QR</button>
-        <div id="reply-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
+        <div style="font-size:10px;color:var(--text-dim);margin:4px 0 12px;letter-spacing:0.08em;">0 / 460</div>
+        <button onclick="replySubmit()" style="width:100%;background:transparent;color:var(--accent);border:1px solid var(--accent);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE REPLY QR</button>
+        <div id="reply-status" style="font-size:10px;color:var(--text-muted);margin-top:8px;min-height:14px;"></div>
       </div>
     </div>
   </div>
 
   <!-- Like modal -->
-  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(17,16,9,0.94);z-index:2000;align-items:center;justify-content:center;padding:16px;">
-    <div style="background:var(--panel);border:1px solid var(--gold2);width:min(400px,100%);">
+  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:2000;align-items:center;justify-content:center;padding:16px;">
+    <div style="background:var(--panel);border:1px solid var(--accent);width:min(400px,100%);">
       <div style="padding:10px 14px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
         <span style="font-family:var(--serif);font-style:italic;font-size:16px;font-weight:400;color:var(--text2);">♥ LIKE</span>
-        <button onclick="closeLikeModal()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
+        <button onclick="closeLikeModal()" style="background:none;border:1px solid var(--border2);color:var(--text-dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;">✕</button>
       </div>
       <div style="padding:14px;">
-        <div id="like-quoting" style="font-size:11px;color:var(--dim);border-left:2px solid var(--gold3);padding:6px 10px;margin-bottom:14px;line-height:1.6;"></div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:12px;letter-spacing:0.06em;">Reaction · device signs kind 7</div>
-        <button onclick="likeSubmit()" style="width:100%;background:transparent;color:var(--gold2);border:1px solid var(--gold2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">→ GENERATE LIKE QR</button>
-        <div id="like-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;"></div>
+        <div id="like-quoting" style="font-size:11px;color:var(--text-dim);border-left:2px solid var(--accent-dim);padding:6px 10px;margin-bottom:14px;line-height:1.6;"></div>
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px;">Reaction · device signs kind 7</div>
+        <button onclick="likeSubmit()" style="width:100%;background:var(--accent);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:12px;border-radius:9999px;cursor:pointer;">Generate like QR</button>
+        <div id="like-status" style="font-size:10px;color:var(--text-muted);margin-top:8px;min-height:14px;"></div>
         <div id="like-qr" style="margin-top:12px;display:flex;flex-direction:column;align-items:center;gap:8px;"></div>
-        <button id="like-fullscreen-btn" onclick="likeShowFullscreen()" style="display:none;width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--gold3);color:var(--gold2);font-family:var(--mono);font-size:9px;padding:6px;cursor:pointer;letter-spacing:0.15em;">⛶ FULLSCREEN</button>
+        <button id="like-fullscreen-btn" onclick="likeShowFullscreen()" style="display:none;width:100%;margin-top:6px;background:var(--bg2);border:1px solid var(--accent-dim);color:var(--accent);font-family:var(--mono);font-size:9px;padding:6px;cursor:pointer;letter-spacing:0.15em;">⛶ FULLSCREEN</button>
       </div>
     </div>
   </div>
 
   <!-- Onboarding interest picker modal -->
-  <div id="onboard-modal" style="display:none;position:fixed;inset:0;background:rgba(17,16,9,0.96);z-index:2000;align-items:flex-start;justify-content:center;overflow-y:auto;padding:20px 0;">
-    <div style="background:var(--panel);border:1px solid var(--gold2);width:min(520px,96vw);margin:auto;">
-      <div style="padding:14px 16px;border-bottom:1px solid var(--border2);background:var(--bg2);display:flex;align-items:center;justify-content:space-between;">
-        <span style="font-family:var(--serif);font-style:italic;font-size:16px;font-weight:400;color:var(--text2);">⬡ Initialise feed</span>
-        <button onclick="onboardSkip()" style="background:none;border:1px solid var(--border2);color:var(--dim);font-family:var(--mono);font-size:9px;padding:4px 10px;cursor:pointer;letter-spacing:0.1em;">Skip</button>
+  <div id="onboard-modal" style="display:none;position:fixed;inset:0;background:var(--modal-bg);backdrop-filter:blur(4px);z-index:2000;align-items:flex-end;justify-content:center;">
+    <div style="background:var(--panel);border:1px solid var(--border);border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:85vh;overflow-y:auto;">
+      <div style="padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--panel);">
+        <span style="font-size:15px;font-weight:700;color:var(--text2);">Choose your interests</span>
+        <button onclick="onboardSkip()" class="btn-sm">Skip</button>
       </div>
       <div style="padding:16px;">
-        <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:16px;line-height:1.7;">
-          No follow list found. Select your interests to seed your feed.
+        <div style="font-size:14px;color:var(--text-muted);margin-bottom:16px;line-height:1.6;">
+          No follow list found. Select topics to seed your feed with real accounts from Nostr.
         </div>
         <div id="interest-grid" style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;"></div>
-        <div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:10px;" id="onboard-count">0 topics selected</div>
-        <button onclick="onboardApply()" id="onboard-apply-btn" style="width:100%;background:transparent;color:var(--gold2);border:1px solid var(--gold2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;text-transform:uppercase;">→ BUILD MY Feed</button>
-        <div id="onboard-status" style="font-size:10px;color:var(--muted);margin-top:8px;min-height:14px;letter-spacing:0.06em;"></div>
+        <div style="font-size:10px;color:var(--text-dim);letter-spacing:0.08em;margin-bottom:10px;" id="onboard-count">0 topics selected</div>
+        <button onclick="onboardApply()" id="onboard-apply-btn" style="width:100%;background:transparent;color:var(--accent);border:1px solid var(--accent);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;text-transform:uppercase;">→ BUILD MY Feed</button>
+        <div id="onboard-status" style="font-size:10px;color:var(--text-muted);margin-top:8px;min-height:14px;letter-spacing:0.06em;"></div>
       </div>
     </div>
   </div>
@@ -913,43 +822,15 @@ footer strong { color: var(--stone2); }
     <div id="thread-header">
       <button class="thread-back-btn" onclick="closeThread()">← Back</button>
       <div id="thread-title">THREAD</div>
-      <div id="thread-reply-count" style="font-size:9px;color:var(--dim);letter-spacing:0.08em;"></div>
+      <div id="thread-reply-count" style="font-size:9px;color:var(--text-dim);letter-spacing:0.08em;"></div>
     </div>
     <div id="thread-body">
       <div id="thread-root-note"></div>
-      <div id="thread-replies-label" style="font-size:9px;color:var(--dim);letter-spacing:0.15em;padding:12px 0 8px;display:none;">// REPLIES</div>
+      <div id="thread-replies-label" style="font-size:9px;color:var(--text-dim);letter-spacing:0.15em;padding:12px 0 8px;display:none;">// REPLIES</div>
       <div id="thread-loading" class="thread-loading">Fetching replies…</div>
       <div id="thread-replies"></div>
     </div>
   </div>
-
-  <!-- Floating nav -->
-  <nav id="spark-nav">
-    <button class="nav-item active" id="nav-feed" onclick="showSection('feed')">
-      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-      Feed
-    </button>
-    <button class="nav-item" id="nav-notes" onclick="showSection('notes')">
-      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      Notes
-    </button>
-    <button class="nav-item" id="nav-zap" onclick="showSection('zap')">
-      <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-      Zap
-    </button>
-    <button class="nav-item" id="nav-messages" onclick="showSection('messages')">
-      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      Msg
-    </button>
-    <button class="nav-item" id="nav-profile" onclick="showSection('profile')">
-      <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-      Profile
-    </button>
-    <button class="nav-item" id="nav-lists" onclick="showSection('lists')">
-      <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-      Lists
-    </button>
-  </nav>
 
   <footer>
     Your signing key never leaves your FAVILLA Key hardware.<br>
@@ -959,6 +840,34 @@ footer strong { color: var(--stone2); }
   </footer>
 
 </div>
+
+<!-- Floating nav — outside .wrap so fixed positioning is relative to viewport -->
+<nav id="spark-nav">
+  <button class="nav-item active" id="nav-feed" onclick="showSection('feed')">
+    <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    Feed
+  </button>
+  <button class="nav-item" id="nav-notes" onclick="showSection('notes')">
+    <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+    Notes
+  </button>
+  <button class="nav-item" id="nav-zap" onclick="showSection('zap')">
+    <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+    Zap
+  </button>
+  <button class="nav-item" id="nav-messages" onclick="showSection('messages')">
+    <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    Msg
+  </button>
+  <button class="nav-item" id="nav-profile" onclick="showSection('profile')">
+    <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    Profile
+  </button>
+  <button class="nav-item" id="nav-lists" onclick="showSection('lists')">
+    <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+    Lists
+  </button>
+</nav>
 
 <!-- ── Pubkey scan modal ── -->
 <div id="pubkey-scan-modal">
@@ -1258,7 +1167,7 @@ async function pasteSignedQR() {
     const inp = document.createElement('textarea');
     inp.id = 'manual-paste-input';
     inp.placeholder = 'Paste QR data here…';
-    inp.style.cssText = 'width:100%;height:60px;background:var(--panel);color:var(--text);border:1px solid var(--gold2);padding:8px;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;margin-bottom:8px;resize:none;box-sizing:border-box';
+    inp.style.cssText = 'width:100%;height:60px;background:var(--panel);color:var(--text);border:1px solid var(--accent);padding:8px;font-family:var(--mono);font-size:11px;letter-spacing:0.05em;margin-bottom:8px;resize:none;box-sizing:border-box';
     const btn = document.createElement('button');
     btn.className = 'btn-primary';
     btn.style.width = '100%';
@@ -1632,30 +1541,32 @@ function renderNote(ev,prepend=false){
   div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button')) openThread(ev.id); };
   div.style.cursor = 'pointer';
   div.innerHTML=`
-    <div class="note-header">
-      <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
-      <div><div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
-      <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div></div>
-      <div class="note-time">${timeAgo(ev.created_at)}</div>
-    </div>
-    <div class="note-content">${escHtml(ev.content||'')}</div>
-    <div class="note-actions">
-      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
-        <span class="count" id="replies-${ev.id}"></span>
-      </button>
-      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        <span class="count" id="likes-${ev.id}"></span>
-      </button>
-      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        <span class="count" id="zaps-${ev.id}"></span>
-      </button>
-      <button class="note-action repost" id="btn-repost-${ev.id}" onclick="noteRepost('${ev.id}')" title="Repost">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-        <span class="count" id="reposts-${ev.id}"></span>
-      </button>
+    <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
+    <div class="note-body">
+      <div class="note-header">
+        <span class="note-name" id="nm-${ev.id}">${escHtml(name)}</span>
+        <span class="note-pubkey">${ev.pubkey.slice(0,12)}…</span>
+        <span class="note-time">${timeAgo(ev.created_at)}</span>
+      </div>
+      <div class="note-content">${escHtml(ev.content||'')}</div>
+      <div class="note-actions">
+        <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span class="count" id="replies-${ev.id}"></span>
+        </button>
+        <button class="note-action repost" id="btn-repost-${ev.id}" onclick="noteRepost('${ev.id}')" title="Repost">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+          <span class="count" id="reposts-${ev.id}"></span>
+        </button>
+        <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+          <span class="count" id="likes-${ev.id}"></span>
+        </button>
+        <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span class="count" id="zaps-${ev.id}"></span>
+        </button>
+      </div>
     </div>`;
   if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
   else feed.appendChild(div);
@@ -1901,7 +1812,7 @@ function zapSetStatus(msg) {
   const el = document.getElementById('zap-status');
   el.textContent = msg;
   el.style.color = msg.toLowerCase().includes('fail') || msg.toLowerCase().includes('error') || msg.toLowerCase().includes('invalid')
-    ? '#b04040' : 'var(--muted)';
+    ? '#dc3545' : 'var(--text-muted)';
   console.log('[ZAP]', msg);
 }
 
@@ -2564,8 +2475,8 @@ function showOnboarding() {
   Object.entries(INTEREST_CURATORS).forEach(([topic, data]) => {
     const btn = document.createElement('button');
     btn.id = 'interest-' + topic.replace(/[^a-zA-Z0-9]/g,'');
-    btn.style.cssText = 'background:var(--bg2);border:1px solid var(--border2);color:var(--muted);font-family:var(--mono);font-size:10px;padding:10px 12px;cursor:pointer;letter-spacing:0.1em;text-align:left;transition:all 0.15s;';
-    btn.innerHTML = data.emoji + ' ' + topic + '<br><span style="font-size:9px;color:var(--dim);">' + data.desc + '</span>';
+    btn.style.cssText = 'background:var(--bg2);border:1px solid var(--border2);color:var(--text-muted);font-family:var(--mono);font-size:10px;padding:10px 12px;cursor:pointer;letter-spacing:0.1em;text-align:left;transition:all 0.15s;';
+    btn.innerHTML = data.emoji + ' ' + topic + '<br><span style="font-size:9px;color:var(--text-dim);">' + data.desc + '</span>';
     btn.onclick = () => toggleInterest(topic, data, btn);
     grid.appendChild(btn);
   });
@@ -2577,12 +2488,12 @@ function toggleInterest(topic, data, btn) {
   if (onboardState.selected.has(topic)) {
     onboardState.selected.delete(topic);
     btn.style.borderColor = 'var(--border2)';
-    btn.style.color = 'var(--muted)';
+    btn.style.color = 'var(--text-muted)';
     btn.style.background = 'var(--bg2)';
   } else {
     onboardState.selected.add(topic);
-    btn.style.borderColor = 'var(--gold2)';
-    btn.style.color = 'var(--gold)';
+    btn.style.borderColor = 'var(--accent)';
+    btn.style.color = 'var(--accent-light)';
     btn.style.background = 'var(--panel)';
   }
   const count = onboardState.selected.size;
@@ -2761,7 +2672,7 @@ function likeSubmit() {
   });
 
   document.querySelector('#like-modal button[onclick="likeSubmit()"]').outerHTML =
-    '<button onclick="likeStartScan()" style="width:100%;background:transparent;color:var(--gold2);border:1px solid var(--gold2);font-family:var(--mono);font-size:10px;padding:12px;cursor:pointer;letter-spacing:0.2em;">↩ SCAN SIGNED LIKE</button>';
+    '<button onclick="likeStartScan()" style="width:100%;background:var(--accent);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:12px;border-radius:9999px;cursor:pointer;">Scan signed like</button>';
 }
 
 function likeStartScan() {
@@ -3093,22 +3004,22 @@ function initListsSection() {
   const display = document.getElementById('follow-list-display');
   if (!display) return;
   if (count === 0) {
-    display.innerHTML = '<div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;">// No follow list. Select interests to build one.</div>';
+    display.innerHTML = '<div style="font-size:10px;color:var(--text-dim);letter-spacing:0.08em;">// No follow list. Select interests to build one.</div>';
     return;
   }
   display.innerHTML = feedState.followList.slice(0, 20).map(hex => {
     const p = state.profiles[hex] || {};
     const name = p.name || p.display_name || hex.slice(0,12) + '…';
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);">
-      <div style="width:28px;height:28px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);flex-shrink:0;overflow:hidden;">
+      <div style="width:28px;height:28px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);flex-shrink:0;overflow:hidden;">
         ${p.picture ? `<img src="${p.picture}" style="width:100%;height:100%;object-fit:cover;">` : name[0] || '?'}
       </div>
       <div style="flex:1;min-width:0;">
-        <div style="color:var(--gold);font-size:10px;">${name}</div>
-        <div style="font-size:8px;color:var(--dim);">${hex.slice(0,16)}…</div>
+        <div style="color:var(--accent-light);font-size:10px;">${name}</div>
+        <div style="font-size:8px;color:var(--text-dim);">${hex.slice(0,16)}…</div>
       </div>
     </div>`;
-  }).join('') + (count > 20 ? `<div style="font-size:10px;color:var(--dim);padding:10px 0;letter-spacing:0.08em;">+ ${count - 20} more</div>` : '');
+  }).join('') + (count > 20 ? `<div style="font-size:10px;color:var(--text-dim);padding:10px 0;letter-spacing:0.08em;">+ ${count - 20} more</div>` : '');
 }
 
 function exportFollowList() {
@@ -3158,33 +3069,40 @@ function buildThreadNote(ev, isRoot) {
   const name = profile.name || profile.display_name || ev.pubkey.slice(0,8) + '…';
   const div = document.createElement('div');
   div.className = isRoot ? 'thread-root' : 'thread-reply';
-  div.innerHTML = `
-    <div class="thread-note-header">
-      <div class="thread-avatar">${profile.picture
-        ? `<img src="${escHtml(profile.picture)}" alt="">`
-        : escHtml(name[0] || '?')}
+  // Thread root gets full-width layout, replies get avatar+body
+  if (isRoot) {
+    div.innerHTML = `
+      <div class="thread-note-header">
+        <div class="thread-avatar">${profile.picture ? `<img src="${escHtml(profile.picture)}" alt="">` : escHtml(name[0] || '?')}</div>
+        <div>
+          <div class="thread-name">${escHtml(name)}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">${ev.pubkey.slice(0,16)}…</div>
+        </div>
+        <div class="thread-time">${timeAgo(ev.created_at)}</div>
       </div>
-      <div>
-        <div class="thread-name">${escHtml(name)}</div>
-        <div style="font-size:8px;color:var(--dim);">${ev.pubkey.slice(0,12)}…</div>
-      </div>
-      <div class="thread-time">${timeAgo(ev.created_at)}</div>
-    </div>
-    <div class="thread-content">${escHtml(ev.content || '')}</div>
-    <div class="note-actions" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">
-      <button class="note-action reply" onclick="noteReply('${ev.id}')" title="Reply">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
-      </button>
-      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        <span class="count" id="likes-${ev.id}"></span>
-      </button>
-      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        <span class="count" id="zaps-${ev.id}"></span>
-      </button>
-    </div>`;
-
+      <div class="thread-content">${escHtml(ev.content || '')}</div>
+      <div class="note-actions" style="margin-top:10px;margin-left:-8px;">
+        <button class="note-action reply" onclick="noteReply('${ev.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+        <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span class="count" id="likes-${ev.id}"></span></button>
+        <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span class="count" id="zaps-${ev.id}"></span></button>
+      </div>`;
+  } else {
+    div.innerHTML = `
+      <div class="thread-avatar">${profile.picture ? `<img src="${escHtml(profile.picture)}" alt="">` : escHtml(name[0] || '?')}</div>
+      <div class="thread-body-inner">
+        <div class="thread-note-header">
+          <span class="thread-name">${escHtml(name)}</span>
+          <span style="font-family:var(--mono);font-size:11px;color:var(--text-muted);">${ev.pubkey.slice(0,12)}…</span>
+          <span class="thread-time">${timeAgo(ev.created_at)}</span>
+        </div>
+        <div class="thread-content">${escHtml(ev.content || '')}</div>
+        <div class="note-actions" style="margin-top:6px;margin-left:-8px;">
+          <button class="note-action reply" onclick="noteReply('${ev.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button>
+          <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg><span class="count" id="likes-${ev.id}"></span></button>
+          <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span class="count" id="zaps-${ev.id}"></span></button>
+        </div>
+      </div>`;
+  }
   if (!state.notes.find(n => n.id === ev.id)) {
     state.notes.push(ev);
   }
@@ -3248,6 +3166,31 @@ function fetchThreadReplies(eventId) {
     } catch(err) {}
   };
 }
+
+// ── Theme toggle ─────────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('spark_theme');
+  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = saved || (prefersDark ? 'dark' : 'light');
+  document.documentElement.setAttribute('data-theme', theme);
+  updateThemeIcon(theme);
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme') || 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('spark_theme', next);
+  updateThemeIcon(next);
+}
+
+function updateThemeIcon(theme) {
+  const btn = document.getElementById('theme-toggle');
+  if (btn) btn.textContent = theme === 'dark' ? '☀' : '☾';
+}
+
+initTheme();
+
 
 </script>
 </body>
