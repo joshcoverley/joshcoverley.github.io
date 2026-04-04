@@ -1500,18 +1500,18 @@ function renderNote(ev,prepend=false){
     </div>
     <div class="note-content">${escHtml(ev.content||'')}</div>
     <div class="note-actions">
-      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}','${ev.pubkey}',${JSON.stringify(escHtml(ev.content||'')).slice(0,60)})" title="Reply">
+      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
       </button>
-      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}','${ev.pubkey}')" title="Like">
+      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span class="count" id="likes-${ev.id}"></span>
       </button>
-      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}','${ev.pubkey}')" title="Zap">
+      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         <span class="count" id="zaps-${ev.id}"></span>
       </button>
-      <button class="note-action repost" onclick="noteRepost('${ev.id}','${ev.pubkey}')" title="Repost">
+      <button class="note-action repost" onclick="noteRepost('${ev.id}')" title="Repost">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       </button>
     </div>`;
@@ -2536,12 +2536,14 @@ function likeShowFullscreen() {
 }
 
 // ── REPLY ─────────────────────────────────────────────────────────────────
-function noteReply(eventId, pubkey, contentPreview) {
+function noteReply(eventId) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
   noteActionState.targetId = eventId;
-  noteActionState.targetPubkey = pubkey;
-  const profile = state.profiles[pubkey] || {};
-  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
-  document.getElementById('reply-quoting').textContent = name + ': ' + (contentPreview || '').slice(0, 120);
+  noteActionState.targetPubkey = note.pubkey;
+  const profile = state.profiles[note.pubkey] || {};
+  const name = profile.name || profile.display_name || note.pubkey.slice(0,12) + '…';
+  document.getElementById('reply-quoting').textContent = name + ': ' + (note.content || '').slice(0, 120);
   document.getElementById('reply-compose').value = '';
   document.getElementById('reply-status').textContent = '';
   document.getElementById('like-qr').innerHTML = '';
@@ -2589,7 +2591,10 @@ function replySubmit() {
 }
 
 // ── LIKE ──────────────────────────────────────────────────────────────────
-function noteLike(eventId, pubkey) {
+function noteLike(eventId) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
+  const pubkey = note.pubkey;
   noteActionState.targetId = eventId;
   noteActionState.targetPubkey = pubkey;
   const profile = state.profiles[pubkey] || {};
@@ -2657,7 +2662,10 @@ function likeStartScan() {
 }
 
 // ── REPOST ───────────────────────────────────────────────────────────────
-function noteRepost(eventId, pubkey) {
+function noteRepost(eventId) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
+  const pubkey = note.pubkey;
   const note = state.notes.find(n => n.id === eventId);
   if (!note) return;
   const senderPubkey = state.pubkeyHex || '0'.repeat(64);
@@ -2687,7 +2695,10 @@ function noteRepost(eventId, pubkey) {
 }
 
 // ── ZAP from note ─────────────────────────────────────────────────────────
-function noteZap(eventId, pubkey) {
+function noteZap(eventId) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
+  const pubkey = note.pubkey;
   // Store event ID for optimistic update after zap completes
   noteActionState.targetId = eventId;
   // Pre-fill zap form and scroll to it
