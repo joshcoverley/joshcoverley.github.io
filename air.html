@@ -952,14 +952,14 @@ footer strong { color: var(--muted); }
   </div>
 
   <!-- Like modal -->
-  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-end;justify-content:center;">
-    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px 16px 0 0;width:100%;max-width:480px;">
+  <div id="like-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-start;justify-content:center;padding-top:60px;">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:380px;">
       <div style="padding:16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
         <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Scan to like</span>
         <button onclick="closeLikeModal()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
       </div>
       <div style="padding:16px;">
-        <div id="like-quoting" style="font-size:14px;color:var(--muted);border-left:2px solid var(--border2);padding:6px 12px;margin-bottom:16px;line-height:1.5;"></div>
+        <div id="like-quoting" style="display:none;"></div>
         <div style="display:flex;justify-content:center;margin-bottom:12px;">
           <div id="like-qr" style="background:#fff;padding:12px;border-radius:12px;line-height:0;"></div>
         </div>
