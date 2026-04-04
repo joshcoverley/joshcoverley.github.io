@@ -426,6 +426,20 @@ footer strong { color: var(--muted); }
     <div class="pubkey-hint" id="pubkey-hint">Scan the npub QR from your FAVILLA Key, or enter manually. Leave blank to post anonymously.</div>
   </div>
 
+  <!-- NWC Wallet Connect -->
+  <div style="margin-bottom:16px;">
+    <div class="sec-label" style="font-size:9px;letter-spacing:0.2em;color:var(--color-text-secondary);margin-bottom:6px;">⚡ LIGHTNING WALLET (NWC)</div>
+    <div style="display:flex;gap:8px;align-items:center;">
+      <input id="nwc-string" type="text" placeholder="nostr+walletconnect://... paste your NWC connection string"
+        autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false"
+        style="flex:1;font-size:11px;font-family:var(--font-mono);"
+        oninput="nwcOnInput()">
+      <button onclick="nwcSave()" style="white-space:nowrap;font-size:11px;">SAVE</button>
+      <button onclick="nwcClear()" style="white-space:nowrap;font-size:11px;background:none;border-color:var(--color-border-tertiary);color:var(--color-text-secondary);">CLEAR</button>
+    </div>
+    <div id="nwc-status" style="font-size:11px;font-family:var(--font-mono);color:var(--color-text-secondary);margin-top:4px;min-height:16px;"></div>
+  </div>
+
   <hr class="sec-line">
 
   <!-- Step 1 -->
@@ -679,6 +693,17 @@ footer strong { color: var(--muted); }
 
 <div id="toast"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@noble/secp256k1@1.7.1/lib/index.js" crossorigin="anonymous"></script>
+<script>
+// Expose noble secp256k1 to NWC functions
+window.addEventListener('load', function() {
+  if (typeof nobleSecp256k1 !== 'undefined') {
+    window.nobleSecp256k1 = nobleSecp256k1;
+  } else if (typeof secp !== 'undefined') {
+    window.nobleSecp256k1 = secp;
+  }
+});
+</script>
 <script>
 window._zxingReady = new Promise((resolve, reject) => {
   function tryLoad(urls) {
@@ -1497,8 +1522,6 @@ async function zapBuild() {
   let profile;
   try {
     profile = await fetchProfileOnce(recipientHex, relay);
-    zapSetStatus('Got: ' + JSON.stringify(profile).slice(0,120));
-    await new Promise(r => setTimeout(r, 2000));
   } catch(e) {
     zapSetStatus('Fetch failed: ' + e.message);
     return;
@@ -1512,9 +1535,7 @@ async function zapBuild() {
       try {
         zapSetStatus('No lud16, trying ' + fb + '...');
         const p2 = await fetchProfileOnce(recipientHex, fb);
-        zapSetStatus('Got: ' + JSON.stringify(p2).slice(0,120));
-        await new Promise(r => setTimeout(r, 1500));
-        if (p2 && p2.lud16) { profile = p2; break; }
+            if (p2 && p2.lud16) { profile = p2; break; }
       } catch(e) {}
     }
   }
@@ -1734,18 +1755,14 @@ async function zapGotSignedEvent(data) {
     amount: amount
   };
   statusEl.textContent = 'Sending to proxy. amount=' + amount + ' callback=' + (zapState.lnurlData.callback||'').slice(0,40);
-  await new Promise(r => setTimeout(r, 2000));
   try {
     const resp = await fetch(ZAP_PROXY, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(proxyPayload)
     });
-    statusEl.textContent = 'Proxy response: HTTP ' + resp.status + ' ' + resp.headers.get('content-type');
-    await new Promise(r => setTimeout(r, 2000));
     const rawText = await resp.text();
     statusEl.textContent = 'Raw: ' + rawText.slice(0, 120);
-    await new Promise(r => setTimeout(r, 3000));
     if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status + ': ' + rawText.slice(0,80));
     const result = JSON.parse(rawText);
     if (result.error) throw new Error(result.error);
@@ -1754,7 +1771,6 @@ async function zapGotSignedEvent(data) {
 
     const invoice = result.pr;
     document.getElementById('zap-invoice-text').value = invoice;
-    document.getElementById('zap-invoice-status').textContent = 'Invoice ready — scan with Lightning wallet';
 
     const qrEl = document.getElementById('zap-invoice-qr');
     qrEl.innerHTML = '';
@@ -1764,6 +1780,17 @@ async function zapGotSignedEvent(data) {
       colorDark: '#000000', colorLight: '#ffffff',
       correctLevel: QRCode.CorrectLevel.L
     });
+
+    // Try NWC auto-pay if wallet connected
+    const invStatusEl = document.getElementById('zap-invoice-status');
+    if (nwcState.pubkey) {
+      const paid = await nwcPayInvoice(invoice, invStatusEl);
+      if (!paid) {
+        invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
+      }
+    } else {
+      invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
+    }
   } catch(e) {
     document.getElementById('zap-invoice-status').textContent = 'LNURL error: ' + e.message;
   }
@@ -1781,6 +1808,210 @@ function stopCameraStream(video) {
     video.srcObject.getTracks().forEach(t => t.stop());
     video.srcObject = null;
   }
+}
+
+
+// ── NWC (Nostr Wallet Connect — NIP-47) ──────────────────────────────────
+
+const nwcState = {
+  pubkey: null,      // wallet service pubkey
+  secret: null,      // our secret key (hex)
+  relayUrl: null,    // relay URL
+  raw: null,         // full connection string
+};
+
+function nwcOnInput() {
+  const val = document.getElementById('nwc-string').value.trim();
+  document.getElementById('nwc-status').textContent = val ? 'Press SAVE to connect' : '';
+}
+
+function nwcSave() {
+  const val = document.getElementById('nwc-string').value.trim();
+  if (!val) { nwcClear(); return; }
+  try {
+    nwcParse(val);
+    localStorage.setItem('nwc_string', val);
+    document.getElementById('nwc-status').textContent = '// Wallet connected — ' + nwcState.relayUrl;
+  } catch(e) {
+    document.getElementById('nwc-status').textContent = '// Invalid NWC string: ' + e.message;
+  }
+}
+
+function nwcClear() {
+  nwcState.pubkey = nwcState.secret = nwcState.relayUrl = nwcState.raw = null;
+  localStorage.removeItem('nwc_string');
+  document.getElementById('nwc-string').value = '';
+  document.getElementById('nwc-status').textContent = '// Wallet disconnected';
+}
+
+function nwcParse(str) {
+  // nostr+walletconnect://<pubkey>?relay=wss://...&secret=<hex>
+  if (!str.startsWith('nostr+walletconnect://')) throw new Error('Not a NWC string');
+  const withoutScheme = str.slice('nostr+walletconnect://'.length);
+  const qIdx = withoutScheme.indexOf('?');
+  if (qIdx < 0) throw new Error('Missing query params');
+  const pubkey = withoutScheme.slice(0, qIdx);
+  const params = new URLSearchParams(withoutScheme.slice(qIdx + 1));
+  const relay = params.get('relay');
+  const secret = params.get('secret');
+  if (!pubkey || !relay || !secret) throw new Error('Missing pubkey, relay, or secret');
+  nwcState.pubkey = pubkey;
+  nwcState.secret = secret;
+  nwcState.relayUrl = relay;
+  nwcState.raw = str;
+}
+
+// Load saved NWC on page load
+(function() {
+  const saved = localStorage.getItem('nwc_string');
+  if (saved) {
+    try {
+      nwcParse(saved);
+      document.getElementById('nwc-string').value = saved;
+      document.getElementById('nwc-status').textContent = '// Wallet connected — ' + nwcState.relayUrl;
+    } catch(e) {}
+  }
+})();
+
+// NWC pay_invoice — sends encrypted NIP-47 request to wallet relay
+async function nwcPayInvoice(invoice, statusEl) {
+  if (!nwcState.pubkey || !nwcState.secret || !nwcState.relayUrl) return false;
+
+  statusEl.textContent = 'Paying via NWC...';
+
+  // Generate ephemeral keypair for this request
+  // We use the stored secret as our privkey
+  const privkeyBytes = hexToBytes(nwcState.secret);
+  const pubkeyBytes = secp256k1GetPublicKey(privkeyBytes);
+  const ourPubkey = bytesToHex(pubkeyBytes);
+
+  // Build NIP-47 pay_invoice request
+  const reqId = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+  const req = {
+    method: 'pay_invoice',
+    params: { invoice }
+  };
+
+  // Encrypt with NIP-04 (NWC uses NIP-04, not NIP-44)
+  const encrypted = await nip04Encrypt(nwcState.secret, nwcState.pubkey, JSON.stringify(req));
+
+  const event = {
+    kind: 23194,
+    created_at: Math.floor(Date.now() / 1000),
+    tags: [['p', nwcState.pubkey]],
+    content: encrypted,
+    pubkey: ourPubkey,
+  };
+
+  // Sign the event
+  const id = await nostrEventId(event);
+  event.id = id;
+  event.sig = await schnorrSign(id, nwcState.secret);
+
+  // Connect to relay and send
+  return new Promise((resolve) => {
+    const ws = new WebSocket(nwcState.relayUrl);
+    const timer = setTimeout(() => {
+      ws.close();
+      statusEl.textContent = 'NWC timeout — pay manually';
+      resolve(false);
+    }, 30000);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify(['EVENT', event]));
+      // Subscribe to response
+      ws.send(JSON.stringify(['REQ', reqId, {
+        kinds: [23195],
+        authors: [nwcState.pubkey],
+        '#p': [ourPubkey],
+        since: Math.floor(Date.now()/1000) - 5
+      }]));
+    };
+
+    ws.onmessage = async (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[2]?.kind === 23195) {
+          clearTimeout(timer);
+          ws.close();
+          const decrypted = await nip04Decrypt(nwcState.secret, nwcState.pubkey, msg[2].content);
+          const resp = JSON.parse(decrypted);
+          if (resp.result?.preimage) {
+            statusEl.textContent = '⚡ Zap paid! preimage: ' + resp.result.preimage.slice(0,16) + '...';
+            resolve(true);
+          } else if (resp.error) {
+            statusEl.textContent = 'NWC error: ' + resp.error.message;
+            resolve(false);
+          }
+        }
+      } catch(e) {}
+    };
+
+    ws.onerror = () => { clearTimeout(timer); statusEl.textContent = 'NWC relay error — pay manually'; resolve(false); };
+  });
+}
+
+// ── NIP-04 encrypt/decrypt (used by NWC) ─────────────────────────────────
+async function nip04Encrypt(privkeyHex, pubkeyHex, plaintext) {
+  const privBytes = hexToBytes(privkeyHex);
+  const pubBytes = hexToBytes('02' + pubkeyHex); // compressed pubkey
+  const sharedPoint = secp256k1SharedSecret(privBytes, pubBytes);
+  const sharedKey = sharedPoint.slice(1, 33); // x-coordinate only
+
+  const iv = crypto.getRandomValues(new Uint8Array(16));
+  const key = await crypto.subtle.importKey('raw', sharedKey, { name: 'AES-CBC' }, false, ['encrypt']);
+  const enc = await crypto.subtle.encrypt({ name: 'AES-CBC', iv }, key, new TextEncoder().encode(plaintext));
+  return btoa(String.fromCharCode(...new Uint8Array(enc))) + '?iv=' + btoa(String.fromCharCode(...iv));
+}
+
+async function nip04Decrypt(privkeyHex, pubkeyHex, ciphertext) {
+  const [encB64, ivPart] = ciphertext.split('?iv=');
+  const privBytes = hexToBytes(privkeyHex);
+  const pubBytes = hexToBytes('02' + pubkeyHex);
+  const sharedPoint = secp256k1SharedSecret(privBytes, pubBytes);
+  const sharedKey = sharedPoint.slice(1, 33);
+  const iv = Uint8Array.from(atob(ivPart), c => c.charCodeAt(0));
+  const enc = Uint8Array.from(atob(encB64), c => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('raw', sharedKey, { name: 'AES-CBC' }, false, ['decrypt']);
+  const dec = await crypto.subtle.decrypt({ name: 'AES-CBC', iv }, key, enc);
+  return new TextDecoder().decode(dec);
+}
+
+// ── Minimal secp256k1 helpers for NWC ────────────────────────────────────
+// These use the noble-secp256k1 library already loaded for existing signing
+function hexToBytes(hex) {
+  const arr = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) arr[i/2] = parseInt(hex.slice(i, i+2), 16);
+  return arr;
+}
+function bytesToHex(bytes) {
+  return Array.from(bytes).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+async function nostrEventId(event) {
+  const ser = JSON.stringify([0, event.pubkey, event.created_at, event.kind, event.tags, event.content]);
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(ser));
+  return bytesToHex(new Uint8Array(buf));
+}
+
+function secp256k1GetPublicKey(privBytes) {
+  // Use noble secp256k1 if available
+  if (window.nobleSecp256k1) return window.nobleSecp256k1.getPublicKey(privBytes, true).slice(1);
+  // Fallback: return zeros (NWC won't work without proper crypto)
+  return new Uint8Array(32);
+}
+
+function secp256k1SharedSecret(privBytes, pubBytes) {
+  if (window.nobleSecp256k1) return window.nobleSecp256k1.getSharedSecret(privBytes, pubBytes);
+  return new Uint8Array(33);
+}
+
+async function schnorrSign(msgHex, privkeyHex) {
+  if (window.nobleSecp256k1) {
+    const sig = await window.nobleSecp256k1.schnorr.sign(msgHex, privkeyHex);
+    return bytesToHex(sig);
+  }
+  return '0'.repeat(128);
 }
 
 </script>
