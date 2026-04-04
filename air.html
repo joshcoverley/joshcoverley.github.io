@@ -712,6 +712,8 @@ window._qrReady = new Promise((resolve, reject) => {
 });
 </script>
 <script>
+const ZAP_PROXY = 'https://wild-feather-5a23.joshcoverley.workers.dev/zap';
+
 const RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
@@ -1711,18 +1713,20 @@ async function zapGotSignedEvent(data) {
     '&nostr=' + encodeURIComponent(JSON.stringify(signedJson));
 
   const statusEl = document.getElementById('zap-invoice-status');
-  statusEl.textContent = 'Signed event decoded OK. id=' + (signedJson.id||'').slice(0,16) + '...';
-  await new Promise(r => setTimeout(r, 1500));
-  statusEl.textContent = 'Calling: ' + callbackUrl.slice(0,80) + '...';
-  await new Promise(r => setTimeout(r, 500));
+  statusEl.textContent = 'Signed event decoded. Requesting invoice...';
   try {
-    const resp = await fetch(callbackUrl);
-    statusEl.textContent = 'Response: HTTP ' + resp.status;
-    await new Promise(r => setTimeout(r, 1000));
-    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' from callback');
+    const resp = await fetch(ZAP_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callbackUrl: zapState.lnurlData.callback,
+        signedEvent: signedJson,
+        amount: amount
+      })
+    });
+    if (!resp.ok) throw new Error('Proxy HTTP ' + resp.status);
     const result = await resp.json();
-    statusEl.textContent = 'Got response: ' + JSON.stringify(result).slice(0,100);
-    await new Promise(r => setTimeout(r, 1500));
+    if (result.error) throw new Error(result.error);
     if (result.status === 'ERROR') throw new Error(result.reason);
     if (!result.pr) throw new Error('No invoice — got: ' + JSON.stringify(result).slice(0,100));
 
