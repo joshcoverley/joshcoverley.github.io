@@ -451,43 +451,42 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 #thread-modal.open { display: flex; }
 #thread-header {
   display: flex; align-items: center; gap: 12px;
-  padding: 10px 14px; border-bottom: 1px solid var(--border2);
-  background: var(--bg2); flex-shrink: 0;
+  padding: 12px 16px; border-bottom: 1px solid var(--border);
+  background: var(--bg); flex-shrink: 0;
 }
 #thread-title {
-  font-family: var(--display); font-size: 10px; font-weight: 700;
-  letter-spacing: 0.2em; color: var(--acid2); flex: 1;
+  font-family: var(--sans); font-size: 15px; font-weight: 700;
+  color: var(--text); flex: 1;
 }
 .thread-back-btn {
-  background: none; border: 1px solid var(--border2); color: var(--muted);
-  font-family: var(--mono); font-size: 9px; padding: 5px 12px;
-  cursor: pointer; letter-spacing: 0.1em;
+  background: none; border: none; color: var(--muted);
+  font-size: 22px; padding: 0; cursor: pointer; line-height: 1;
+  display: flex; align-items: center;
 }
-.thread-back-btn:hover { border-color: var(--muted); color: var(--text); }
+.thread-back-btn:hover { color: var(--text); }
 #thread-body {
   flex: 1; overflow-y: auto; padding: 14px 16px;
   -webkit-overflow-scrolling: touch;
   padding-bottom: 80px;
 }
 .thread-root {
-  border: 1px solid var(--acid3); background: var(--panel);
-  padding: 12px 14px; margin-bottom: 8px;
+  border-bottom: 1px solid var(--border); background: var(--bg);
+  padding: 12px 16px; margin-bottom: 0;
 }
 .thread-reply {
-  border-left: 2px solid var(--acid3); border-right: 1px solid var(--border);
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-  background: var(--panel); padding: 10px 14px;
-  margin-bottom: 4px; margin-left: 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg); padding: 12px 16px;
+  margin-bottom: 0; margin-left: 0;
 }
 .thread-note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .thread-avatar {
-  width: 26px; height: 26px; background: var(--bg2);
-  border: 1px solid var(--border2); display: flex; align-items: center;
-  justify-content: center; font-size: 10px; color: var(--muted);
-  flex-shrink: 0; overflow: hidden;
+  width: 40px; height: 40px; background: var(--bg2);
+  border: 1px solid var(--border2); border-radius: 50%; display: flex; align-items: center;
+  justify-content: center; font-size: 14px; font-weight: 600; color: var(--muted);
+  flex-shrink: 0; overflow: hidden; cursor: pointer;
 }
 .thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.thread-name { font-size: 11px; color: var(--acid); letter-spacing: 0.04em; }
+.thread-name { font-size: 14px; font-weight: 700; color: var(--text); }
 .thread-time { font-size: 9px; color: var(--dim); margin-left: auto; white-space: nowrap; }
 .thread-content { font-size: 13px; color: var(--text); line-height: 1.6; word-break: break-word; }
 .thread-loading { font-size: 10px; color: var(--dim); padding: 20px 0; letter-spacing: 0.1em; }
@@ -1472,13 +1471,13 @@ footer strong { color: var(--muted); }
   <!-- Thread modal -->
   <div id="thread-modal">
     <div id="thread-header">
-      <button class="thread-back-btn" onclick="closeThread()">← BACK</button>
-      <div id="thread-title">THREAD</div>
-      <div id="thread-reply-count" style="font-size:9px;color:var(--dim);letter-spacing:0.08em;"></div>
+      <button class="thread-back-btn" onclick="closeThread()">←</button>
+      <div id="thread-title">Thread</div>
+      <div id="thread-reply-count" style="font-family:var(--mono);font-size:10px;color:var(--muted);"></div>
     </div>
     <div id="thread-body">
       <div id="thread-root-note"></div>
-      <div id="thread-replies-label" style="font-size:9px;color:var(--dim);letter-spacing:0.15em;padding:12px 0 8px;display:none;">// REPLIES</div>
+      <div id="thread-replies-label" style="display:none;"></div>
       <div id="thread-loading" class="thread-loading">// Fetching replies…</div>
       <div id="thread-replies"></div>
     </div>
@@ -2665,15 +2664,37 @@ function updateHeaderAvatar(p) {
 }
 
 function updateNotesWithProfile(pubkey,p){
-  const name=p.name||p.display_name||(pubkey.slice(0,8)+'…');
-  document.querySelectorAll('[id^="nm-"]').forEach(el=>{
-    const noteId=el.id.replace('nm-','');
-    const note=state.notes.find(n=>n.id===noteId);
-    if(note&&note.pubkey===pubkey){
-      el.textContent=name;
-      const av=document.getElementById('av-'+noteId);
-      if(av){if(p.picture)av.innerHTML=`<img src="${escHtml(p.picture)}" alt="">`;else av.textContent=name[0]||'?';}
+  const name = p.name || p.display_name || (pubkey.slice(0,8)+'…');
+
+  // Update all nm- elements — check both state.notes and DOM pubkey attrs
+  document.querySelectorAll('[id^="nm-"]').forEach(el => {
+    const noteId = el.id.replace('nm-','');
+    // Find note in state or check the avatar's onclick for pubkey match
+    const av = document.getElementById('av-' + noteId);
+    const avOnclick = av ? (av.getAttribute('onclick') || '') : '';
+    const noteInState = state.notes.find(n => n.id === noteId);
+    const matches = (noteInState && noteInState.pubkey === pubkey) ||
+                    avOnclick.includes("'" + pubkey + "'");
+    if (matches) {
+      el.textContent = name;
+      if (av) {
+        if (p.picture) av.innerHTML = `<img src="${escHtml(p.picture)}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+        else av.textContent = name[0] || '?';
+      }
     }
+  });
+
+  // Also update thread avatars
+  document.querySelectorAll('.thread-avatar').forEach(av => {
+    const onclick = av.getAttribute('onclick') || '';
+    if (onclick.includes("'" + pubkey + "'")) {
+      if (p.picture) av.innerHTML = `<img src="${escHtml(p.picture)}" alt="" style="width:100%;height:100%;object-fit:cover;">`;
+      else av.textContent = name[0] || '?';
+    }
+  });
+  document.querySelectorAll('.thread-name').forEach(el => {
+    const onclick = el.closest('.thread-note-header')?.querySelector('.thread-avatar')?.getAttribute('onclick') || '';
+    if (onclick.includes("'" + pubkey + "'")) el.textContent = name;
   });
 }
 function renderRelayChips(){
@@ -4993,12 +5014,12 @@ function buildThreadNote(ev, isRoot) {
   div.className = isRoot ? 'thread-root' : 'thread-reply';
   div.innerHTML = `
     <div class="thread-note-header">
-      <div class="thread-avatar">${profile.picture
-        ? `<img src="${escHtml(profile.picture)}" alt="">`
+      <div class="thread-avatar" onclick="openUserProfilePage('${ev.pubkey}')">${profile.picture
+        ? `<img src="${escHtml(profile.picture)}" alt="" style="width:100%;height:100%;object-fit:cover;">`
         : escHtml(name[0] || '?')}
       </div>
       <div>
-        <div class="thread-name">${escHtml(name)}</div>
+        <div class="thread-name" onclick="openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">${escHtml(name)}</div>
         <div style="font-size:8px;color:var(--dim);">${ev.pubkey.slice(0,12)}…</div>
       </div>
       <div class="thread-time">${timeAgo(ev.created_at)}</div>
