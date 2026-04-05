@@ -3656,8 +3656,9 @@ function findNote(eventId) {
 }
 
 function noteReply(eventId) {
+  try {
   const note = findNote(eventId);
-  if (!note) { console.warn("noteReply: note not found", eventId); return; }
+  if (!note) { showToast('Note not found'); return; }
   if (!state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   noteActionState.targetId = eventId;
   noteActionState.targetPubkey = note.pubkey;
@@ -3679,6 +3680,7 @@ function noteReply(eventId) {
   document.getElementById('reply-status').textContent = '';
   document.getElementById('reply-modal').style.display = 'flex';
   setTimeout(() => document.getElementById('reply-compose').focus(), 100);
+  } catch(err) { showToast('Reply error: ' + err.message); console.error(err); }
 }
 
 function replyCharCount(el) {
@@ -3731,8 +3733,9 @@ function replySubmit() {
 
 // ── LIKE ──────────────────────────────────────────────────────────────────
 function noteLike(eventId) {
+  try {
   const note = findNote(eventId);
-  if (!note) { console.warn("noteLike: note not found", eventId); return; }
+  if (!note) { showToast('Note not found for like'); return; }
   if (!state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   const pubkey = note.pubkey;
   noteActionState.targetId = eventId;
@@ -3745,6 +3748,7 @@ function noteLike(eventId) {
   document.getElementById('like-modal').style.display = 'flex';
   // Generate QR immediately — no button tap needed
   likeSubmit();
+  } catch(err) { showToast('Like error: ' + err.message); console.error(err); }
 }
 
 function closeLikeModal() {
