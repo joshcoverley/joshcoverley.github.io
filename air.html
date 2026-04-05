@@ -605,7 +605,7 @@ footer strong { color: var(--muted); }
 /* ── Floating compose button ── */
 #compose-fab {
   position: fixed;
-  bottom: 76px;
+  bottom: calc(56px + env(safe-area-inset-bottom) + 16px);
   right: 20px;
   width: 52px; height: 52px;
   background: var(--acid2);
@@ -613,7 +613,8 @@ footer strong { color: var(--muted); }
   border-radius: 50%;
   cursor: pointer;
   z-index: 4000;
-  display: flex; align-items: center; justify-content: center;
+  display: none;
+  align-items: center; justify-content: center;
   box-shadow: 0 2px 12px rgba(160,120,48,0.4);
   transition: transform 0.15s, background 0.15s;
   -webkit-tap-highlight-color: transparent;
@@ -1033,8 +1034,7 @@ footer strong { color: var(--muted); }
           style="width:100%;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:11px;border-radius:9999px;cursor:pointer;transition:background 0.15s;">
           Generate profile update QR
         </button>
-        <div id="edit-profile-qr" style="display:flex;justify-content:center;margin-top:16px;"></div>
-        <div id="edit-profile-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:8px;min-height:14px;"></div>
+
       </div>
 
       <!-- NWC -->
@@ -1253,36 +1253,107 @@ footer strong { color: var(--muted); }
   <!-- ── SETTINGS section ── -->
   <div class="app-section" id="section-settings">
     <div class="section-header"><span class="section-title">Settings</span></div>
-    <div style="padding:16px;display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;">
 
-      <div>
-        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>Relays</div>
+      <!-- Relays -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;">Relays</div>
         <div id="settings-relay-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
-        <div style="display:flex;gap:8px;">
-          <input id="settings-relay-input" type="text" placeholder="wss://relay.example.com"
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <select id="settings-relay-select"
             style="flex:1;font-family:var(--mono);font-size:11px;"
-            autocomplete="off" autocorrect="off" spellcheck="false">
+            onchange="settingsRelaySelectChange(this)">
+            <option value="">— Choose a relay —</option>
+            <optgroup label="Popular">
+              <option value="wss://relay.damus.io">relay.damus.io</option>
+              <option value="wss://nos.lol">nos.lol</option>
+              <option value="wss://relay.nostr.band">relay.nostr.band</option>
+              <option value="wss://nostr.mom">nostr.mom</option>
+              <option value="wss://relay.primal.net">relay.primal.net</option>
+              <option value="wss://relay.snort.social">relay.snort.social</option>
+              <option value="wss://nostr.wine">nostr.wine</option>
+              <option value="wss://purplepag.es">purplepag.es</option>
+            </optgroup>
+            <optgroup label="Privacy">
+              <option value="wss://nostr.bitcoiner.social">nostr.bitcoiner.social</option>
+              <option value="wss://relay.nostr.bg">relay.nostr.bg</option>
+              <option value="wss://nostr.oxtr.dev">nostr.oxtr.dev</option>
+            </optgroup>
+            <optgroup label="Custom">
+              <option value="custom">Enter custom relay…</option>
+            </optgroup>
+          </select>
           <button class="btn-sm-accent" onclick="settingsAddRelay()">Add</button>
+        </div>
+        <div id="settings-relay-custom-wrap" style="display:none;">
+          <input id="settings-relay-input" type="text" placeholder="wss://relay.example.com"
+            style="width:100%;font-family:var(--mono);font-size:11px;"
+            autocomplete="off" autocorrect="off" spellcheck="false">
         </div>
       </div>
 
-      <div>
-        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>Appearance</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">
+      <!-- Default zap amount -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;">Default zap amount</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-size:22px;">⚡</span>
+          <input id="settings-default-zap" type="number" min="1" value="21"
+            style="width:90px;font-family:var(--mono);font-size:18px;font-weight:600;color:var(--acid);"
+            oninput="settingsSaveZap()">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--muted);">sats</span>
+        </div>
+      </div>
+
+      <!-- QR error correction -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:4px;">QR error correction</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;">Lower = less dense = easier for device camera to scan</div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="settingsSetQR('L')" id="qr-level-L"
+            style="flex:1;padding:8px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">L</button>
+          <button onclick="settingsSetQR('M')" id="qr-level-M"
+            style="flex:1;padding:8px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--acid2);background:var(--gold-dim);color:var(--acid);">M</button>
+          <button onclick="settingsSetQR('Q')" id="qr-level-Q"
+            style="flex:1;padding:8px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">Q</button>
+          <button onclick="settingsSetQR('H')" id="qr-level-H"
+            style="flex:1;padding:8px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">H</button>
+        </div>
+      </div>
+
+      <!-- Appearance -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;">Appearance</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
           <span style="font-size:14px;color:var(--text);">Dark mode</span>
           <button onclick="toggleTheme()" id="settings-theme-btn"
-            style="font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border2);background:none;padding:5px 14px;border-radius:9999px;cursor:pointer;letter-spacing:0.08em;">
+            style="font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border2);background:none;padding:6px 16px;border-radius:9999px;cursor:pointer;letter-spacing:0.08em;">
             Toggle
           </button>
         </div>
       </div>
 
-      <div>
-        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>About</div>
-        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:2;letter-spacing:0.06em;">
-          FAVILLA KEY · Airgap Portal<br>
+      <!-- Export + Clear -->
+      <div style="padding:16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;">Data</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button onclick="settingsExport()"
+            style="width:100%;background:none;border:1px solid var(--border2);color:var(--text);font-family:var(--sans);font-size:14px;font-weight:500;padding:11px;border-radius:9999px;cursor:pointer;text-align:left;padding-left:16px;">
+            ↓ Export settings to clipboard
+          </button>
+          <button onclick="settingsClearAll()"
+            style="width:100%;background:none;border:1px solid var(--danger);color:var(--danger);font-family:var(--sans);font-size:14px;font-weight:500;padding:11px;border-radius:9999px;cursor:pointer;text-align:left;padding-left:16px;">
+            ✕ Clear all data
+          </button>
+        </div>
+      </div>
+
+      <!-- About -->
+      <div style="padding:16px;">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:10px;">About</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:2.2;letter-spacing:0.04em;">
+          FAVILLA KEY · Airgap Portal · v1.0<br>
           Open Source · No Tracking · No Key Online<br>
-          <a href="https://github.com/nostr-protocol/nostr" target="_blank" style="color:var(--acid2);">Nostr Protocol</a>
+          <a href="https://github.com/nostr-protocol/nostr" target="_blank" style="color:var(--acid2);">Nostr Protocol ↗</a>
         </div>
       </div>
 
@@ -1366,12 +1437,22 @@ window._qrReady = new Promise((resolve, reject) => {
 <script>
 const ZAP_PROXY = 'https://wild-feather-5a23.joshcoverley.workers.dev/zap';
 
-const RELAYS = [
+const DEFAULT_RELAYS = [
   'wss://relay.damus.io',
   'wss://nos.lol',
   'wss://relay.nostr.band',
   'wss://nostr.mom',
 ];
+let RELAYS = (() => {
+  try {
+    const saved = localStorage.getItem('relays');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  return [...DEFAULT_RELAYS];
+})();
 
 const LS = {
   get(k)    { try { return localStorage.getItem(k); }    catch(e) { return null; } },
@@ -3536,6 +3617,10 @@ function showSection(name) {
     b.style.borderTop = '';
   });
 
+  // FAB only visible on feed
+  const fab = document.getElementById('compose-fab');
+  if (fab) fab.style.display = name === 'feed' ? 'flex' : 'none';
+
   const section = document.getElementById('section-' + name);
   const btn = document.getElementById('nav-' + name);
   if (section) section.classList.add('active');
@@ -3548,6 +3633,7 @@ function showSection(name) {
   if (name === 'profile') initProfileSection();
   if (name === 'lists') initListsSection();
   if (name === 'settings') initSettingsSection();
+  if (name === 'zap') { const dz = LS.get('default_zap'); if (dz) { const el = document.getElementById('zap-amount'); if (el && !el._userSet) el.value = dz; } }
   if (name === 'notes') {
     if (!state.unsignedEvent) showStep('compose');
   }
@@ -3617,7 +3703,7 @@ function updateProfileCard(p) {
 function editProfileGenerateQR() {
   const pubkey = state.pubkeyHex || '0'.repeat(64);
   const existing = state.profiles[pubkey] || {};
-  const content = JSON.stringify({
+  const profileContent = JSON.stringify({
     name:    document.getElementById('edit-name').value.trim()    || existing.name    || '',
     about:   document.getElementById('edit-about').value.trim()   || existing.about   || '',
     lud16:   document.getElementById('edit-lud16').value.trim()   || existing.lud16   || '',
@@ -3627,25 +3713,30 @@ function editProfileGenerateQR() {
 
   const event = {
     kind: 0,
-    content,
+    content: profileContent,
     tags: [],
     created_at: Math.floor(Date.now() / 1000),
     pubkey,
   };
   state.unsignedEvent = event;
 
-  const qrEl = document.getElementById('edit-profile-qr');
+  // Navigate to notes section and show the QR step — same as composing a note
+  const qrEl = document.getElementById('qr-canvas');
   qrEl.innerHTML = '';
-  document.getElementById('edit-profile-status').textContent = 'Scan with FAVILLA Key · approve · scan back to publish';
-
   (window._qrReady || Promise.resolve()).then(() => {
+    const size = Math.min(window.innerWidth - 48, 320);
     new QRCode(qrEl, {
       text: JSON.stringify(event),
-      width: 240, height: 240,
+      width: size, height: size,
       colorDark: '#000', colorLight: '#fff',
-      correctLevel: QRCode.CorrectLevel.M
+      correctLevel: getQRLevel()
     });
   });
+
+  // Show the notes section at the QR step
+  showSection('notes');
+  showStep('qr');
+  document.getElementById('pill-compose').className = 'step-pill done';
 }
 
 function onPubkeyInputVisible() {
@@ -3824,27 +3915,123 @@ function fetchThreadReplies(eventId) {
 
 // ── Settings ─────────────────────────────────────────────────
 function initSettingsSection() {
+  // Relays
   const list = document.getElementById('settings-relay-list');
-  if (!list) return;
-  list.innerHTML = RELAYS.map((url, i) => `
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;">
-      <div style="width:7px;height:7px;border-radius:50%;background:${relayConnected[url] ? 'var(--acid2)' : 'var(--dim)'};flex-shrink:0;"></div>
-      <span style="flex:1;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${url.replace('wss://','')}</span>
-      <button onclick="settingsRemoveRelay(${i})" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
-    </div>
-  `).join('');
+  if (list) {
+    list.innerHTML = RELAYS.map((url, i) => `
+      <div style="display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid var(--border2);border-radius:9999px;">
+        <div style="width:7px;height:7px;border-radius:50%;background:${relayConnected[url] ? 'var(--acid2)' : 'var(--dim)'};flex-shrink:0;"></div>
+        <span style="flex:1;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${url.replace('wss://','')}</span>
+        <button onclick="settingsRemoveRelay(${i})" style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer;padding:0 2px;line-height:1;">✕</button>
+      </div>
+    `).join('');
+  }
+
+  // Default zap
+  const zapEl = document.getElementById('settings-default-zap');
+  if (zapEl) zapEl.value = LS.get('default_zap') || '21';
+
+  // QR level
+  const level = LS.get('qr_level') || 'M';
+  ['L','M','Q','H'].forEach(l => {
+    const btn = document.getElementById('qr-level-' + l);
+    if (!btn) return;
+    if (l === level) {
+      btn.style.borderColor = 'var(--acid2)';
+      btn.style.background = 'var(--gold-dim)';
+      btn.style.color = 'var(--acid)';
+    } else {
+      btn.style.borderColor = 'var(--border2)';
+      btn.style.background = 'none';
+      btn.style.color = 'var(--muted)';
+    }
+  });
+}
+
+
+function getQRLevel() {
+  const l = LS.get('qr_level') || 'M';
+  const map = { L: QRCode.CorrectLevel.L, M: QRCode.CorrectLevel.M, Q: QRCode.CorrectLevel.Q, H: QRCode.CorrectLevel.H };
+  return map[l] || QRCode.CorrectLevel.M;
+}
+function settingsSaveZap() {
+  const val = document.getElementById('settings-default-zap').value;
+  if (val && parseInt(val) > 0) {
+    LS.set('default_zap', val);
+    // Update zap amount field if visible
+    const zapAmount = document.getElementById('zap-amount');
+    if (zapAmount) zapAmount.value = val;
+  }
+}
+
+function settingsSetQR(level) {
+  LS.set('qr_level', level);
+  initSettingsSection();
+  showToast('QR level set to ' + level);
+}
+
+function settingsExport() {
+  const data = {
+    pubkey:      LS.get('kv_pubkey')    || '',
+    nwc:         LS.get('nwc_string')   || '',
+    theme:       LS.get('spark_theme')  || 'dark',
+    defaultZap:  LS.get('default_zap')  || '21',
+    qrLevel:     LS.get('qr_level')     || 'M',
+    relays:      [...RELAYS],
+    followList:  feedState.followList,
+  };
+  const json = JSON.stringify(data, null, 2);
+  navigator.clipboard.writeText(json)
+    .then(() => showToast('✓ Settings copied to clipboard'))
+    .catch(() => showToast('Copy failed — try again'));
+}
+
+function settingsClearAll() {
+  if (!confirm('Clear all data? This cannot be undone.')) return;
+  ['kv_pubkey','nwc_string','spark_theme','default_zap','qr_level','follow_list','relays'].forEach(k => LS.del(k));
+  RELAYS.length = 0; DEFAULT_RELAYS.forEach(r => RELAYS.push(r));
+  state.pubkeyHex = '';
+  feedState.followList = [];
+  feedState.followListLoaded = false;
+  document.getElementById('pubkey-input').value = '';
+  document.getElementById('pubkey-input-visible') && (document.getElementById('pubkey-input-visible').value = '');
+  document.getElementById('nwc-string') && (document.getElementById('nwc-string').value = '');
+  updateHeaderAvatar(null);
+  setFeedMode('global');
+  showToast('All data cleared');
+  initSettingsSection();
+}
+
+function settingsRelaySelectChange(sel) {
+  const wrap = document.getElementById('settings-relay-custom-wrap');
+  if (sel.value === 'custom') {
+    wrap.style.display = 'block';
+    document.getElementById('settings-relay-input').focus();
+  } else {
+    wrap.style.display = 'none';
+  }
 }
 
 function settingsAddRelay() {
-  const input = document.getElementById('settings-relay-input');
-  const url = (input.value || '').trim();
+  const select = document.getElementById('settings-relay-select');
+  const customInput = document.getElementById('settings-relay-input');
+  let url = '';
+  if (select.value === 'custom') {
+    url = (customInput ? customInput.value : '').trim();
+  } else {
+    url = select.value.trim();
+  }
+  if (!url) { showToast('Select or enter a relay'); return; }
   if (!url.startsWith('wss://')) { showToast('Must start with wss://'); return; }
   if (RELAYS.includes(url)) { showToast('Already added'); return; }
   RELAYS.push(url);
+  LS.set('relays', JSON.stringify(RELAYS));
   openRelay(url);
-  input.value = '';
+  select.value = '';
+  if (customInput) customInput.value = '';
+  document.getElementById('settings-relay-custom-wrap').style.display = 'none';
   initSettingsSection();
-  showToast('Relay added');
+  showToast('✓ ' + url.replace('wss://','') + ' added');
 }
 
 function settingsRemoveRelay(idx) {
@@ -3854,6 +4041,7 @@ function settingsRemoveRelay(idx) {
   delete state.sockets[url];
   delete relayConnected[url];
   RELAYS.splice(idx, 1);
+  LS.set('relays', JSON.stringify(RELAYS));
   initSettingsSection();
   updateRelayPill();
   showToast('Relay removed');
