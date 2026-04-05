@@ -963,7 +963,7 @@ footer strong { color: var(--muted); }
           </button>
         </div>
         <!-- Comment row -->
-        <input id="zap-comment" type="text" placeholder="Add a comment… ⚡" maxlength="100"
+        <input id="zap-comment" type="text" placeholder="Add a comment… ⚡" maxlength="100" value="⚡"
           style="width:100%;background:transparent;border:none;outline:none;font-family:var(--sans);font-size:14px;color:var(--text);padding:0;margin-bottom:14px;">
       </div>
 
@@ -1164,6 +1164,7 @@ footer strong { color: var(--muted); }
           <button class="btn-sm" onclick="nwcClear()" style="flex-shrink:0;">Clear</button>
         </div>
         <div id="nwc-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px;min-height:14px;letter-spacing:0.06em;">Connect a wallet to auto-pay zaps. Supported: Coinos, Cashu.me, LNbits, Alby Hub.</div>
+        <div id="webln-status" style="font-family:var(--mono);font-size:10px;color:var(--acid2);margin-top:4px;min-height:14px;letter-spacing:0.06em;"></div>
       </div>
 
     </div>
@@ -1880,6 +1881,9 @@ function resolveUnloadedProfiles() {
 setInterval(resolveUnloadedProfiles, 3000);
 
 (function boot() {
+  // Check for WebLN extension (Alby)
+  setTimeout(checkWebLN, 1500);
+
   if(state.pubkeyHex) {
     document.getElementById('pubkey-input').value = state.pubkeyHex;
     updatePubkeyHint(state.pubkeyHex);
@@ -3023,6 +3027,7 @@ async function zapBuild() {
   const relay = document.getElementById('zap-relay').value;
   const noteId = document.getElementById('zap-noteid').value.trim();
   const comment = document.getElementById('zap-comment').value.trim() || '⚡';
+  if (!comment) document.getElementById('zap-comment').value = '⚡';
 
   if (!recipientInput) { zapSetStatus('Enter recipient npub or pubkey'); return; }
   if (!amountSats || amountSats < 1) { zapSetStatus('Enter a valid amount'); return; }
@@ -3296,17 +3301,9 @@ async function zapGotSignedEvent(data) {
     });
 
     const invStatusEl = document.getElementById('zap-invoice-status');
-    if (nwcState.pubkey) {
-      const paid = await nwcPayInvoice(invoice, invStatusEl);
-      if (!paid) {
-        invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
-        if (noteActionState.targetId) {
-          const zapSats = Math.floor(amount / 1000);
-          markZappedOptimistic(noteActionState.targetId, zapSats);
-        }
-      }
-    } else {
-      invStatusEl.textContent = 'Invoice ready — scan with Lightning wallet';
+    const paid = await tryPayInvoice(invoice, invStatusEl);
+    if (paid && noteActionState.targetId) {
+      markZappedOptimistic(noteActionState.targetId, Math.floor(amount / 1000));
     }
   } catch(e) {
     document.getElementById('zap-invoice-status').textContent = 'LNURL error: ' + e.message;
@@ -3705,11 +3702,31 @@ function findNote(eventId) {
   if (card && card.dataset.ev) {
     try {
       const ev = JSON.parse(card.dataset.ev);
-      state.notes.push(ev); // add back to state
+      state.notes.push(ev);
       return ev;
+    } catch(e) { console.error('findNote parse error', e); }
+  }
+
+  // Last resort — scan ALL note cards in DOM
+  const allCards = document.querySelectorAll('.note-card[data-ev]');
+  for (const c of allCards) {
+    try {
+      const ev = JSON.parse(c.dataset.ev);
+      if (ev.id === eventId) {
+        state.notes.push(ev);
+        return ev;
+      }
     } catch(e) {}
   }
 
+  const debugMsg = [
+    'state:' + state.notes.length,
+    'dom:' + document.querySelectorAll('.note-card').length,
+    'card:' + (!!document.getElementById('note-' + eventId)),
+    'dset:' + (!!(document.getElementById('note-' + eventId) && document.getElementById('note-' + eventId).dataset.ev)),
+    'id:' + eventId.slice(0,8)
+  ].join(' ');
+  showToast(debugMsg, 6000);
   return null;
 }
 
@@ -4320,7 +4337,7 @@ function openQuickZapModal_direct(pubkey) {
 
   const defaultZap = LS.get('default_zap') || '21';
   document.getElementById('quick-zap-amount').value = defaultZap;
-  document.getElementById('quick-zap-comment').value = '';
+  document.getElementById('quick-zap-comment').value = '⚡';
   document.getElementById('quick-zap-status').textContent = '';
 
   quickZapShowStep('build');
@@ -4344,7 +4361,7 @@ function openQuickZapModal(eventId) {
   // Pre-fill default zap amount
   const defaultZap = LS.get('default_zap') || '21';
   document.getElementById('quick-zap-amount').value = defaultZap;
-  document.getElementById('quick-zap-comment').value = '';
+  document.getElementById('quick-zap-comment').value = '⚡';
   document.getElementById('quick-zap-status').textContent = '';
 
   quickZapShowStep('build');
@@ -4499,10 +4516,11 @@ async function quickZapGotSignedEvent(data) {
       new QRCode(qrEl, { text: result.pr, width: 200, height: 200, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.L });
     });
 
-    // Auto-pay via NWC if connected
-    if (nwcState.pubkey) {
-      const paid = await nwcPayInvoice(result.pr, statusEl);
-      if (paid) { showToast('⚡ Zap paid!'); closeQuickZapModal(); }
+    // Auto-pay via WebLN or NWC
+    const paid = await tryPayInvoice(result.pr, statusEl);
+    if (paid) {
+      showToast('⚡ Zap paid!');
+      setTimeout(() => closeQuickZapModal(), 1200);
     }
 
     if (quickZapState.eventId) markZappedOptimistic(quickZapState.eventId, Math.floor(amount/1000));
@@ -4578,6 +4596,53 @@ function startLoadingDots(id) {
 function stopLoadingDots() {
   if (_dotsTimer) { clearInterval(_dotsTimer); _dotsTimer = null; }
 }
+
+// ── WebLN + payment priority ───────────────────────────────────────────────
+
+async function tryPayInvoice(invoice, statusEl) {
+  // Priority: WebLN (Alby browser extension) > NWC > manual QR
+
+  // Try WebLN first
+  if (window.webln) {
+    try {
+      statusEl.textContent = 'Connecting to Alby…';
+      await window.webln.enable();
+      statusEl.textContent = 'Waiting for Alby approval…';
+      const result = await window.webln.sendPayment(invoice);
+      if (result && result.preimage) {
+        statusEl.textContent = '⚡ Paid via Alby!';
+        return true;
+      }
+    } catch(e) {
+      if (e.message && e.message.includes('User rejected')) {
+        statusEl.textContent = 'Payment cancelled';
+        return false;
+      }
+      // Any other error — fall through to NWC
+      statusEl.textContent = 'Alby error, trying NWC…';
+    }
+  }
+
+  // Try NWC
+  if (nwcState.pubkey) {
+    const paid = await nwcPayInvoice(invoice, statusEl);
+    if (paid) return true;
+  }
+
+  // Manual — show QR
+  statusEl.textContent = 'Scan invoice with your Lightning wallet';
+  return false;
+}
+
+// Check if WebLN is available and show indicator
+function checkWebLN() {
+  if (window.webln) {
+    showToast('⚡ Alby detected — zaps will auto-pay');
+    const el = document.getElementById('webln-status');
+    if (el) el.textContent = '⚡ Alby extension detected — zaps will auto-pay via Alby';
+  }
+}
+
 // ── QR Fullscreen ─────────────────────────────────────────────────────────
 
 function showQRFullscreen(text, hint) {
