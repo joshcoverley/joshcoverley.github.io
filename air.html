@@ -669,13 +669,7 @@ footer strong { color: var(--muted); }
 /* ── User profile page ── */
 #section-user-profile { display:none; padding-bottom:80px; }
 #section-user-profile.active { display:block; }
-.up-banner {
-  width:100%;height:120px;background:linear-gradient(135deg,#1a1510,#0d0c0a);
-  position:relative;overflow:hidden;
-}
-.up-banner-key {
-  position:absolute;right:-10px;top:50%;transform:translateY(-50%);opacity:0.06;
-}
+
 .up-avatar-wrap {
   width:72px;height:72px;border-radius:50%;
   background:var(--bg2);border:3px solid var(--bg);
@@ -1617,20 +1611,9 @@ footer strong { color: var(--muted); }
       <span id="upp-back-name" style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
     </div>
 
-    <!-- Banner -->
-    <div class="up-banner">
-      <svg class="up-banner-key" width="200" height="90" viewBox="0 0 110 50" fill="none">
-        <circle cx="26" cy="25" r="18" stroke="#c9a84c" stroke-width="5.5" fill="none"/>
-        <circle cx="26" cy="25" r="6" fill="#0a0908"/>
-        <line x1="44" y1="25" x2="102" y2="25" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
-        <line x1="72" y1="25" x2="72" y2="41" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
-        <line x1="88" y1="25" x2="88" y2="36" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
-      </svg>
-    </div>
-
     <!-- Avatar + identity -->
     <div style="padding:0 16px;">
-      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:-36px;margin-bottom:12px;">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:12px;margin-bottom:12px;">
         <div id="upp-avatar" class="up-avatar-wrap">?</div>
         <!-- Action buttons -->
         <div style="display:flex;gap:8px;padding-bottom:4px;">
