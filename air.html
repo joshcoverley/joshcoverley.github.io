@@ -2716,30 +2716,118 @@ function insertNoteInOrder(ev) {
   while (feed.children.length > 50) feed.removeChild(feed.lastChild);
 }
 
-function fetchProfile(pubkey){
-  state.profiles[pubkey]={};
-  const ws=Object.values(state.sockets).find(w=>w&&w.readyState===WebSocket.OPEN);
-  if(!ws)return;
-  const sub='prof-'+pubkey.slice(0,8);
-  ws.send(JSON.stringify(['REQ',sub,{kinds:[0],authors:[pubkey],limit:1}]));
-  const prev=ws.onmessage;
-  ws.onmessage=e=>{
-    if(prev)prev(e);
-    try{
-      const msg=JSON.parse(e.data);
-      if(msg[0]==='EVENT'&&msg[1]===sub&&msg[2]){
-        const p=JSON.parse(msg[2].content||'{}');
-        state.profiles[pubkey]=p;
-        _profileCacheDirty = true;
-        updateNotesWithProfile(pubkey,p);
-        // Update header avatar and profile card if this is our own profile
-        if(pubkey===state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
-        // Refresh user profile modal if open
-        if(pubkey===userProfilePubkey) openUserProfile(pubkey);
-        ws.send(JSON.stringify(['CLOSE',sub]));
-      }
-    }catch(er){}
+// ── Profile fetch — batched queue, dedicated WebSocket, no onmessage clobbering ──
+const _profileQueue = new Set();
+const _profileFetching = new Set();
+
+function fetchProfile(pubkey) {
+  if (!pubkey) return;
+  // Return immediately if we have a good cached profile
+  if (state.profiles[pubkey] && state.profiles[pubkey].name) return;
+  if (_profileFetching.has(pubkey)) return;
+  _profileQueue.add(pubkey);
+  _scheduleDrain();
+}
+
+let _drainScheduled = false;
+function _scheduleDrain() {
+  if (_drainScheduled) return;
+  _drainScheduled = true;
+  setTimeout(() => { _drainScheduled = false; _drainProfileQueue(); }, 50);
+}
+
+function _drainProfileQueue() {
+  if (_profileQueue.size === 0) return;
+  const batch = [..._profileQueue].slice(0, 20);
+  batch.forEach(pk => { _profileQueue.delete(pk); _profileFetching.add(pk); });
+  _fetchProfileBatch(batch);
+  // Schedule next drain if more remain
+  if (_profileQueue.size > 0) setTimeout(_drainProfileQueue, 500);
+}
+
+function _fetchProfileBatch(pubkeys) {
+  const relayUrl = RELAYS[0] || 'wss://relay.damus.io';
+  let ws;
+  try { ws = new WebSocket(relayUrl); } catch(e) {
+    pubkeys.forEach(pk => _profileFetching.delete(pk));
+    return;
+  }
+  const sub = 'prof-' + Date.now();
+  const remaining = new Set(pubkeys);
+  const timer = setTimeout(() => {
+    try { ws.close(); } catch(e) {}
+    remaining.forEach(pk => _profileFetching.delete(pk));
+    // Retry on second relay if available
+    if (RELAYS[1] && pubkeys.length > 0) _fetchProfileBatchFromRelay(pubkeys, RELAYS[1]);
+  }, 8000);
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify(['REQ', sub, { kinds:[0], authors: pubkeys, limit: pubkeys.length }]));
   };
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        const ev = msg[2];
+        const pubkey = ev.pubkey;
+        if (!remaining.has(pubkey)) return;
+        remaining.delete(pubkey);
+        _profileFetching.delete(pubkey);
+        try {
+          const p = JSON.parse(ev.content || '{}');
+          if (p && (p.name || p.picture || p.lud16)) {
+            state.profiles[pubkey] = p;
+            _profileCacheDirty = true;
+            updateNotesWithProfile(pubkey, p);
+            if (pubkey === state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
+            if (pubkey === userProfilePubkey) openUserProfile(pubkey);
+            if (pubkey === uppPubkey) uppPopulateProfile(pubkey);
+          }
+        } catch(er) {}
+      }
+      if (msg[0] === 'EOSE' && msg[1] === sub) {
+        remaining.forEach(pk => _profileFetching.delete(pk));
+        clearTimeout(timer);
+        try { ws.close(); } catch(e) {}
+        if (_profileQueue.size > 0) _drainProfileQueue();
+      }
+    } catch(er) {}
+  };
+
+  ws.onerror = () => {
+    clearTimeout(timer);
+    pubkeys.forEach(pk => _profileFetching.delete(pk));
+  };
+  ws.onclose = () => clearTimeout(timer);
+}
+
+function _fetchProfileBatchFromRelay(pubkeys, relayUrl) {
+  let ws;
+  try { ws = new WebSocket(relayUrl); } catch(e) { return; }
+  const sub = 'prof2-' + Date.now();
+  const timer = setTimeout(() => { try { ws.close(); } catch(e) {} }, 6000);
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[0], authors: pubkeys, limit: pubkeys.length }]));
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        const pubkey = msg[2].pubkey;
+        if (state.profiles[pubkey] && state.profiles[pubkey].name) return; // already got it
+        try {
+          const p = JSON.parse(msg[2].content || '{}');
+          if (p && (p.name || p.picture)) {
+            state.profiles[pubkey] = p;
+            _profileCacheDirty = true;
+            updateNotesWithProfile(pubkey, p);
+            if (pubkey === state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
+          }
+        } catch(er) {}
+      }
+      if (msg[0] === 'EOSE') { clearTimeout(timer); try { ws.close(); } catch(e) {} }
+    } catch(er) {}
+  };
+  ws.onerror = () => clearTimeout(timer);
 }
 function updateHeaderAvatar(p) {
   const img = document.getElementById('header-avatar');
