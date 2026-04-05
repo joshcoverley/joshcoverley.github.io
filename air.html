@@ -480,6 +480,9 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
   background: var(--bg); padding: 12px 16px;
   margin-bottom: 0; margin-left: 0;
 }
+.thread-reply.depth-1 { margin-left: 16px; border-left: 2px solid var(--border2); }
+.thread-reply.depth-2 { margin-left: 32px; border-left: 2px solid var(--border2); }
+.thread-reply.depth-3 { margin-left: 44px; border-left: 2px solid var(--border2); }
 .thread-note-header { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 8px; }
 .thread-avatar {
   width: 40px; height: 40px; background: var(--bg2);
@@ -2648,9 +2651,22 @@ function renderNote(ev,prepend=false){
   div.addEventListener('click', (e) => { if (e.target.closest('button') || e.target.closest('.note-action') || e.target.closest('.reply-parent')) return; openThread(ev.id); });
   div.style.cursor = 'pointer';
 
-  // Detect reply — find root or parent e tag
-  const eTag = ev.tags.find(t => t[0] === 'e');
-  const parentId = eTag ? eTag[1] : null;
+  // Detect reply — NIP-10: find direct parent
+  // 'reply' marker = direct parent; last e-tag without marker = direct parent; 'root' = skip
+  const eTags = ev.tags.filter(t => t[0] === 'e');
+  let parentId = null;
+  if (eTags.length > 0) {
+    const replyTag = eTags.find(t => t[3] === 'reply');
+    if (replyTag) {
+      parentId = replyTag[1];
+    } else {
+      // No markers — last e-tag is the direct parent (NIP-10 positional)
+      const noMarkerTags = eTags.filter(t => !t[3] || t[3] === '');
+      if (noMarkerTags.length > 0) {
+        parentId = noMarkerTags[noMarkerTags.length - 1][1];
+      }
+    }
+  }
 
   div.innerHTML=`
     <div class="note-header">
@@ -2693,43 +2709,87 @@ function renderNote(ev,prepend=false){
 // Cache of fetched parent notes
 const parentNoteCache = {};
 
+// Queue parent note fetches to avoid hammering relay
+const _parentQueue = {}; // parentId -> [noteId, ...]
+let _parentFetchTimer = null;
+
 function fetchParentNote(parentId, noteId) {
-  // Check local notes cache first
-  const local = state.notes.find(n => n.id === parentId);
+  // Check caches first
+  const local = state.notes.find(n => n.id === parentId) || parentNoteCache[parentId];
   if (local) { renderParentNote(local, noteId); return; }
 
-  // Check parent cache
-  if (parentNoteCache[parentId]) { renderParentNote(parentNoteCache[parentId], noteId); return; }
+  // Queue for batch fetch
+  if (!_parentQueue[parentId]) _parentQueue[parentId] = [];
+  _parentQueue[parentId].push(noteId);
 
-  // Fetch from relay
-  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
-  if (!ws) return;
-  const sub = 'par-' + parentId.slice(0,8);
-  ws.send(JSON.stringify(['REQ', sub, { ids: [parentId], limit: 1 }]));
+  clearTimeout(_parentFetchTimer);
+  _parentFetchTimer = setTimeout(_drainParentQueue, 100);
+}
 
-  const prev = ws.onmessage;
-  const cleanup = () => { try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {} ws.onmessage = prev; };
+function _drainParentQueue() {
+  const ids = Object.keys(_parentQueue);
+  if (!ids.length) return;
+
+  // Take up to 20 at once
+  const batch = ids.slice(0, 20);
+  const waiting = {};
+  batch.forEach(id => { waiting[id] = _parentQueue[id]; delete _parentQueue[id]; });
+
+  const relayUrl = RELAYS[0] || 'wss://relay.damus.io';
+  let ws;
+  try { ws = new WebSocket(relayUrl); } catch(e) { return; }
+  const sub = 'parents-' + Date.now();
+
+  ws.onopen = () => {
+    ws.send(JSON.stringify(['REQ', sub, { ids: batch, limit: batch.length }]));
+  };
+
   const timer = setTimeout(() => {
-    cleanup();
-    const el = document.getElementById('parent-' + noteId);
-    if (el) el.style.display = 'none';
-  }, 5000);
+    try { ws.close(); } catch(e) {}
+    // Hide any still-loading parent previews
+    Object.entries(waiting).forEach(([parentId, noteIds]) => {
+      noteIds.forEach(noteId => {
+        const el = document.getElementById('parent-' + noteId);
+        if (el) el.style.display = 'none';
+      });
+    });
+    // Drain remaining queue
+    if (Object.keys(_parentQueue).length) _drainParentQueue();
+  }, 6000);
 
   ws.onmessage = (e) => {
-    if (prev) prev(e);
     try {
       const msg = JSON.parse(e.data);
       if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
-        clearTimeout(timer); cleanup();
-        parentNoteCache[parentId] = msg[2];
-        renderParentNote(msg[2], noteId);
-      } else if (msg[0] === 'EOSE' && msg[1] === sub) {
-        clearTimeout(timer); cleanup();
-        const el = document.getElementById('parent-' + noteId);
-        if (el) el.style.display = 'none'; // hide if not found
+        const ev = msg[2];
+        parentNoteCache[ev.id] = ev;
+        if (!state.notes.find(n => n.id === ev.id)) state.notes.push(ev);
+        const noteIds = waiting[ev.id] || [];
+        noteIds.forEach(noteId => {
+          if (noteId.startsWith('thread-')) {
+            const el = document.getElementById('parent-thread-' + noteId.replace('thread-', ''));
+            if (el) renderThreadParentPreview(ev, el);
+          } else {
+            renderParentNote(ev, noteId);
+          }
+        });
+        delete waiting[ev.id];
       }
-    } catch(e2) {}
+      if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer);
+        try { ws.close(); } catch(e) {}
+        // Hide any that weren't found
+        Object.entries(waiting).forEach(([parentId, noteIds]) => {
+          noteIds.forEach(noteId => {
+            const el = document.getElementById('parent-' + noteId) || document.getElementById('parent-thread-' + noteId.replace('thread-', ''));
+            if (el) el.style.display = 'none';
+          });
+        });
+        if (Object.keys(_parentQueue).length) _drainParentQueue();
+      }
+    } catch(e) {}
   };
+  ws.onerror = () => { clearTimeout(timer); };
 }
 
 function renderParentNote(parentEv, noteId) {
@@ -2737,13 +2797,27 @@ function renderParentNote(parentEv, noteId) {
   if (!el) return;
   const profile = state.profiles[parentEv.pubkey] || {};
   const name = profile.name || profile.display_name || parentEv.pubkey.slice(0,8) + '…';
-  const preview = (parentEv.content || '').replace(/\n/g,' ').slice(0, 120) + ((parentEv.content || '').length > 120 ? '…' : '');
+  const preview = (parentEv.content || '').replace(/\n/g,' ').trim().slice(0, 140) + ((parentEv.content || '').length > 140 ? '…' : '');
+  const avatar = profile.picture
+    ? `<img src="${escHtml(profile.picture)}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`
+    : `<span style="font-size:11px;font-weight:700;">${name[0]||'?'}</span>`;
   el.innerHTML = `
-    <div class="reply-parent-name">${escHtml(name)}</div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;">
+      <div style="width:18px;height:18px;border-radius:50%;background:var(--bg2);overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">${avatar}</div>
+      <div class="reply-parent-name">${escHtml(name)}</div>
+    </div>
     <div class="reply-parent-content">${escHtml(preview)}</div>
   `;
-  // Fetch profile if needed
-  if (!state.profiles[parentEv.pubkey] || !state.profiles[parentEv.pubkey].name) fetchProfile(parentEv.pubkey);
+  if (!state.profiles[parentEv.pubkey] || !state.profiles[parentEv.pubkey].name) {
+    fetchProfile(parentEv.pubkey);
+    // Update avatar when profile loads
+    const pubkey = parentEv.pubkey;
+    const origUpdate = window._profileUpdateHook;
+    window._profileUpdateHook = function(pk, p) {
+      if (pk === pubkey) renderParentNote(parentEv, noteId);
+      if (origUpdate) origUpdate(pk, p);
+    };
+  }
 }
 
 function insertNoteInOrder(ev) {
@@ -5584,11 +5658,33 @@ function closeThread() {
   threadState.rootId = null;
 }
 
-function buildThreadNote(ev, isRoot) {
+function buildThreadNote(ev, isRoot, depth) {
   const profile = state.profiles[ev.pubkey] || {};
   const name = profile.name || profile.display_name || ev.pubkey.slice(0,8) + '…';
   const div = document.createElement('div');
-  div.className = isRoot ? 'thread-root' : 'thread-reply';
+  if (isRoot) {
+    div.className = 'thread-root';
+  } else {
+    div.className = 'thread-reply' + (depth > 0 ? ' depth-' + Math.min(depth, 3) : '');
+    // For sub-replies (depth > 0), show what note this is replying to
+    if (depth > 0) {
+      const directParent = getDirectParent(ev);
+      if (directParent && directParent !== threadState.rootId) {
+        // Inject reply context after div is built — do it async
+        setTimeout(() => {
+          const parentEl = div.querySelector('.thread-reply-parent');
+          if (!parentEl) return;
+          const cached = state.notes.find(n => n.id === directParent) || parentNoteCache[directParent];
+          if (cached) {
+            renderThreadParentPreview(cached, parentEl);
+          } else {
+            parentEl.innerHTML = '<div class="reply-parent-loading">Loading…</div>';
+            fetchParentNote(directParent, 'thread-' + ev.id);
+          }
+        }, 0);
+      }
+    }
+  }
   div.innerHTML = `
     <div class="thread-note-header">
       <div class="thread-avatar" onclick="openUserProfilePage('${ev.pubkey}')">${profile.picture
@@ -5625,6 +5721,19 @@ function buildThreadNote(ev, isRoot) {
   return div;
 }
 
+function getDirectParent(ev) {
+  // NIP-10: find the direct parent event ID from e-tags
+  const eTags = (ev.tags || []).filter(t => t[0] === 'e');
+  if (eTags.length === 0) return null;
+  // Prefer 'reply' marker
+  const replyTag = eTags.find(t => t[3] === 'reply');
+  if (replyTag) return replyTag[1];
+  // No markers — last e-tag is direct parent
+  const noMarker = eTags.filter(t => !t[3] || t[3] === '');
+  if (noMarker.length > 0) return noMarker[noMarker.length - 1][1];
+  return null;
+}
+
 function fetchThreadReplies(eventId) {
   const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
   if (!ws) {
@@ -5633,13 +5742,9 @@ function fetchThreadReplies(eventId) {
   }
 
   const sub = 'thread-' + Math.random().toString(36).slice(2, 8);
-  const replies = [];
+  const allReplies = [];
 
-  ws.send(JSON.stringify(['REQ', sub, {
-    kinds: [1],
-    '#e': [eventId],
-    limit: 100,
-  }]));
+  ws.send(JSON.stringify(['REQ', sub, { kinds: [1], '#e': [eventId], limit: 200 }]));
 
   const prev = ws.onmessage;
   ws.onmessage = (e) => {
@@ -5648,37 +5753,71 @@ function fetchThreadReplies(eventId) {
       const msg = JSON.parse(e.data);
       if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
         const ev = msg[2];
-        const eTag = ev.tags.find(t => t[0] === 'e' && t[1] === eventId);
-        if (eTag && ev.id !== eventId) {
-          replies.push(ev);
+        if (ev.id !== eventId) {
+          allReplies.push(ev);
+          // Cache for findNote
+          if (!state.notes.find(n => n.id === ev.id)) state.notes.push(ev);
+          if (!state.profiles[ev.pubkey]) fetchProfile(ev.pubkey);
         }
       } else if (msg[0] === 'EOSE' && msg[1] === sub) {
-        ws.send(JSON.stringify(['CLOSE', sub]));
+        try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
         ws.onmessage = prev;
 
         if (threadState.rootId !== eventId) return;
 
         document.getElementById('thread-loading').style.display = 'none';
 
-        if (replies.length === 0) {
+        if (allReplies.length === 0) {
           document.getElementById('thread-replies').innerHTML =
             '<div class="thread-empty">// No replies yet</div>';
           return;
         }
 
-        replies.sort((a, b) => a.created_at - b.created_at);
+        allReplies.sort((a, b) => a.created_at - b.created_at);
 
         document.getElementById('thread-replies-label').style.display = 'block';
         document.getElementById('thread-reply-count').textContent =
-          replies.length + ' repl' + (replies.length === 1 ? 'y' : 'ies');
+          allReplies.length + ' repl' + (allReplies.length === 1 ? 'y' : 'ies');
 
+        // Build tree structure
         const container = document.getElementById('thread-replies');
-        replies.forEach(ev => {
-          container.appendChild(buildThreadNote(ev, false));
-        });
+        renderThreadTree(eventId, allReplies, container, 0);
       }
     } catch(err) {}
   };
+}
+
+function renderThreadTree(parentId, allReplies, container, depth, rendered) {
+  if (!rendered) rendered = new Set();
+  
+  // Find direct children — prefer NIP-10 marker, fall back to any e-tag match
+  const children = allReplies.filter(ev => {
+    if (rendered.has(ev.id)) return false;
+    const directParent = getDirectParent(ev);
+    if (directParent) return directParent === parentId;
+    // No clear direct parent — check if it references parentId at all
+    return ev.tags.some(t => t[0] === 'e' && t[1] === parentId);
+  });
+
+  children.sort((a, b) => a.created_at - b.created_at);
+
+  children.forEach(ev => {
+    rendered.add(ev.id);
+    const note = buildThreadNote(ev, false, Math.min(depth, 3));
+    container.appendChild(note);
+    renderThreadTree(ev.id, allReplies, container, depth + 1, rendered);
+  });
+
+  // At root level, append any truly orphaned replies at the end (depth 1)
+  if (depth === 0) {
+    const orphans = allReplies.filter(ev => !rendered.has(ev.id));
+    orphans.sort((a, b) => a.created_at - b.created_at);
+    orphans.forEach(ev => {
+      rendered.add(ev.id);
+      const note = buildThreadNote(ev, false, 1);
+      container.appendChild(note);
+    });
+  }
 }
 
 // ── Settings ─────────────────────────────────────────────────
