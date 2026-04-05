@@ -2489,7 +2489,7 @@ function renderNote(ev,prepend=false){
   const profile=state.profiles[ev.pubkey]||{};
   const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
   const div=document.createElement('div');div.className='note-card';div.id=id;
-  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button') && !e.target.closest('.reply-parent')) openThread(ev.id); };
+  div.addEventListener('click', (e) => { if (e.target.closest('button') || e.target.closest('.note-action') || e.target.closest('.reply-parent')) return; openThread(ev.id); });
   div.style.cursor = 'pointer';
 
   // Detect reply — find root or parent e tag
@@ -4064,7 +4064,7 @@ function uppRenderNote(ev) {
   div.className = 'note-card';
   div.id = 'note-' + ev.id;
   div.style.cursor = 'pointer';
-  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button') && !e.target.closest('.reply-parent')) openThread(ev.id); };
+  div.addEventListener('click', (e) => { if (e.target.closest('button') || e.target.closest('.note-action') || e.target.closest('.reply-parent')) return; openThread(ev.id); });
   div.innerHTML = `
     <div class="note-header">
       <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">${avatarContent}</div>
@@ -4876,8 +4876,35 @@ function exportFollowList() {
 const threadState = { rootId: null, stopScan: null };
 
 async function openThread(eventId) {
-  const root = state.notes.find(n => n.id === eventId);
-  if (!root) return;
+  // Check state.notes first, then parentNoteCache
+  let root = state.notes.find(n => n.id === eventId) || parentNoteCache[eventId];
+  if (!root) {
+    // Try fetching it
+    const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
+    if (ws) {
+      const sub = 'th-' + eventId.slice(0,8);
+      ws.send(JSON.stringify(['REQ', sub, { ids: [eventId], limit: 1 }]));
+      await new Promise(resolve => {
+        const timer = setTimeout(resolve, 4000);
+        const prev = ws.onmessage;
+        ws.onmessage = (e) => {
+          if (prev) prev(e);
+          try {
+            const msg = JSON.parse(e.data);
+            if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+              root = msg[2];
+              state.notes.push(root);
+              clearTimeout(timer);
+              ws.send(JSON.stringify(['CLOSE', sub]));
+              ws.onmessage = prev;
+              resolve();
+            }
+          } catch(e2) {}
+        };
+      });
+    }
+    if (!root) return;
+  }
 
   threadState.rootId = eventId;
 
