@@ -4472,30 +4472,58 @@ function uppSetTab(tab) {
 }
 
 async function uppFetchStats(pubkey) {
-  // Get following count from kind:3
+  // Following count — from kind:3 event
   const followEvent = await fetchFollowEventFromRelay(pubkey, RELAYS[0]);
   if (followEvent) {
     const count = (followEvent.tags || []).filter(t => t[0] === 'p').length;
-    document.getElementById('upp-following-count').textContent = count;
+    document.getElementById('upp-following-count').textContent = count.toLocaleString();
   }
 
-  // Get follower count — check how many people have a kind:3 with this pubkey
+  // Follower count — paginated, no cap
+  uppFetchFollowersPaginated(pubkey, 0, 0);
+}
+
+function uppFetchFollowersPaginated(pubkey, total, oldestSeen) {
   const relay = RELAYS[0];
-  const ws = new WebSocket(relay);
-  const sub = 'upf-' + Math.random().toString(36).slice(2,8);
-  let followerCount = 0;
+  const PAGE = 500;
+  let ws;
+  try { ws = new WebSocket(relay); } catch(e) { return; }
+
+  const sub = 'upf-' + Date.now();
+  let pageCount = 0;
+  let pageOldest = null;
+
   const timer = setTimeout(() => {
-    ws.close();
-    document.getElementById('upp-followers-count').textContent = followerCount + '+';
-  }, 15000);
-  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], '#p':[pubkey], limit:1000 }]));
+    try { ws.close(); } catch(e) {}
+    const el = document.getElementById('upp-followers-count');
+    if (el) el.textContent = (total + pageCount).toLocaleString() + '+';
+  }, 10000);
+
+  const filter = { kinds:[3], '#p':[pubkey], limit: PAGE };
+  if (oldestSeen) filter.until = oldestSeen - 1;
+
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, filter]));
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg[0] === 'EVENT' && msg[1] === sub) followerCount++;
-      if (msg[0] === 'EOSE') {
-        clearTimeout(timer); ws.close();
-        document.getElementById('upp-followers-count').textContent = followerCount;
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        pageCount++;
+        const t = msg[2].created_at;
+        if (!pageOldest || t < pageOldest) pageOldest = t;
+        // Update live
+        const el = document.getElementById('upp-followers-count');
+        if (el) el.textContent = (total + pageCount).toLocaleString();
+      }
+      if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer);
+        try { ws.close(); } catch(e) {}
+        const newTotal = total + pageCount;
+        const el = document.getElementById('upp-followers-count');
+        if (el) el.textContent = newTotal.toLocaleString();
+        // If we got a full page, there may be more — paginate
+        if (pageCount === PAGE && pageOldest) {
+          uppFetchFollowersPaginated(pubkey, newTotal, pageOldest);
+        }
       }
     } catch(e) {}
   };
@@ -4558,42 +4586,73 @@ async function uppFetchZapTotal(pubkey) {
 }
 
 async function uppFetchNotes(pubkey) {
+  document.getElementById('upp-notes-feed').innerHTML = '';
+  document.getElementById('upp-replies-feed').innerHTML = '';
+  uppFetchNotesPaginated(pubkey, 0, 0, null);
+}
+
+function uppFetchNotesPaginated(pubkey, noteCount, replyCount, oldestSeen) {
   const relay = RELAYS[0];
-  const ws = new WebSocket(relay);
-  const sub = 'upn-' + Math.random().toString(36).slice(2,8);
+  const PAGE = 100;
+  let ws;
+  try { ws = new WebSocket(relay); } catch(e) { uppDoneLoading(noteCount, replyCount); return; }
+
+  const sub = 'upn-' + Date.now();
   const notesFeed = document.getElementById('upp-notes-feed');
   const repliesFeed = document.getElementById('upp-replies-feed');
-  let noteCount = 0;
-  let replyCount = 0;
+  let pageNotes = 0, pageReplies = 0;
+  let pageOldest = null;
+  const seenIds = new Set();
 
-  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 20000);
+  const timer = setTimeout(() => {
+    try { ws.close(); } catch(e) {}
+    uppDoneLoading(noteCount + pageNotes, replyCount + pageReplies);
+  }, 12000);
 
-  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[1], authors:[pubkey], limit:200 }]));
+  const filter = { kinds:[1], authors:[pubkey], limit: PAGE };
+  if (oldestSeen) filter.until = oldestSeen - 1;
+
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, filter]));
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
       if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
         const ev = msg[2];
+        if (seenIds.has(ev.id)) return;
+        seenIds.add(ev.id);
+        const t = ev.created_at;
+        if (!pageOldest || t < pageOldest) pageOldest = t;
         const isReply = ev.tags.some(t => t[0] === 'e');
         const card = uppRenderNote(ev);
-        if (isReply) { repliesFeed.appendChild(card); replyCount++; }
-        else { notesFeed.appendChild(card); noteCount++; }
+        if (isReply) { repliesFeed.appendChild(card); pageReplies++; }
+        else { notesFeed.appendChild(card); pageNotes++; }
+        // Update count live
+        document.getElementById('upp-notes-count').textContent =
+          (noteCount + pageNotes + replyCount + pageReplies).toLocaleString();
       }
-      if (msg[0] === 'EOSE') {
-        clearTimeout(timer); ws.close();
-        uppDoneLoading(noteCount, replyCount);
+      if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer);
+        try { ws.close(); } catch(e) {}
+        const totalNotes = noteCount + pageNotes;
+        const totalReplies = replyCount + pageReplies;
+        // If full page returned, fetch more
+        if ((pageNotes + pageReplies) === PAGE && pageOldest) {
+          uppFetchNotesPaginated(pubkey, totalNotes, totalReplies, pageOldest);
+        } else {
+          uppDoneLoading(totalNotes, totalReplies);
+        }
       }
     } catch(e) {}
   };
-  ws.onerror = () => { clearTimeout(timer); uppDoneLoading(noteCount, replyCount); };
+  ws.onerror = () => { clearTimeout(timer); uppDoneLoading(noteCount + pageNotes, replyCount + pageReplies); };
 }
 
 function uppDoneLoading(noteCount, replyCount) {
   stopLoadingDots();
   document.getElementById('upp-loading').style.display = 'none';
-  document.getElementById('upp-notes-count').textContent = noteCount + replyCount;
-  document.getElementById('upp-notes-tab-count').textContent = noteCount ? '(' + noteCount + ')' : '';
-  document.getElementById('upp-replies-tab-count').textContent = replyCount ? '(' + replyCount + ')' : '';
+  document.getElementById('upp-notes-count').textContent = (noteCount + replyCount).toLocaleString();
+  document.getElementById('upp-notes-tab-count').textContent = noteCount ? '(' + noteCount.toLocaleString() + ')' : '';
+  document.getElementById('upp-replies-tab-count').textContent = replyCount ? '(' + replyCount.toLocaleString() + ')' : '';
   if (noteCount === 0) {
     document.getElementById('upp-notes-feed').innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:32px 0;">No notes yet</div>';
   }
