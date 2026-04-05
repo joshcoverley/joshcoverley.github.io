@@ -1183,21 +1183,53 @@ footer strong { color: var(--muted); }
 
     <!-- ── LISTS section ── -->
   <div class="app-section" id="section-lists">
-    <div class="section-header">
-      <span class="section-title">Lists</span>
+    <div class="section-header"><span class="section-title">Lists</span></div>
+
+    <!-- Search -->
+    <div style="margin-bottom:20px;">
+      <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:8px;">Find people</div>
+      <div style="display:flex;gap:8px;">
+        <input id="search-input" type="text" placeholder="Search by name…"
+          autocomplete="off" autocorrect="off" spellcheck="false"
+          style="flex:1;background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:8px 0!important;font-family:var(--sans);font-size:15px;color:var(--text);outline:none;"
+          onkeydown="if(event.key==='Enter')searchProfiles()">
+        <button onclick="searchProfiles()"
+          style="background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:13px;font-weight:600;padding:8px 18px;border-radius:9999px;cursor:pointer;flex-shrink:0;">
+          Search
+        </button>
+      </div>
+      <div id="search-results" style="margin-top:12px;"></div>
     </div>
-    <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:14px;">
-      // Follow list — <span id="lists-count">0 accounts</span>
+
+    <div style="height:1px;background:var(--border);margin-bottom:20px;"></div>
+
+    <!-- Following -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Following</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span id="lists-count" style="font-family:var(--mono);font-size:15px;font-weight:700;color:var(--acid);">0</span>
+        <button onclick="clearFollowList()"
+          style="background:none;border:1px solid var(--danger);color:var(--danger);font-family:var(--sans);font-size:11px;padding:4px 12px;border-radius:9999px;cursor:pointer;">
+          Clear
+        </button>
+      </div>
     </div>
-    <!-- Publish follow list via airgap -->
-    <button onclick="publishFollowList()"
-      style="width:100%;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:11px;border-radius:9999px;cursor:pointer;margin-bottom:10px;">
-      Publish follow list
-    </button>
-    <div id="follow-list-qr-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-bottom:12px;min-height:14px;"></div>
-    <button onclick="showOnboarding()" class="btn-outline" style="width:100%;margin-bottom:10px;">⬡ REBUILD FROM INTERESTS</button>
-    <button onclick="exportFollowList()" class="btn-sm" style="width:100%;margin-bottom:6px;">EXPORT FOLLOW LIST</button>
-    <div id="follow-list-display" style="margin-top:16px;"></div>
+    <div style="font-family:var(--sans);font-size:13px;color:var(--muted);margin-bottom:16px;line-height:1.5;">
+      Stored locally on this device. Shapes your feed.
+    </div>
+
+    <div id="follow-list-display"></div>
+
+    <div style="display:flex;gap:8px;margin-top:16px;">
+      <button onclick="showOnboarding()"
+        style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:9px;border-radius:9999px;cursor:pointer;">
+        ⬡ Rebuild
+      </button>
+      <button onclick="exportFollowList()"
+        style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:9px;border-radius:9999px;cursor:pointer;">
+        ↓ Export
+      </button>
+    </div>
   </div>
 
   <!-- QR fullscreen overlay -->
@@ -2490,15 +2522,24 @@ async function fetchFollowList(pubkeyHex) {
   }
 
   if (bestEvent) {
-    const follows = (bestEvent.tags || [])
+    const relayFollows = (bestEvent.tags || [])
       .filter(t => t[0] === 'p' && t[1] && /^[0-9a-f]{64}$/.test(t[1]))
       .map(t => t[1]);
 
-    if (follows.length > 0) {
-      feedState.followList = follows;
+    if (relayFollows.length > 0) {
+      // MERGE: combine relay follows with any new local follows, deduplicated
+      const localFollows = feedState.followList || [];
+      const merged = Array.from(new Set([...relayFollows, ...localFollows]));
+
+      feedState.followList = merged;
       feedState.followListLoaded = true;
-      localStorage.setItem('follow_list', JSON.stringify(follows));
-      if (statusEl) statusEl.textContent = 'Following ' + follows.length + ' accounts';
+      localStorage.setItem('follow_list', JSON.stringify(merged));
+
+      const newCount = merged.length - relayFollows.length;
+      const label = newCount > 0
+        ? 'Following ' + merged.length + ' (' + newCount + ' new pending publish)'
+        : 'Following ' + merged.length;
+      if (statusEl) statusEl.textContent = label;
       if (feedState.mode === 'following') resubscribeAll();
       return;
     }
@@ -5212,27 +5253,38 @@ function onPubkeyInputVisible() {
 function initListsSection() {
   const count = feedState.followList.length;
   const countEl = document.getElementById('lists-count');
-  if (countEl) countEl.textContent = count + ' account' + (count !== 1 ? 's' : '');
+  if (countEl) countEl.textContent = count;
 
   const display = document.getElementById('follow-list-display');
   if (!display) return;
+
   if (count === 0) {
-    display.innerHTML = '<div style="font-size:10px;color:var(--dim);letter-spacing:0.08em;">// No follow list. Select interests to build one.</div>';
+    display.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:20px 0;text-align:center;">No follows yet — browse the feed and tap Follow</div>';
     return;
   }
-  display.innerHTML = feedState.followList.slice(0, 20).map(hex => {
+
+  const visible = feedState.followList.slice(0, 100);
+  display.innerHTML = visible.map(hex => {
     const p = state.profiles[hex] || {};
-    const name = p.name || p.display_name || hex.slice(0,12) + '…';
-    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:11px;color:var(--text);">
-      <div style="width:28px;height:28px;background:var(--bg2);border:1px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--muted);flex-shrink:0;overflow:hidden;">
-        ${p.picture ? `<img src="${p.picture}" style="width:100%;height:100%;object-fit:cover;">` : name[0] || '?'}
-      </div>
+    const name = p.name || p.display_name || hex.slice(0,8) + '…';
+    const avatar = p.picture
+      ? `<img src="${escHtml(p.picture)}" style="width:100%;height:100%;object-fit:cover;">`
+      : `<span style="font-size:15px;font-weight:600;">${name[0]||'?'}</span>`;
+    return `<div onclick="openUserProfilePage('${hex}')"
+        style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background 0.15s;"
+        onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <div class="note-avatar" style="flex-shrink:0;">${avatar}</div>
       <div style="flex:1;min-width:0;">
-        <div style="color:var(--acid);font-size:10px;">${name}</div>
-        <div style="font-size:8px;color:var(--dim);">${hex.slice(0,16)}…</div>
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:1px;">${escHtml(name)}</div>
+        ${p.nip05 ? `<div style="font-family:var(--mono);font-size:10px;color:var(--acid2);">✓ ${escHtml(p.nip05)}</div>` : `<div style="font-family:var(--mono);font-size:10px;color:var(--dim);">${hex.slice(0,16)}…</div>`}
       </div>
+      <div style="font-size:18px;color:var(--border2);">›</div>
     </div>`;
-  }).join('') + (count > 20 ? `<div style="font-size:10px;color:var(--dim);padding:10px 0;letter-spacing:0.08em;">// + ${count - 20} more</div>` : '');
+  }).join('') + (count > 100 ? `<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:12px 0;text-align:center;">+ ${count - 100} more</div>` : '');
+
+  // Fetch missing profiles
+  visible.filter(hex => !state.profiles[hex] || !state.profiles[hex].name)
+    .forEach(hex => fetchProfile(hex));
 }
 
 
@@ -5320,6 +5372,125 @@ function publishFollowChunk(idx) {
   showStep('qr');
   const _pill = document.getElementById('pill-compose');
   if (_pill) _pill.className = 'step-pill done';
+}
+
+
+// ── Profile search (via nostr.band) ──────────────────────────────────────
+
+async function searchProfiles() {
+  const query = document.getElementById('search-input').value.trim();
+  if (!query) return;
+
+  const results = document.getElementById('search-results');
+  results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:12px 0;">Searching…</div>';
+
+  try {
+    // Use nostr.band search API — NIP-50 search
+    const ws = new WebSocket('wss://relay.nostr.band');
+    const sub = 'search-' + Date.now();
+    const found = [];
+    const timer = setTimeout(() => {
+      ws.close();
+      renderSearchResults(found, query);
+    }, 6000);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify(['REQ', sub, {
+        kinds: [0],
+        search: query,
+        limit: 20
+      }]));
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+          try {
+            const p = JSON.parse(msg[2].content || '{}');
+            if (p.name || p.display_name) {
+              found.push({ pubkey: msg[2].pubkey, profile: p });
+              state.profiles[msg[2].pubkey] = p;
+              _profileCacheDirty = true;
+            }
+          } catch(e) {}
+        }
+        if (msg[0] === 'EOSE') {
+          clearTimeout(timer);
+          ws.close();
+          renderSearchResults(found, query);
+        }
+      } catch(e) {}
+    };
+
+    ws.onerror = () => {
+      clearTimeout(timer);
+      results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:12px 0;">Search unavailable — try again</div>';
+    };
+
+  } catch(e) {
+    results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">Error: ' + e.message + '</div>';
+  }
+}
+
+function renderSearchResults(found, query) {
+  const results = document.getElementById('search-results');
+  if (found.length === 0) {
+    results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:12px 0;">No results for "' + escHtml(query) + '"</div>';
+    return;
+  }
+
+  results.innerHTML = found.map(({ pubkey, profile: p }) => {
+    const name = p.name || p.display_name || pubkey.slice(0,8) + '…';
+    const isFollowing = feedState.followList.includes(pubkey);
+    const avatar = p.picture
+      ? `<img src="${escHtml(p.picture)}" style="width:100%;height:100%;object-fit:cover;">`
+      : `<span style="font-size:15px;font-weight:600;">${name[0]||'?'}</span>`;
+    return `<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <div class="note-avatar" onclick="openUserProfilePage('${pubkey}')" style="flex-shrink:0;cursor:pointer;">${avatar}</div>
+      <div style="flex:1;min-width:0;cursor:pointer;" onclick="openUserProfilePage('${pubkey}')">
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:1px;">${escHtml(name)}</div>
+        ${p.nip05 ? `<div style="font-family:var(--mono);font-size:10px;color:var(--acid2);">✓ ${escHtml(p.nip05)}</div>` : `<div style="font-family:var(--mono);font-size:10px;color:var(--dim);">${pubkey.slice(0,16)}…</div>`}
+        ${p.about ? `<div style="font-size:12px;color:var(--muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(p.about.slice(0,60))}</div>` : ''}
+      </div>
+      <button onclick="searchToggleFollow('${pubkey}', this)"
+        style="background:${isFollowing ? 'none' : 'var(--acid2)'};color:${isFollowing ? 'var(--muted)' : '#fff'};border:1px solid ${isFollowing ? 'var(--border2)' : 'transparent'};font-family:var(--sans);font-size:12px;font-weight:600;padding:6px 14px;border-radius:9999px;cursor:pointer;flex-shrink:0;white-space:nowrap;">
+        ${isFollowing ? 'Following' : 'Follow'}
+      </button>
+    </div>`;
+  }).join('');
+}
+
+function searchToggleFollow(pubkey, btn) {
+  const isFollowing = feedState.followList.includes(pubkey);
+  if (isFollowing) {
+    feedState.followList = feedState.followList.filter(p => p !== pubkey);
+    btn.textContent = 'Follow';
+    btn.style.background = 'var(--acid2)';
+    btn.style.color = '#fff';
+    btn.style.border = '1px solid transparent';
+  } else {
+    feedState.followList.push(pubkey);
+    btn.textContent = 'Following';
+    btn.style.background = 'none';
+    btn.style.color = 'var(--muted)';
+    btn.style.border = '1px solid var(--border2)';
+    showToast('Following ' + (state.profiles[pubkey]?.name || pubkey.slice(0,8)));
+  }
+  localStorage.setItem('follow_list', JSON.stringify(feedState.followList));
+  const countEl = document.getElementById('lists-count');
+  if (countEl) countEl.textContent = feedState.followList.length;
+  if (feedState.mode === 'following') resubscribeAll();
+}
+
+function clearFollowList() {
+  if (!confirm('Clear your entire follow list? This cannot be undone.')) return;
+  feedState.followList = [];
+  feedState.followListLoaded = false;
+  localStorage.setItem('follow_list', JSON.stringify([]));
+  setFeedMode('global');
+  initListsSection();
+  showToast('Follow list cleared');
 }
 
 function exportFollowList() {
