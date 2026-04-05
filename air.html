@@ -5837,199 +5837,18 @@ initTheme();
 </script>
 
 
-<script>
-// ── Pull-to-refresh ────────────────────────────────────────────────────────
-(function() {
-  var startY = 0;
-  var pulling = false;
-  var triggered = false;
-  var THRESHOLD = 80;
 
-  function atTop() {
-    var wrap = document.querySelector('.wrap');
-    if (wrap && wrap.scrollTop > 2) return false;
-    if (window.scrollY > 2) return false;
-    return true;
-  }
-
-  function onFeedSection() {
-    var feed = document.getElementById('section-feed');
-    return feed && feed.classList.contains('active');
-  }
-
-  document.addEventListener('touchstart', function(e) {
-    var tag = e.target.tagName;
-    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'A') return;
-    if (e.target.closest('button, input, textarea, select, a, .note-action, #spark-nav, #compose-fab')) return;
-    if (!atTop()) return;
-    startY = e.touches[0].clientY;
-    pulling = false;
-    triggered = false;
-  }, { passive: true });
-
-  document.addEventListener('touchmove', function(e) {
-    if (startY === 0) return;
-    var dy = e.touches[0].clientY - startY;
-    if (dy < 8) return;
-    if (!atTop() && !pulling) { startY = 0; return; }
-    pulling = true;
-
-    var h = Math.min(dy * 0.45, THRESHOLD);
-    var progress = h / THRESHOLD;
-
-    var indicator = document.getElementById('ptr-indicator');
-    var label = document.getElementById('ptr-label');
-    if (indicator) { indicator.style.height = h + 'px'; }
-    if (label) {
-      label.style.opacity = progress;
-      label.textContent = h >= THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
-    }
-    var key = document.getElementById('ptr-key');
-    if (key) {
-      key.style.opacity = progress;
-      key.style.transform = 'rotate(' + (progress * 180) + 'deg)';
-    }
-    if (h >= THRESHOLD && !triggered) {
-      triggered = true;
-      if (window.navigator && window.navigator.vibrate) navigator.vibrate(8);
-    }
-  }, { passive: true });
-
-  document.addEventListener('touchend', function() {
-    if (!pulling) { startY = 0; return; }
-    pulling = false; startY = 0;
-    var indicator = document.getElementById('ptr-indicator');
-    var key = document.getElementById('ptr-key');
-    var label = document.getElementById('ptr-label');
-    if (triggered) {
-      if (indicator) { indicator.style.transition = 'height 0.1s'; indicator.style.height = '48px'; }
-      if (label) label.textContent = 'Refreshing…';
-      if (key) key.style.transform = 'rotate(360deg)';
-      setTimeout(function() { window.location.reload(); }, 500);
-    } else {
-      if (indicator) { indicator.style.transition = 'height 0.25s'; indicator.style.height = '0'; }
-      if (key) { key.style.opacity = '0'; key.style.transform = ''; }
-      if (label) label.style.opacity = '0';
-      setTimeout(function() { if (indicator) indicator.style.transition = 'none'; }, 260);
-    }
-  });
-})();
-
-// ── Infinite scroll — load older notes at bottom ──────────────────────────
-(function() {
-  var loading = false;
-  var oldestTimestamp = null;
-
-  function updateOldest() {
-    var feed = document.getElementById('feed');
-    if (!feed) return;
-    var cards = feed.querySelectorAll('.note-card');
-    cards.forEach(function(card) {
-      var noteId = card.id.replace('note-', '');
-      var note = state.notes.find(function(n) { return n.id === noteId; });
-      if (note) {
-        if (!oldestTimestamp || note.created_at < oldestTimestamp) {
-          oldestTimestamp = note.created_at;
-        }
-      }
-    });
-  }
-
-  function loadOlder() {
-    if (loading || !oldestTimestamp) return;
-    var feedSection = document.getElementById('section-feed');
-    if (!feedSection || !feedSection.classList.contains('active')) return;
-
-    loading = true;
-    var indicator = document.getElementById('scroll-loading-indicator');
-    if (indicator) indicator.style.display = 'block';
-
-    var filter = Object.assign({}, buildFeedFilter(), {
-      until: oldestTimestamp - 1,
-      limit: 30
-    });
-
-    var loaded = 0;
-    var open = state.sockets;
-    var relayUrls = Object.keys(open).filter(function(url) {
-      return open[url] && open[url].readyState === WebSocket.OPEN;
-    });
-
-    if (!relayUrls.length) { loading = false; if (indicator) indicator.style.display = 'none'; return; }
-
-    var ws = open[relayUrls[0]];
-    var sub = 'older-' + Date.now();
-    var eose = false;
-
-    ws.send(JSON.stringify(['REQ', sub, filter]));
-    var prev = ws.onmessage;
-    var timer = setTimeout(function() {
-      try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
-      ws.onmessage = prev;
-      loading = false;
-      if (indicator) indicator.style.display = 'none';
-      updateOldest();
-    }, 6000);
-
-    ws.onmessage = function(e) {
-      if (prev) prev(e);
-      try {
-        var msg = JSON.parse(e.data);
-        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
-          var ev = msg[2];
-          if (!state.knownIds.has(ev.id)) {
-            state.notes.push(ev);
-            if (state.notes.length > 1000) state.notes.shift();
-            if (noteMatchesMode(ev, feedState.mode)) {
-              state.knownIds.add(ev.id);
-              var feed = document.getElementById('feed');
-              if (feed && !document.getElementById('note-' + ev.id)) {
-                renderNote(ev, false);
-                loaded++;
-              }
-            }
-          }
-        }
-        if (msg[0] === 'EOSE' && msg[1] === sub && !eose) {
-          eose = true;
-          clearTimeout(timer);
-          try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
-          ws.onmessage = prev;
-          loading = false;
-          if (indicator) indicator.style.display = 'none';
-          updateOldest();
-        }
-      } catch(err) {}
-    };
-  }
-
-  window.addEventListener('scroll', function() {
-    var scrollBottom = window.innerHeight + window.scrollY;
-    var docHeight = document.documentElement.scrollHeight;
-    if (scrollBottom >= docHeight - 200) {
-      updateOldest();
-      loadOlder();
-    }
-  });
-
-  // Also check on feed mode change
-  var origSetFeed = window.setFeedMode;
-  document.addEventListener('DOMContentLoaded', function() {
-    oldestTimestamp = null;
-  });
-})();
-</script>
-
-<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);border-bottom:1px solid transparent;transition:none;pointer-events:none;">
-  <div style="display:flex;align-items:center;gap:10px;">
-    <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transform-origin:center;transition:opacity 0.15s,transform 0.05s;">
+<!-- Pull-to-refresh indicator -->
+<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);transition:none;pointer-events:none;">
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 0;">
+    <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transform-origin:26px 25px;transition:opacity 0.15s,transform 0.1s;">
       <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
       <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
       <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
       <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
       <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
       <circle cx="26" cy="25" r="5" fill="var(--acid)">
-        <animate attributeName="r" values="5;9;5" dur="1.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+        <animate id="ptr-pulse" attributeName="r" values="5;9;5" dur="1.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
         <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/>
       </circle>
     </svg>
@@ -6040,4 +5859,157 @@ initTheme();
 <div id="scroll-loading-indicator" style="display:none;text-align:center;padding:16px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.08em;">
   Loading older notes…
 </div>
+
+<script>
+// Wait for DOM to be ready
+document.addEventListener('DOMContentLoaded', function() {
+
+// ── Pull-to-refresh ────────────────────────────────────────────────────
+var ptr = {
+  startY: 0,
+  pulling: false,
+  triggered: false,
+  THRESHOLD: 80,
+  indicator: document.getElementById('ptr-indicator'),
+  key: document.getElementById('ptr-key'),
+  label: document.getElementById('ptr-label')
+};
+
+function ptrAtTop() {
+  // Check actual document scroll position
+  return (document.documentElement.scrollTop || document.body.scrollTop || window.pageYOffset || 0) <= 2;
+}
+
+document.addEventListener('touchstart', function(e) {
+  if (e.target.closest('button, input, textarea, select, a, .note-action, #spark-nav, #compose-fab, .note-card')) return;
+  if (!ptrAtTop()) return;
+  ptr.startY = e.touches[0].clientY;
+  ptr.pulling = false;
+  ptr.triggered = false;
+}, { passive: true });
+
+document.addEventListener('touchmove', function(e) {
+  if (!ptr.startY) return;
+  var dy = e.touches[0].clientY - ptr.startY;
+  if (dy < 10) return;
+  if (!ptrAtTop() && !ptr.pulling) { ptr.startY = 0; return; }
+  ptr.pulling = true;
+
+  var h = Math.min(dy * 0.45, ptr.THRESHOLD);
+  var progress = Math.min(h / ptr.THRESHOLD, 1);
+
+  ptr.indicator.style.height = h + 'px';
+  ptr.key.style.opacity = progress;
+  ptr.label.style.opacity = progress;
+  ptr.key.style.transform = 'rotate(' + (progress * 180) + 'deg)';
+
+  if (h >= ptr.THRESHOLD && !ptr.triggered) {
+    ptr.triggered = true;
+    ptr.label.textContent = 'Release to refresh';
+    if (navigator.vibrate) navigator.vibrate(8);
+  } else if (h < ptr.THRESHOLD && ptr.triggered) {
+    ptr.triggered = false;
+    ptr.label.textContent = 'Pull to refresh';
+  }
+}, { passive: true });
+
+document.addEventListener('touchend', function() {
+  if (!ptr.pulling) { ptr.startY = 0; return; }
+  ptr.pulling = false; ptr.startY = 0;
+
+  if (ptr.triggered) {
+    ptr.indicator.style.height = '52px';
+    ptr.label.textContent = 'Refreshing…';
+    ptr.key.style.transform = 'rotate(360deg)';
+    setTimeout(function() { window.location.reload(); }, 600);
+  } else {
+    ptr.indicator.style.transition = 'height 0.25s';
+    ptr.indicator.style.height = '0';
+    ptr.key.style.opacity = '0';
+    ptr.label.style.opacity = '0';
+    ptr.key.style.transform = '';
+    setTimeout(function() { ptr.indicator.style.transition = 'none'; }, 260);
+  }
+});
+
+// ── Infinite scroll ────────────────────────────────────────────────────
+var scrollLoading = false;
+
+function getOldestTimestamp() {
+  var oldest = null;
+  state.notes.forEach(function(n) {
+    if (!oldest || n.created_at < oldest) oldest = n.created_at;
+  });
+  return oldest;
+}
+
+function loadOlderNotes() {
+  if (scrollLoading) return;
+  var feedSection = document.getElementById('section-feed');
+  if (!feedSection || !feedSection.classList.contains('active')) return;
+
+  var oldest = getOldestTimestamp();
+  if (!oldest) return;
+
+  scrollLoading = true;
+  var ind = document.getElementById('scroll-loading-indicator');
+  if (ind) ind.style.display = 'block';
+
+  var ws = Object.values(state.sockets).find(function(w) {
+    return w && w.readyState === WebSocket.OPEN;
+  });
+  if (!ws) { scrollLoading = false; if (ind) ind.style.display = 'none'; return; }
+
+  var filter = Object.assign({}, buildFeedFilter(), { until: oldest - 1, limit: 30 });
+  var sub = 'older-' + Date.now();
+  var done = false;
+
+  var timer = setTimeout(function() {
+    if (done) return; done = true;
+    try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
+    ws.onmessage = prevMsg;
+    scrollLoading = false;
+    if (ind) ind.style.display = 'none';
+  }, 6000);
+
+  var prevMsg = ws.onmessage;
+  ws.send(JSON.stringify(['REQ', sub, filter]));
+
+  ws.onmessage = function(e) {
+    if (prevMsg) prevMsg(e);
+    try {
+      var msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        var ev = msg[2];
+        if (ev.kind === 1 && !state.knownIds.has(ev.id)) {
+          state.notes.push(ev);
+          if (noteMatchesMode(ev, feedState.mode)) {
+            state.knownIds.add(ev.id);
+            var feed = document.getElementById('feed');
+            if (feed && !document.getElementById('note-' + ev.id)) {
+              renderNote(ev, false);
+            }
+          }
+        }
+      }
+      if (msg[0] === 'EOSE' && msg[1] === sub && !done) {
+        done = true;
+        clearTimeout(timer);
+        try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
+        ws.onmessage = prevMsg;
+        scrollLoading = false;
+        if (ind) ind.style.display = 'none';
+      }
+    } catch(err) {}
+  };
+}
+
+window.addEventListener('scroll', function() {
+  var scrolledTo = window.scrollY + window.innerHeight;
+  var total = document.documentElement.scrollHeight;
+  if (scrolledTo >= total - 300) loadOlderNotes();
+}, { passive: true });
+
+}); // end DOMContentLoaded
+</script>
 </body>
