@@ -2513,7 +2513,7 @@ function handleNote(ev){
   if(ev.kind!==1)return;
   if(!state.knownIds.has(ev.id)){
     state.notes.unshift(ev);
-    if(state.notes.length>200)state.notes.pop();
+    if(state.notes.length>1000)state.notes.pop();
   }
   if(!noteMatchesMode(ev, feedState.mode))return;
   if(state.knownIds.has(ev.id))return;
@@ -2532,6 +2532,7 @@ function renderNote(ev,prepend=false){
   const profile=state.profiles[ev.pubkey]||{};
   const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
   const div=document.createElement('div');div.className='note-card';div.id=id;
+  div.dataset.ev = JSON.stringify(ev);
   div.addEventListener('click', (e) => { if (e.target.closest('button') || e.target.closest('.note-action') || e.target.closest('.reply-parent')) return; openThread(ev.id); });
   div.style.cursor = 'pointer';
 
@@ -3692,9 +3693,24 @@ function likeShowFullscreen() {
 // ── REPLY ─────────────────────────────────────────────────────────────────
 
 function findNote(eventId) {
-  return state.notes.find(n => n.id === eventId)
-    || parentNoteCache[eventId]
-    || null;
+  // Check state.notes first
+  const inState = state.notes.find(n => n.id === eventId);
+  if (inState) return inState;
+
+  // Check parent cache
+  if (parentNoteCache[eventId]) return parentNoteCache[eventId];
+
+  // Check DOM — note cards store their event as data-ev
+  const card = document.getElementById('note-' + eventId);
+  if (card && card.dataset.ev) {
+    try {
+      const ev = JSON.parse(card.dataset.ev);
+      state.notes.push(ev); // add back to state
+      return ev;
+    } catch(e) {}
+  }
+
+  return null;
 }
 
 function noteReply(eventId) {
