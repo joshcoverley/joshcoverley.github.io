@@ -5243,7 +5243,41 @@ function publishFollowList() {
   }
 
   const pubkey = state.pubkeyHex || '0'.repeat(64);
-  const tags = feedState.followList.map(hex => ['p', hex]);
+  const statusEl = document.getElementById('follow-list-qr-status');
+
+  // QR codes max ~2900 chars at L error correction
+  // Each follow tag ["p","<64hex>"] = ~74 chars in JSON
+  // Base event wrapper = ~120 chars
+  // So max follows per QR ≈ (2900 - 120) / 74 ≈ 37
+  const MAX_PER_QR = 35;
+  const total = feedState.followList.length;
+
+  // If too many follows, chunk into pages
+  const chunks = [];
+  for (let i = 0; i < feedState.followList.length; i += MAX_PER_QR) {
+    chunks.push(feedState.followList.slice(i, i + MAX_PER_QR));
+  }
+
+  // Store chunks state
+  window._followChunks = chunks;
+  window._followChunkIdx = 0;
+  window._followTotal = total;
+
+  publishFollowChunk(0);
+}
+
+function publishFollowChunk(idx) {
+  const chunks = window._followChunks;
+  const total = window._followTotal;
+  const statusEl = document.getElementById('follow-list-qr-status');
+
+  if (idx >= chunks.length) {
+    statusEl.textContent = '✓ All ' + total + ' follows published';
+    return;
+  }
+
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const tags = chunks[idx].map(hex => ['p', hex]);
 
   const event = {
     kind: 3,
@@ -5255,15 +5289,17 @@ function publishFollowList() {
 
   state.unsignedEvent = event;
 
-  const statusEl = document.getElementById('follow-list-qr-status');
-  statusEl.textContent = 'Building QR for ' + tags.length + ' follows…';
+  const chunkLabel = chunks.length > 1
+    ? 'Part ' + (idx + 1) + ' of ' + chunks.length + ' · '
+    : '';
+
+  statusEl.textContent = chunkLabel + tags.length + ' follows in this QR';
 
   const qrEl = document.getElementById('qr-canvas');
   qrEl.innerHTML = '';
 
   (window._qrReady || Promise.resolve()).then(() => {
     const json = JSON.stringify(event);
-    // kind:3 with many follows can be large — use L error correction
     new QRCode(qrEl, {
       text: json,
       width: Math.min(window.innerWidth - 48, 320),
@@ -5272,7 +5308,12 @@ function publishFollowList() {
       colorLight: '#fff',
       correctLevel: QRCode.CorrectLevel.L
     });
-    statusEl.textContent = tags.length + ' follows · tap QR to enlarge · scan signed QR to publish';
+
+    if (chunks.length > 1) {
+      statusEl.textContent = chunkLabel + tags.length + ' follows · sign & publish, then return here for next chunk';
+    } else {
+      statusEl.textContent = tags.length + ' follows · tap QR to enlarge · scan signed QR to publish';
+    }
   });
 
   showSection('notes');
