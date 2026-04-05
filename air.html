@@ -665,6 +665,28 @@ footer strong { color: var(--muted); }
   letter-spacing: 0.1em;
   text-align: center;
 }
+
+/* ── User profile page ── */
+#section-user-profile { display:none; padding-bottom:80px; }
+#section-user-profile.active { display:block; }
+.up-banner {
+  width:100%;height:120px;background:linear-gradient(135deg,#1a1510,#0d0c0a);
+  position:relative;overflow:hidden;
+}
+.up-banner-key {
+  position:absolute;right:-10px;top:50%;transform:translateY(-50%);opacity:0.06;
+}
+.up-avatar-wrap {
+  width:72px;height:72px;border-radius:50%;
+  background:var(--bg2);border:3px solid var(--bg);
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+  font-size:24px;color:var(--muted);flex-shrink:0;
+}
+.up-stat { display:flex;flex-direction:column;align-items:center;gap:2px; }
+.up-stat-num { font-family:var(--sans);font-size:17px;font-weight:700;color:var(--text); }
+.up-stat-label { font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase; }
+.up-tab { flex:1;padding:10px 0;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;text-align:center;transition:color 0.15s,border-color 0.15s; }
+.up-tab.active { color:var(--text);border-bottom-color:var(--acid); }
 </style>
 </head>
 <body>
@@ -1585,6 +1607,93 @@ footer strong { color: var(--muted); }
     </div>
   </div>
 
+
+  <!-- ── User profile page ── -->
+  <div class="app-section" id="section-user-profile">
+
+    <!-- Back bar -->
+    <div style="display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);position:sticky;top:0;background:var(--bg);z-index:10;">
+      <button onclick="closeUserProfilePage()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:0;line-height:1;">←</button>
+      <span id="upp-back-name" style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+    </div>
+
+    <!-- Banner -->
+    <div class="up-banner">
+      <svg class="up-banner-key" width="200" height="90" viewBox="0 0 110 50" fill="none">
+        <circle cx="26" cy="25" r="18" stroke="#c9a84c" stroke-width="5.5" fill="none"/>
+        <circle cx="26" cy="25" r="6" fill="#0a0908"/>
+        <line x1="44" y1="25" x2="102" y2="25" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
+        <line x1="72" y1="25" x2="72" y2="41" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
+        <line x1="88" y1="25" x2="88" y2="36" stroke="#c9a84c" stroke-width="5.5" stroke-linecap="square"/>
+      </svg>
+    </div>
+
+    <!-- Avatar + identity -->
+    <div style="padding:0 16px;">
+      <div style="display:flex;align-items:flex-end;justify-content:space-between;margin-top:-36px;margin-bottom:12px;">
+        <div id="upp-avatar" class="up-avatar-wrap">?</div>
+        <!-- Action buttons -->
+        <div style="display:flex;gap:8px;padding-bottom:4px;">
+          <button onclick="uppZap()" id="upp-zap-btn"
+            style="background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:12px;padding:7px 14px;border-radius:9999px;cursor:pointer;">
+            ⚡ Zap
+          </button>
+          <button onclick="uppDM()" id="upp-dm-btn"
+            style="background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:12px;padding:7px 14px;border-radius:9999px;cursor:pointer;">
+            ✉ DM
+          </button>
+          <button onclick="uppToggleFollow()" id="upp-follow-btn"
+            style="background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:12px;font-weight:600;padding:7px 16px;border-radius:9999px;cursor:pointer;">
+            Follow
+          </button>
+        </div>
+      </div>
+
+      <!-- Name + NIP-05 -->
+      <div id="upp-name" style="font-family:var(--sans);font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px;"></div>
+      <div id="upp-nip05" style="font-family:var(--mono);font-size:10px;color:var(--acid2);margin-bottom:6px;display:none;"></div>
+      <div id="upp-pubkey" style="font-family:var(--mono);font-size:10px;color:var(--dim);margin-bottom:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+
+      <!-- Bio -->
+      <div id="upp-about" style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:12px;"></div>
+
+      <!-- Lightning address -->
+      <div id="upp-lud16-row" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px;">⚡ <span id="upp-lud16"></span></div>
+
+      <!-- Stats -->
+      <div style="display:flex;gap:0;padding:14px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:0;">
+        <div class="up-stat" style="flex:1;border-right:1px solid var(--border);">
+          <div class="up-stat-num" id="upp-following-count">—</div>
+          <div class="up-stat-label">Following</div>
+        </div>
+        <div class="up-stat" style="flex:1;border-right:1px solid var(--border);">
+          <div class="up-stat-num" id="upp-followers-count">—</div>
+          <div class="up-stat-label">Followers</div>
+        </div>
+        <div class="up-stat" style="flex:1;">
+          <div class="up-stat-num" id="upp-notes-count">—</div>
+          <div class="up-stat-label">Notes</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab bar -->
+    <div style="display:flex;border-bottom:1px solid var(--border);position:sticky;top:49px;background:var(--bg);z-index:9;">
+      <button class="up-tab active" id="upp-tab-notes" onclick="uppSetTab('notes')">
+        Notes <span id="upp-notes-tab-count" style="opacity:0.5;"></span>
+      </button>
+      <button class="up-tab" id="upp-tab-replies" onclick="uppSetTab('replies')">
+        Replies <span id="upp-replies-tab-count" style="opacity:0.5;"></span>
+      </button>
+    </div>
+
+    <!-- Notes feed -->
+    <div id="upp-notes-feed" style=""></div>
+    <div id="upp-replies-feed" style="display:none;"></div>
+    <div id="upp-loading" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:32px 0;letter-spacing:0.08em;">Loading…</div>
+
+  </div>
+
   <footer>
     Your signing key never leaves your FAVILLA Key hardware.<br>
     This portal handles only the <strong>unsigned</strong> event and relay publishing.<br>
@@ -2369,8 +2478,8 @@ function renderNote(ev,prepend=false){
   div.style.cursor = 'pointer';
   div.innerHTML=`
     <div class="note-header">
-      <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfile('${ev.pubkey}')" style="cursor:pointer;">${name[0]||'?'}</div>
-      <div onclick="event.stopPropagation();openUserProfile('${ev.pubkey}')" style="cursor:pointer;">
+      <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">${name[0]||'?'}</div>
+      <div onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">
         <div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
         <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div>
       </div>
@@ -3654,6 +3763,237 @@ function noteZap(eventId) {
 
 
 
+
+// ── User profile page ─────────────────────────────────────────────────────
+
+let uppPubkey = null;
+let uppTab = 'notes';
+let uppPrevSection = 'feed';
+
+function openUserProfilePage(pubkey) {
+  uppPubkey = pubkey;
+  uppTab = 'notes';
+
+  // Remember where we came from
+  const active = document.querySelector('.app-section.active');
+  uppPrevSection = active ? active.id.replace('section-','') : 'feed';
+
+  // Show section
+  document.querySelectorAll('.app-section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(b => { b.classList.remove('active'); });
+  document.getElementById('section-user-profile').classList.add('active');
+
+  // Hide FAB
+  const fab = document.getElementById('compose-fab');
+  if (fab) fab.style.display = 'none';
+
+  // Clear previous content
+  document.getElementById('upp-notes-feed').innerHTML = '';
+  document.getElementById('upp-replies-feed').innerHTML = '';
+  document.getElementById('upp-loading').style.display = 'block';
+  document.getElementById('upp-loading').textContent = 'Loading…';
+  document.getElementById('upp-following-count').textContent = '—';
+  document.getElementById('upp-followers-count').textContent = '—';
+  document.getElementById('upp-notes-count').textContent = '—';
+
+  // Populate from cached profile
+  uppPopulateProfile(pubkey);
+
+  // Fetch fresh profile + stats
+  if (!state.profiles[pubkey] || !state.profiles[pubkey].name) fetchProfile(pubkey);
+  uppFetchStats(pubkey);
+  uppFetchNotes(pubkey);
+}
+
+function closeUserProfilePage() {
+  showSection(uppPrevSection || 'feed');
+}
+
+function uppPopulateProfile(pubkey) {
+  const profile = state.profiles[pubkey] || {};
+  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
+
+  document.getElementById('upp-back-name').textContent = name;
+  document.getElementById('upp-name').textContent = name;
+  document.getElementById('upp-pubkey').textContent = pubkey.slice(0,20) + '…' + pubkey.slice(-8);
+
+  const av = document.getElementById('upp-avatar');
+  if (profile.picture) {
+    av.innerHTML = '<img src="' + escHtml(profile.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
+  } else {
+    av.textContent = name[0] || '?';
+  }
+
+  const nip05 = document.getElementById('upp-nip05');
+  if (profile.nip05) { nip05.textContent = '✓ ' + profile.nip05; nip05.style.display = 'block'; }
+  else { nip05.style.display = 'none'; }
+
+  document.getElementById('upp-about').textContent = profile.about || '';
+
+  const lud16Row = document.getElementById('upp-lud16-row');
+  if (profile.lud16) { document.getElementById('upp-lud16').textContent = profile.lud16; lud16Row.style.display = 'block'; }
+  else { lud16Row.style.display = 'none'; }
+
+  // Follow button
+  uppUpdateFollowBtn(pubkey);
+
+  // Zap button
+  const zapBtn = document.getElementById('upp-zap-btn');
+  if (zapBtn) zapBtn.style.opacity = profile.lud16 ? '1' : '0.4';
+}
+
+function uppUpdateFollowBtn(pubkey) {
+  const btn = document.getElementById('upp-follow-btn');
+  if (!btn) return;
+  if (pubkey === state.pubkeyHex) { btn.style.display = 'none'; return; }
+  btn.style.display = '';
+  const following = feedState.followList.includes(pubkey);
+  if (following) {
+    btn.textContent = 'Following ✓';
+    btn.style.background = 'none';
+    btn.style.border = '1px solid var(--border2)';
+    btn.style.color = 'var(--muted)';
+    btn.style.fontWeight = '400';
+  } else {
+    btn.textContent = 'Follow';
+    btn.style.background = 'var(--acid2)';
+    btn.style.border = 'none';
+    btn.style.color = '#fff';
+    btn.style.fontWeight = '600';
+  }
+}
+
+function uppToggleFollow() {
+  if (!uppPubkey) return;
+  const isFollowing = feedState.followList.includes(uppPubkey);
+  if (isFollowing) {
+    feedState.followList = feedState.followList.filter(p => p !== uppPubkey);
+    showToast('Unfollowed');
+  } else {
+    feedState.followList.push(uppPubkey);
+    showToast('Following — publish kind:3 from device to persist');
+  }
+  localStorage.setItem('follow_list', JSON.stringify(feedState.followList));
+  uppUpdateFollowBtn(uppPubkey);
+  if (feedState.mode === 'following') resubscribeAll();
+}
+
+function uppZap() {
+  if (!uppPubkey) return;
+  const profile = state.profiles[uppPubkey] || {};
+  if (!profile.lud16) { showToast('No lightning address for this user'); return; }
+  openQuickZapModal_direct(uppPubkey);
+}
+
+function uppDM() {
+  showToast('DMs coming soon');
+}
+
+function uppSetTab(tab) {
+  uppTab = tab;
+  ['notes','replies'].forEach(t => {
+    document.getElementById('upp-tab-' + t).className = 'up-tab' + (t === tab ? ' active' : '');
+    document.getElementById('upp-' + t + '-feed').style.display = t === tab ? '' : 'none';
+  });
+}
+
+async function uppFetchStats(pubkey) {
+  // Get following count from kind:3
+  const followEvent = await fetchFollowEventFromRelay(pubkey, RELAYS[0]);
+  if (followEvent) {
+    const count = (followEvent.tags || []).filter(t => t[0] === 'p').length;
+    document.getElementById('upp-following-count').textContent = count;
+  }
+
+  // Get follower count — check how many people have a kind:3 with this pubkey
+  const relay = RELAYS[0];
+  const ws = new WebSocket(relay);
+  const sub = 'upf-' + Math.random().toString(36).slice(2,8);
+  let followerCount = 0;
+  const timer = setTimeout(() => {
+    ws.close();
+    document.getElementById('upp-followers-count').textContent = followerCount + '+';
+  }, 5000);
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], '#p':[pubkey], limit:500 }]));
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub) followerCount++;
+      if (msg[0] === 'EOSE') {
+        clearTimeout(timer); ws.close();
+        document.getElementById('upp-followers-count').textContent = followerCount;
+      }
+    } catch(e) {}
+  };
+  ws.onerror = () => { clearTimeout(timer); };
+}
+
+async function uppFetchNotes(pubkey) {
+  const relay = RELAYS[0];
+  const ws = new WebSocket(relay);
+  const sub = 'upn-' + Math.random().toString(36).slice(2,8);
+  const notesFeed = document.getElementById('upp-notes-feed');
+  const repliesFeed = document.getElementById('upp-replies-feed');
+  let noteCount = 0;
+  let replyCount = 0;
+
+  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 8000);
+
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[1], authors:[pubkey], limit:50 }]));
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        const ev = msg[2];
+        const isReply = ev.tags.some(t => t[0] === 'e');
+        const card = uppRenderNote(ev);
+        if (isReply) { repliesFeed.appendChild(card); replyCount++; }
+        else { notesFeed.appendChild(card); noteCount++; }
+      }
+      if (msg[0] === 'EOSE') {
+        clearTimeout(timer); ws.close();
+        uppDoneLoading(noteCount, replyCount);
+      }
+    } catch(e) {}
+  };
+  ws.onerror = () => { clearTimeout(timer); uppDoneLoading(noteCount, replyCount); };
+}
+
+function uppDoneLoading(noteCount, replyCount) {
+  document.getElementById('upp-loading').style.display = 'none';
+  document.getElementById('upp-notes-count').textContent = noteCount + replyCount;
+  document.getElementById('upp-notes-tab-count').textContent = noteCount ? '(' + noteCount + ')' : '';
+  document.getElementById('upp-replies-tab-count').textContent = replyCount ? '(' + replyCount + ')' : '';
+  if (noteCount === 0) {
+    document.getElementById('upp-notes-feed').innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:32px 0;">No notes yet</div>';
+  }
+}
+
+function uppRenderNote(ev) {
+  const profile = state.profiles[ev.pubkey] || {};
+  const name = profile.name || profile.display_name || ev.pubkey.slice(0,8) + '…';
+  const div = document.createElement('div');
+  div.className = 'note-card';
+  div.style.cursor = 'default';
+  div.innerHTML = `
+    <div class="note-content" style="padding:14px 16px 10px;">${escHtml(ev.content || '')}</div>
+    <div style="padding:4px 16px 12px;display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--dim);">${timeAgo(ev.created_at)}</span>
+      <div style="display:flex;gap:16px;">
+        <button class="note-action reply" onclick="noteReply('${ev.id}')" title="Reply" style="font-size:11px;">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+        </button>
+        <button class="note-action like" onclick="noteLike('${ev.id}')" title="Like">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        </button>
+        <button class="note-action zap" onclick="noteZap('${ev.id}')" title="Zap">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        </button>
+      </div>
+    </div>
+  `;
+  return div;
+}
 // ── User profile modal ────────────────────────────────────────────────────
 
 let userProfilePubkey = null;
