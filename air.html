@@ -2209,7 +2209,7 @@ function resubscribeAll() {
 }
 
 function buildFeedFilter() {
-  const base = { kinds:[1], limit:50 };
+  const base = { kinds:[1], limit: feedState.mode === 'following' ? 100 : 50 };
   switch(feedState.mode) {
     case 'following':
       if (feedState.followList.length > 0) {
@@ -2231,26 +2231,59 @@ function buildFeedFilter() {
 
 async function fetchFollowList(pubkeyHex) {
   const statusEl = document.getElementById('follow-status');
-  statusEl.textContent = '// Fetching follow list...';
-  let found = false;
-  for (const url of RELAYS) {
-    try {
-      const follows = await fetchFollowListFromRelay(pubkeyHex, url);
-      if (follows && follows.length > 0) {
-        feedState.followList = follows;
-        feedState.followListLoaded = true;
-        localStorage.setItem('follow_list', JSON.stringify(follows));
-        statusEl.textContent = '// Following ' + follows.length + ' accounts';
-        found = true;
-        if (feedState.mode === 'following') resubscribeAll();
-        break;
+  if (statusEl) statusEl.textContent = 'Fetching follow list…';
+
+  // Fetch from all relays in parallel, keep the most recent kind:3
+  let bestEvent = null;
+  const results = await Promise.allSettled(
+    RELAYS.map(url => fetchFollowEventFromRelay(pubkeyHex, url))
+  );
+
+  for (const r of results) {
+    if (r.status === 'fulfilled' && r.value) {
+      if (!bestEvent || r.value.created_at > bestEvent.created_at) {
+        bestEvent = r.value;
       }
-    } catch(e) {}
+    }
   }
-  if (!found) {
-    statusEl.textContent = '';
-    if (!feedState.followListLoaded) showOnboarding();
+
+  if (bestEvent) {
+    const follows = (bestEvent.tags || [])
+      .filter(t => t[0] === 'p' && t[1] && /^[0-9a-f]{64}$/.test(t[1]))
+      .map(t => t[1]);
+
+    if (follows.length > 0) {
+      feedState.followList = follows;
+      feedState.followListLoaded = true;
+      localStorage.setItem('follow_list', JSON.stringify(follows));
+      if (statusEl) statusEl.textContent = 'Following ' + follows.length + ' accounts';
+      if (feedState.mode === 'following') resubscribeAll();
+      return;
+    }
   }
+
+  if (statusEl) statusEl.textContent = '';
+  if (!feedState.followListLoaded) showOnboarding();
+}
+
+function fetchFollowEventFromRelay(pubkeyHex, relayUrl) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(relayUrl);
+    const timer = setTimeout(() => { ws.close(); resolve(null); }, 6000);
+    const sub = 'fl-' + Math.random().toString(36).slice(2,8);
+    ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], authors:[pubkeyHex], limit:1 }]));
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]?.kind === 3) {
+          clearTimeout(timer); ws.close(); resolve(msg[2]);
+        } else if (msg[0] === 'EOSE') {
+          clearTimeout(timer); ws.close(); resolve(null);
+        }
+      } catch(e) {}
+    };
+    ws.onerror = () => { clearTimeout(timer); resolve(null); };
+  });
 }
 
 function fetchFollowListFromRelay(pubkeyHex, relayUrl) {
@@ -4612,76 +4645,96 @@ initTheme();
 
 </script>
 
-<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);transition:height 0.15s;pointer-events:none;">
-  <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transition:opacity 0.2s;">
-    <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
-    <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
-    <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
-    <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
-    <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
-    <circle cx="26" cy="25" r="5" fill="var(--acid)" id="ptr-dot">
-      <animate id="ptr-anim" attributeName="r" values="5;9;5" dur="1s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
-    </circle>
-  </svg>
+<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);border-bottom:1px solid transparent;transition:none;pointer-events:none;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transition:opacity 0.15s;transform-origin:center;transition:opacity 0.15s,transform 0.05s;">
+      <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+      <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
+      <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <circle cx="26" cy="25" r="5" fill="var(--acid)">
+        <animate attributeName="r" values="5;9;5" dur="1.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+        <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+    <span id="ptr-label" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.1em;opacity:0;transition:opacity 0.15s;">Pull to refresh</span>
+  </div>
 </div>
 
 <script>
 (function() {
-  let startY = 0;
-  let pulling = false;
-  let triggered = false;
-  const THRESHOLD = 72;
-  const indicator = document.getElementById('ptr-indicator');
-  const key = document.getElementById('ptr-key');
+  var startY = 0;
+  var pulling = false;
+  var triggered = false;
+  var THRESHOLD = 80;
+  var indicator = document.getElementById('ptr-indicator');
+  var key = document.getElementById('ptr-key');
+  var label = document.getElementById('ptr-label');
 
+  // Check if the scrollable container is at the top
   function atTop() {
-    return window.scrollY <= 0;
+    // Check both window and the .wrap element
+    var wrap = document.querySelector('.wrap');
+    if (wrap && wrap.scrollTop > 2) return false;
+    if (window.scrollY > 2) return false;
+    return true;
   }
 
-  document.addEventListener('touchstart', (e) => {
+  document.addEventListener('touchstart', function(e) {
     if (!atTop()) return;
     startY = e.touches[0].clientY;
-    pulling = true;
+    pulling = false;
     triggered = false;
   }, { passive: true });
 
-  document.addEventListener('touchmove', (e) => {
-    if (!pulling) return;
-    const dy = e.touches[0].clientY - startY;
-    if (dy <= 0) { pulling = false; return; }
+  document.addEventListener('touchmove', function(e) {
+    if (startY === 0) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy < 8) return; // ignore small movements
+    if (!atTop() && !pulling) { startY = 0; return; } // started scrolling down, not pulling
 
-    const h = Math.min(dy * 0.5, THRESHOLD);
+    pulling = true;
+    var h = Math.min(dy * 0.45, THRESHOLD);
+    var progress = h / THRESHOLD;
+
     indicator.style.height = h + 'px';
-    key.style.opacity = Math.min(h / THRESHOLD, 1);
-
-    // Rotate key based on pull distance
-    const rotate = Math.min((h / THRESHOLD) * 180, 180);
-    key.style.transform = 'rotate(' + rotate + 'deg)';
+    key.style.opacity = progress;
+    label.style.opacity = progress;
+    key.style.transform = 'rotate(' + (progress * 180) + 'deg)';
 
     if (h >= THRESHOLD && !triggered) {
       triggered = true;
-      // Haptic if available
-      if (window.navigator && window.navigator.vibrate) navigator.vibrate(10);
-      key.style.transform = 'rotate(180deg)';
+      label.textContent = 'Release to refresh';
+      if (window.navigator && window.navigator.vibrate) navigator.vibrate(8);
+    }
+    if (h < THRESHOLD && triggered) {
+      triggered = false;
+      label.textContent = 'Pull to refresh';
     }
   }, { passive: true });
 
-  document.addEventListener('touchend', () => {
-    if (!pulling) return;
+  document.addEventListener('touchend', function() {
+    if (!pulling) { startY = 0; return; }
     pulling = false;
+    startY = 0;
 
     if (triggered) {
-      // Hold indicator for a moment then refresh
-      indicator.style.height = THRESHOLD + 'px';
-      key.style.opacity = '1';
-      setTimeout(() => { window.location.reload(); }, 400);
+      indicator.style.transition = 'height 0.1s';
+      indicator.style.height = '48px';
+      key.style.transform = 'rotate(360deg)';
+      label.textContent = 'Refreshing…';
+      setTimeout(function() { window.location.reload(); }, 500);
     } else {
+      indicator.style.transition = 'height 0.25s';
       indicator.style.height = '0';
       key.style.opacity = '0';
+      label.style.opacity = '0';
       key.style.transform = '';
+      setTimeout(function() { indicator.style.transition = 'none'; }, 260);
     }
   });
 })();
 </script>
+
 </body>
-</html>
