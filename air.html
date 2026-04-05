@@ -4481,6 +4481,31 @@ async function uppFetchStats(pubkey) {
 }
 
 async function uppFetchStatsPrimal(pubkey) {
+  // Try nostr.band HTTP API first — genuinely instant
+  try {
+    const resp = await fetch('https://api.nostr.band/v0/stats/profile/' + pubkey,
+      { signal: AbortSignal.timeout(4000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      const s = data.stats;
+      if (s) {
+        if (s.followers_count != null)
+          document.getElementById('upp-followers-count').textContent = Number(s.followers_count).toLocaleString();
+        if (s.follows_count != null)
+          document.getElementById('upp-following-count').textContent = Number(s.follows_count).toLocaleString();
+        if (s.note_count != null)
+          document.getElementById('upp-notes-count').textContent = Number(s.note_count).toLocaleString();
+        if (s.zap_amount != null) {
+          const sats = Math.floor(s.zap_amount / 1000);
+          document.getElementById('upp-zaps-total').textContent =
+            sats >= 1000 ? (sats/1000).toFixed(1)+'k' : sats.toString();
+        }
+        return true;
+      }
+    }
+  } catch(e) {}
+
+  // Fallback: Primal WebSocket cache
   return new Promise((resolve) => {
     let ws;
     try { ws = new WebSocket('wss://cache2.primal.net/v1'); } catch(e) { resolve(false); return; }
@@ -4500,20 +4525,41 @@ async function uppFetchStatsPrimal(pubkey) {
         const msg = JSON.parse(e.data);
         if (msg[0] === 'EVENT' && msg[2]) {
           const ev = msg[2];
-          // Primal returns kind 0 (profile) and kind 10000133 (stats)
+
+          // Format 1: kind 10000133 with JSON content (older Primal)
           if (ev.kind === 10000133) {
             try {
               const stats = JSON.parse(ev.content);
-              const followersEl = document.getElementById('upp-followers-count');
-              const followingEl = document.getElementById('upp-following-count');
-              const notesEl = document.getElementById('upp-notes-count');
-              if (followersEl && stats.followers_count != null)
-                followersEl.textContent = Number(stats.followers_count).toLocaleString();
-              if (followingEl && stats.follows_count != null)
-                followingEl.textContent = Number(stats.follows_count).toLocaleString();
-              if (notesEl && stats.note_count != null)
-                notesEl.textContent = Number(stats.note_count).toLocaleString();
+              const f = stats.followers_count ?? stats.follower_count;
+              const fw = stats.follows_count ?? stats.following_count;
+              const n = stats.note_count ?? stats.notes_count;
+              if (f != null) document.getElementById('upp-followers-count').textContent = Number(f).toLocaleString();
+              if (fw != null) document.getElementById('upp-following-count').textContent = Number(fw).toLocaleString();
+              if (n != null) document.getElementById('upp-notes-count').textContent = Number(n).toLocaleString();
             } catch(e) {}
+          }
+
+          // Format 2: kind 0 with primal_words/primal_followers in tags
+          if (ev.kind === 0 && ev.tags) {
+            ev.tags.forEach(t => {
+              if (t[0] === 'followers_count' || t[0] === 'primal_followers')
+                document.getElementById('upp-followers-count').textContent = Number(t[1]).toLocaleString();
+              if (t[0] === 'follows_count' || t[0] === 'primal_following')
+                document.getElementById('upp-following-count').textContent = Number(t[1]).toLocaleString();
+              if (t[0] === 'note_count' || t[0] === 'primal_notes')
+                document.getElementById('upp-notes-count').textContent = Number(t[1]).toLocaleString();
+            });
+          }
+
+          // Format 3: kind 30382 with tags (NIP-85 / Antiprimal format)
+          if (ev.kind === 30382 && ev.tags) {
+            const getTag = (name) => ev.tags.find(t => t[0] === name)?.[1];
+            const followers = getTag('followers');
+            const following = getTag('following') || getTag('follows');
+            const notes = getTag('notes') || getTag('note_count');
+            if (followers) document.getElementById('upp-followers-count').textContent = Number(followers).toLocaleString();
+            if (following) document.getElementById('upp-following-count').textContent = Number(following).toLocaleString();
+            if (notes) document.getElementById('upp-notes-count').textContent = Number(notes).toLocaleString();
           }
         }
         if (msg[0] === 'EOSE') {
@@ -4526,6 +4572,7 @@ async function uppFetchStatsPrimal(pubkey) {
 
     ws.onerror = () => { clearTimeout(timer); resolve(false); };
   });
+  }); // end Primal WS promise
 }
 
 function uppFetchStatsFromRelay(pubkey) {
