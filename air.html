@@ -1220,16 +1220,20 @@ footer strong { color: var(--muted); }
         <!-- Lightning -->
         <div id="up-lud16-row" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px;">⚡ <span id="up-lud16"></span></div>
         <!-- Actions -->
-        <div style="display:flex;gap:8px;">
-          <button onclick="quickZapFromProfile()" id="up-zap-btn"
+        <div style="display:flex;gap:8px;margin-bottom:10px;">
+          <button onclick="upZap()" id="up-zap-btn"
             style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
             ⚡ Zap
           </button>
-          <button onclick="closeUserProfile()"
+          <button onclick="upToggleFollow()" id="up-follow-btn"
             style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:13px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
-            Done
+            Follow
           </button>
         </div>
+        <button onclick="closeUserProfile()"
+          style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:9px;border-radius:9999px;cursor:pointer;">
+          Done
+        </button>
       </div>
     </div>
   </div>
@@ -3665,6 +3669,7 @@ function openUserProfile(pubkey) {
     av.innerHTML = '<img src="' + escHtml(profile.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
   } else {
     av.textContent = name[0] || '?';
+    av.style.fontSize = '20px';
   }
 
   document.getElementById('up-name').textContent = name;
@@ -3680,10 +3685,75 @@ function openUserProfile(pubkey) {
   if (profile.lud16) { document.getElementById('up-lud16').textContent = profile.lud16; lud16Row.style.display = 'block'; }
   else { lud16Row.style.display = 'none'; }
 
+  // Follow button state
+  updateFollowBtn(pubkey);
+
+  // Zap button — dim if no lightning address
+  const zapBtn = document.getElementById('up-zap-btn');
+  if (zapBtn) {
+    const hasLud16 = !!(profile.lud16);
+    zapBtn.style.opacity = hasLud16 ? '1' : '0.4';
+    zapBtn.title = hasLud16 ? '' : 'No lightning address found';
+  }
+
   document.getElementById('user-profile-modal').style.display = 'flex';
 
   // Fetch profile if not cached
   if (!state.profiles[pubkey] || !state.profiles[pubkey].name) fetchProfile(pubkey);
+}
+
+function updateFollowBtn(pubkey) {
+  const btn = document.getElementById('up-follow-btn');
+  if (!btn) return;
+  const isMe = pubkey === state.pubkeyHex;
+  const isFollowing = feedState.followList.includes(pubkey);
+  if (isMe) {
+    btn.style.display = 'none';
+  } else if (isFollowing) {
+    btn.textContent = 'Following ✓';
+    btn.style.background = 'none';
+    btn.style.border = '1px solid var(--border2)';
+    btn.style.color = 'var(--muted)';
+  } else {
+    btn.textContent = 'Follow';
+    btn.style.background = 'var(--acid2)';
+    btn.style.border = 'none';
+    btn.style.color = '#fff';
+    btn.style.display = '';
+  }
+}
+
+function upToggleFollow() {
+  if (!userProfilePubkey) return;
+  const pubkey = userProfilePubkey;
+  const isFollowing = feedState.followList.includes(pubkey);
+
+  if (isFollowing) {
+    // Unfollow
+    feedState.followList = feedState.followList.filter(p => p !== pubkey);
+    showToast('Unfollowed');
+  } else {
+    // Follow
+    if (!feedState.followList.includes(pubkey)) feedState.followList.push(pubkey);
+    showToast('Following');
+  }
+
+  localStorage.setItem('follow_list', JSON.stringify(feedState.followList));
+  updateFollowBtn(pubkey);
+
+  // If on following tab, resubscribe to update feed
+  if (feedState.mode === 'following') resubscribeAll();
+}
+
+function upZap() {
+  if (!userProfilePubkey) return;
+  const profile = state.profiles[userProfilePubkey] || {};
+  if (!profile.lud16) {
+    showToast('No lightning address for this user');
+    return;
+  }
+  closeUserProfile();
+  openQuickZapModal_direct(userProfilePubkey);
 }
 
 function closeUserProfile() {
@@ -3692,15 +3762,7 @@ function closeUserProfile() {
 }
 
 function quickZapFromProfile() {
-  if (!userProfilePubkey) return;
-  // Find a note by this pubkey to use as context, or zap without note
-  closeUserProfile();
-  // Create a fake noteZap without a specific eventId
-  const fakeNote = { id: null, pubkey: userProfilePubkey };
-  if (!state.notes.find(n => n.pubkey === userProfilePubkey)) {
-    state.notes.push(fakeNote);
-  }
-  openQuickZapModal_direct(userProfilePubkey);
+  upZap();
 }
 
 function openQuickZapModal_direct(pubkey) {
