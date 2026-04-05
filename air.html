@@ -1178,6 +1178,12 @@ footer strong { color: var(--muted); }
     <div style="font-size:10px;color:var(--muted);letter-spacing:0.08em;margin-bottom:14px;">
       // Follow list — <span id="lists-count">0 accounts</span>
     </div>
+    <!-- Publish follow list via airgap -->
+    <button onclick="publishFollowList()"
+      style="width:100%;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:11px;border-radius:9999px;cursor:pointer;margin-bottom:10px;">
+      Publish follow list
+    </button>
+    <div id="follow-list-qr-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-bottom:12px;min-height:14px;"></div>
     <button onclick="showOnboarding()" class="btn-outline" style="width:100%;margin-bottom:10px;">⬡ REBUILD FROM INTERESTS</button>
     <button onclick="exportFollowList()" class="btn-sm" style="width:100%;margin-bottom:6px;">EXPORT FOLLOW LIST</button>
     <div id="follow-list-display" style="margin-top:16px;"></div>
@@ -5216,6 +5222,52 @@ function initListsSection() {
       </div>
     </div>`;
   }).join('') + (count > 20 ? `<div style="font-size:10px;color:var(--dim);padding:10px 0;letter-spacing:0.08em;">// + ${count - 20} more</div>` : '');
+}
+
+
+function publishFollowList() {
+  if (feedState.followList.length === 0) {
+    showToast('No follows to publish');
+    return;
+  }
+
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const tags = feedState.followList.map(hex => ['p', hex]);
+
+  const event = {
+    kind: 3,
+    content: '',
+    tags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
+  };
+
+  state.unsignedEvent = event;
+
+  const statusEl = document.getElementById('follow-list-qr-status');
+  statusEl.textContent = 'Building QR for ' + tags.length + ' follows…';
+
+  const qrEl = document.getElementById('qr-canvas');
+  qrEl.innerHTML = '';
+
+  (window._qrReady || Promise.resolve()).then(() => {
+    const json = JSON.stringify(event);
+    // kind:3 with many follows can be large — use L error correction
+    new QRCode(qrEl, {
+      text: json,
+      width: Math.min(window.innerWidth - 48, 320),
+      height: Math.min(window.innerWidth - 48, 320),
+      colorDark: '#000',
+      colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.L
+    });
+    statusEl.textContent = tags.length + ' follows · tap QR to enlarge · scan signed QR to publish';
+  });
+
+  showSection('notes');
+  showStep('qr');
+  const _pill = document.getElementById('pill-compose');
+  if (_pill) _pill.className = 'step-pill done';
 }
 
 function exportFollowList() {
