@@ -2593,7 +2593,7 @@ function resubscribeAll() {
 }
 
 function buildFeedFilter() {
-  const base = { kinds:[1], limit: feedState.mode === 'following' ? 100 : 50 };
+  const base = { kinds:[1], limit: feedState.mode === 'following' ? 200 : 100 };
   switch(feedState.mode) {
     case 'following':
       if (feedState.followList.length > 0) {
@@ -4729,7 +4729,7 @@ async function uppFetchNotes(pubkey) {
 
 function uppFetchNotesPaginated(pubkey, noteCount, replyCount, oldestSeen) {
   const relay = RELAYS[0];
-  const PAGE = 100;
+  const PAGE = 500; // ask for max per request, relay caps at its own limit
   let ws;
   try { ws = new WebSocket(relay); } catch(e) { uppDoneLoading(noteCount, replyCount); return; }
 
@@ -4771,8 +4771,9 @@ function uppFetchNotesPaginated(pubkey, noteCount, replyCount, oldestSeen) {
         try { ws.close(); } catch(e) {}
         const totalNotes = noteCount + pageNotes;
         const totalReplies = replyCount + pageReplies;
-        // If full page returned, fetch more
-        if ((pageNotes + pageReplies) === PAGE && pageOldest) {
+        // Keep paginating as long as we got a full page back
+        const pageTotal = pageNotes + pageReplies;
+        if (pageTotal >= PAGE && pageOldest) {
           uppFetchNotesPaginated(pubkey, totalNotes, totalReplies, pageOldest);
         } else {
           uppDoneLoading(totalNotes, totalReplies);
