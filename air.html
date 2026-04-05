@@ -681,6 +681,38 @@ footer strong { color: var(--muted); }
 .up-stat-label { font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase; }
 .up-tab { flex:1;padding:10px 0;font-family:var(--mono);font-size:10px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;background:none;border:none;border-bottom:2px solid transparent;color:var(--muted);cursor:pointer;text-align:center;transition:color 0.15s,border-color 0.15s; }
 .up-tab.active { color:var(--text);border-bottom-color:var(--acid); }
+
+/* ── Parent note preview (for replies in feed) ── */
+.reply-parent {
+  margin: 10px 16px 0;
+  padding: 8px 12px;
+  border-left: 2px solid var(--border2);
+  border-radius: 0 6px 6px 0;
+  background: var(--bg2);
+  cursor: pointer;
+}
+.reply-parent-name {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--acid2);
+  margin-bottom: 2px;
+}
+.reply-parent-content {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.reply-parent-loading {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+}
 </style>
 </head>
 <body>
@@ -2457,8 +2489,13 @@ function renderNote(ev,prepend=false){
   const profile=state.profiles[ev.pubkey]||{};
   const name=profile.name||profile.display_name||(ev.pubkey.slice(0,8)+'…');
   const div=document.createElement('div');div.className='note-card';div.id=id;
-  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button')) openThread(ev.id); };
+  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button') && !e.target.closest('.reply-parent')) openThread(ev.id); };
   div.style.cursor = 'pointer';
+
+  // Detect reply — find root or parent e tag
+  const eTag = ev.tags.find(t => t[0] === 'e');
+  const parentId = eTag ? eTag[1] : null;
+
   div.innerHTML=`
     <div class="note-header">
       <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">${name[0]||'?'}</div>
@@ -2468,6 +2505,7 @@ function renderNote(ev,prepend=false){
       </div>
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
+    ${parentId ? `<div class="reply-parent" id="parent-${ev.id}" onclick="event.stopPropagation();openThread('${parentId}')"><div class="reply-parent-loading">Loading reply context…</div></div>` : ''}
     <div class="note-content">${escHtml(ev.content||'')}</div>
     <div class="note-actions">
       <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
@@ -2491,6 +2529,65 @@ function renderNote(ev,prepend=false){
   else feed.appendChild(div);
   while(feed.children.length>50)feed.removeChild(feed.lastChild);
   observeNoteForStats(div);
+
+  // Fetch parent note for replies
+  if (parentId) fetchParentNote(parentId, ev.id);
+}
+
+// Cache of fetched parent notes
+const parentNoteCache = {};
+
+function fetchParentNote(parentId, noteId) {
+  // Check local notes cache first
+  const local = state.notes.find(n => n.id === parentId);
+  if (local) { renderParentNote(local, noteId); return; }
+
+  // Check parent cache
+  if (parentNoteCache[parentId]) { renderParentNote(parentNoteCache[parentId], noteId); return; }
+
+  // Fetch from relay
+  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
+  if (!ws) return;
+  const sub = 'par-' + parentId.slice(0,8);
+  ws.send(JSON.stringify(['REQ', sub, { ids: [parentId], limit: 1 }]));
+
+  const prev = ws.onmessage;
+  const cleanup = () => { try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {} ws.onmessage = prev; };
+  const timer = setTimeout(() => {
+    cleanup();
+    const el = document.getElementById('parent-' + noteId);
+    if (el) el.style.display = 'none';
+  }, 5000);
+
+  ws.onmessage = (e) => {
+    if (prev) prev(e);
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        clearTimeout(timer); cleanup();
+        parentNoteCache[parentId] = msg[2];
+        renderParentNote(msg[2], noteId);
+      } else if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer); cleanup();
+        const el = document.getElementById('parent-' + noteId);
+        if (el) el.style.display = 'none'; // hide if not found
+      }
+    } catch(e2) {}
+  };
+}
+
+function renderParentNote(parentEv, noteId) {
+  const el = document.getElementById('parent-' + noteId);
+  if (!el) return;
+  const profile = state.profiles[parentEv.pubkey] || {};
+  const name = profile.name || profile.display_name || parentEv.pubkey.slice(0,8) + '…';
+  const preview = (parentEv.content || '').replace(/\n/g,' ').slice(0, 120) + ((parentEv.content || '').length > 120 ? '…' : '');
+  el.innerHTML = `
+    <div class="reply-parent-name">${escHtml(name)}</div>
+    <div class="reply-parent-content">${escHtml(preview)}</div>
+  `;
+  // Fetch profile if needed
+  if (!state.profiles[parentEv.pubkey] || !state.profiles[parentEv.pubkey].name) fetchProfile(parentEv.pubkey);
 }
 
 function insertNoteInOrder(ev) {
@@ -3955,26 +4052,52 @@ function uppDoneLoading(noteCount, replyCount) {
 function uppRenderNote(ev) {
   const profile = state.profiles[ev.pubkey] || {};
   const name = profile.name || profile.display_name || ev.pubkey.slice(0,8) + '…';
+  const avatarContent = profile.picture
+    ? `<img src="${escHtml(profile.picture)}" style="width:100%;height:100%;object-fit:cover;">`
+    : (name[0] || '?');
+
+  // Detect parent reply
+  const eTag = ev.tags ? ev.tags.find(t => t[0] === 'e') : null;
+  const parentId = eTag ? eTag[1] : null;
+
   const div = document.createElement('div');
   div.className = 'note-card';
-  div.style.cursor = 'default';
+  div.id = 'note-' + ev.id;
+  div.style.cursor = 'pointer';
+  div.onclick = (e) => { if (!e.target.closest('.note-action') && !e.target.closest('button') && !e.target.closest('.reply-parent')) openThread(ev.id); };
   div.innerHTML = `
-    <div class="note-content" style="padding:14px 16px 10px;">${escHtml(ev.content || '')}</div>
-    <div style="padding:4px 16px 12px;display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-family:var(--mono);font-size:10px;color:var(--dim);">${timeAgo(ev.created_at)}</span>
-      <div style="display:flex;gap:16px;">
-        <button class="note-action reply" onclick="noteReply('${ev.id}')" title="Reply" style="font-size:11px;">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
-        </button>
-        <button class="note-action like" onclick="noteLike('${ev.id}')" title="Like">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
-        </button>
-        <button class="note-action zap" onclick="noteZap('${ev.id}')" title="Zap">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-        </button>
+    <div class="note-header">
+      <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">${avatarContent}</div>
+      <div onclick="event.stopPropagation();openUserProfilePage('${ev.pubkey}')" style="cursor:pointer;">
+        <div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
+        <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div>
       </div>
+      <div class="note-time">${timeAgo(ev.created_at)}</div>
+    </div>
+    ${parentId ? `<div class="reply-parent" id="parent-${ev.id}" onclick="event.stopPropagation();openThread('${parentId}')"><div class="reply-parent-loading">Loading reply context…</div></div>` : ''}
+    <div class="note-content">${escHtml(ev.content || '')}</div>
+    <div class="note-actions">
+      <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+        <span class="count" id="replies-${ev.id}"></span>
+      </button>
+      <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <span class="count" id="likes-${ev.id}"></span>
+      </button>
+      <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <span class="count" id="zaps-${ev.id}"></span>
+      </button>
     </div>
   `;
+
+  // Fetch parent if reply
+  if (parentId) fetchParentNote(parentId, ev.id);
+
+  // Fetch profile if not cached
+  if (!state.profiles[ev.pubkey] || !state.profiles[ev.pubkey].name) fetchProfile(ev.pubkey);
+
   return div;
 }
 // ── User profile modal ────────────────────────────────────────────────────
