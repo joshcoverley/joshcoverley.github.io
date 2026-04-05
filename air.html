@@ -4472,31 +4472,85 @@ function uppSetTab(tab) {
 }
 
 async function uppFetchStats(pubkey) {
-  // Following count — from kind:3 event
-  const followEvent = await fetchFollowEventFromRelay(pubkey, RELAYS[0]);
-  if (followEvent) {
-    const count = (followEvent.tags || []).filter(t => t[0] === 'p').length;
-    document.getElementById('upp-following-count').textContent = count.toLocaleString();
+  // Try Primal cache first — instant single-request stats
+  const gotPrimal = await uppFetchStatsPrimal(pubkey);
+  if (!gotPrimal) {
+    // Fallback: count from kind:3
+    uppFetchStatsFromRelay(pubkey);
   }
+}
 
-  // Follower count — paginated, no cap
+async function uppFetchStatsPrimal(pubkey) {
+  return new Promise((resolve) => {
+    let ws;
+    try { ws = new WebSocket('wss://cache2.primal.net/v1'); } catch(e) { resolve(false); return; }
+
+    const sub = 'uprimal-' + Date.now();
+    const timer = setTimeout(() => {
+      try { ws.close(); } catch(e) {}
+      resolve(false);
+    }, 5000);
+
+    ws.onopen = () => {
+      ws.send(JSON.stringify(['REQ', sub, { cache: ['user_profile', { pubkey }] }]));
+    };
+
+    ws.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[2]) {
+          const ev = msg[2];
+          // Primal returns kind 0 (profile) and kind 10000133 (stats)
+          if (ev.kind === 10000133) {
+            try {
+              const stats = JSON.parse(ev.content);
+              const followersEl = document.getElementById('upp-followers-count');
+              const followingEl = document.getElementById('upp-following-count');
+              const notesEl = document.getElementById('upp-notes-count');
+              if (followersEl && stats.followers_count != null)
+                followersEl.textContent = Number(stats.followers_count).toLocaleString();
+              if (followingEl && stats.follows_count != null)
+                followingEl.textContent = Number(stats.follows_count).toLocaleString();
+              if (notesEl && stats.note_count != null)
+                notesEl.textContent = Number(stats.note_count).toLocaleString();
+            } catch(e) {}
+          }
+        }
+        if (msg[0] === 'EOSE') {
+          clearTimeout(timer);
+          try { ws.close(); } catch(e) {}
+          resolve(true);
+        }
+      } catch(e) {}
+    };
+
+    ws.onerror = () => { clearTimeout(timer); resolve(false); };
+  });
+}
+
+function uppFetchStatsFromRelay(pubkey) {
+  // Fallback: get following from kind:3, count followers manually
+  fetchFollowEventFromRelay(pubkey, RELAYS[0]).then(followEvent => {
+    if (followEvent) {
+      const count = (followEvent.tags || []).filter(t => t[0] === 'p').length;
+      document.getElementById('upp-following-count').textContent = count.toLocaleString();
+    }
+  });
   uppFetchFollowersPaginated(pubkey, 0, 0);
 }
 
 function uppFetchFollowersPaginated(pubkey, total, oldestSeen) {
-  const relay = RELAYS[0];
   const PAGE = 500;
   let ws;
-  try { ws = new WebSocket(relay); } catch(e) { return; }
+  try { ws = new WebSocket(RELAYS[0]); } catch(e) { return; }
 
   const sub = 'upf-' + Date.now();
-  let pageCount = 0;
-  let pageOldest = null;
+  let pageCount = 0, pageOldest = null;
 
   const timer = setTimeout(() => {
     try { ws.close(); } catch(e) {}
     const el = document.getElementById('upp-followers-count');
-    if (el) el.textContent = (total + pageCount).toLocaleString() + '+';
+    if (el && el.textContent === '—') el.textContent = (total + pageCount).toLocaleString() + '+';
   }, 10000);
 
   const filter = { kinds:[3], '#p':[pubkey], limit: PAGE };
@@ -4510,20 +4564,16 @@ function uppFetchFollowersPaginated(pubkey, total, oldestSeen) {
         pageCount++;
         const t = msg[2].created_at;
         if (!pageOldest || t < pageOldest) pageOldest = t;
-        // Update live
         const el = document.getElementById('upp-followers-count');
-        if (el) el.textContent = (total + pageCount).toLocaleString();
+        if (el && el.textContent === '—') el.textContent = (total + pageCount).toLocaleString();
       }
       if (msg[0] === 'EOSE' && msg[1] === sub) {
         clearTimeout(timer);
         try { ws.close(); } catch(e) {}
         const newTotal = total + pageCount;
         const el = document.getElementById('upp-followers-count');
-        if (el) el.textContent = newTotal.toLocaleString();
-        // If we got a full page, there may be more — paginate
-        if (pageCount === PAGE && pageOldest) {
-          uppFetchFollowersPaginated(pubkey, newTotal, pageOldest);
-        }
+        if (el && el.textContent === '—') el.textContent = newTotal.toLocaleString();
+        if (pageCount === PAGE && pageOldest) uppFetchFollowersPaginated(pubkey, newTotal, pageOldest);
       }
     } catch(e) {}
   };
