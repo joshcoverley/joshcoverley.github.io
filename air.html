@@ -419,10 +419,12 @@ textarea#compose-area { resize: none; height: 80px; line-height: 1.6; }
 }
 .note-action {
   background: none; border: none; color: var(--dim);
-  font-size: 13px; padding: 0;
-  cursor: pointer; display: flex; align-items: center; gap: 5px;
+  font-size: 13px; padding: 8px 10px;
+  margin: -8px -6px;
+  cursor: pointer; display: flex; align-items: center; gap: 6px;
   transition: color 0.15s; font-family: var(--mono);
   letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
 }
 .note-action span.count {
   font-size: 10px; color: var(--dim);
@@ -2508,19 +2510,19 @@ function renderNote(ev,prepend=false){
     <div class="note-content">${renderContent(ev.content||'')} </div>
     <div class="note-actions">
       <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
         <span class="count" id="replies-${ev.id}"></span>
       </button>
       <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span class="count" id="likes-${ev.id}"></span>
       </button>
       <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         <span class="count" id="zaps-${ev.id}"></span>
       </button>
       <button class="note-action repost" id="btn-repost-${ev.id}" onclick="noteRepost('${ev.id}')" title="Repost">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
         <span class="count" id="reposts-${ev.id}"></span>
       </button>
     </div>`;
@@ -3646,9 +3648,17 @@ function likeShowFullscreen() {
 }
 
 // ── REPLY ─────────────────────────────────────────────────────────────────
+
+function findNote(eventId) {
+  return state.notes.find(n => n.id === eventId)
+    || parentNoteCache[eventId]
+    || null;
+}
+
 function noteReply(eventId) {
-  const note = state.notes.find(n => n.id === eventId);
-  if (!note) return;
+  const note = findNote(eventId);
+  if (!note) { console.warn("noteReply: note not found", eventId); return; }
+  if (!state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   noteActionState.targetId = eventId;
   noteActionState.targetPubkey = note.pubkey;
   const profile = state.profiles[note.pubkey] || {};
@@ -3721,8 +3731,9 @@ function replySubmit() {
 
 // ── LIKE ──────────────────────────────────────────────────────────────────
 function noteLike(eventId) {
-  const note = state.notes.find(n => n.id === eventId);
-  if (!note) return;
+  const note = findNote(eventId);
+  if (!note) { console.warn("noteLike: note not found", eventId); return; }
+  if (!state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   const pubkey = note.pubkey;
   noteActionState.targetId = eventId;
   noteActionState.targetPubkey = pubkey;
@@ -3825,8 +3836,9 @@ function likeStartScan() {
 
 // ── REPOST — CHANGE 2: navigate to notes section then show QR ─────────────
 function noteRepost(eventId) {
-  const note = state.notes.find(n => n.id === eventId);
+  const note = findNote(eventId);
   if (!note) return;
+  if (!state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   const pubkey = note.pubkey;
   const senderPubkey = state.pubkeyHex || '0'.repeat(64);
   const event = {
@@ -3858,6 +3870,8 @@ function noteRepost(eventId) {
 
 // ── ZAP from note ─────────────────────────────────────────────────────────
 function noteZap(eventId) {
+  const note = findNote(eventId);
+  if (note && !state.notes.find(n=>n.id===eventId)) state.notes.push(note);
   openQuickZapModal(eventId);
 }
 
@@ -4101,15 +4115,15 @@ function uppRenderNote(ev) {
     <div class="note-content">${renderContent(ev.content||'')} </div>
     <div class="note-actions">
       <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
         <span class="count" id="replies-${ev.id}"></span>
       </button>
       <button class="note-action like" id="btn-like-${ev.id}" onclick="noteLike('${ev.id}')" title="Like">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
         <span class="count" id="likes-${ev.id}"></span>
       </button>
       <button class="note-action zap" id="btn-zap-${ev.id}" onclick="noteZap('${ev.id}')" title="Zap">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
         <span class="count" id="zaps-${ev.id}"></span>
       </button>
     </div>
