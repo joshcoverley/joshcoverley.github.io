@@ -2683,7 +2683,7 @@ function renderNote(ev,prepend=false){
     </div>`;
   if(prepend&&feed.firstChild)feed.insertBefore(div,feed.firstChild);
   else feed.appendChild(div);
-  while(feed.children.length>50)feed.removeChild(feed.lastChild);
+  // No DOM trim — all notes kept for scroll history
   observeNoteForStats(div);
 
   // Fetch parent note for replies
@@ -2771,7 +2771,7 @@ function insertNoteInOrder(ev) {
     feed.insertBefore(newEl, insertBefore);
   }
 
-  while (feed.children.length > 50) feed.removeChild(feed.lastChild);
+  // No DOM trim — all notes kept for scroll history
 }
 
 // ── Profile fetch — batched queue, dedicated WebSocket, no onmessage clobbering ──
@@ -4305,8 +4305,8 @@ async function uppFetchStats(pubkey) {
   const timer = setTimeout(() => {
     ws.close();
     document.getElementById('upp-followers-count').textContent = followerCount + '+';
-  }, 10000);
-  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], '#p':[pubkey], limit:500 }]));
+  }, 15000);
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], '#p':[pubkey], limit:1000 }]));
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
@@ -4329,9 +4329,9 @@ async function uppFetchNotes(pubkey) {
   let noteCount = 0;
   let replyCount = 0;
 
-  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 12000);
+  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 20000);
 
-  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[1], authors:[pubkey], limit:50 }]));
+  ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[1], authors:[pubkey], limit:200 }]));
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
@@ -5375,7 +5375,7 @@ function publishFollowChunk(idx) {
 }
 
 
-// ── Profile search (via nostr.band) ──────────────────────────────────────
+// ── Profile search ────────────────────────────────────────────────────────
 
 async function searchProfiles() {
   const query = document.getElementById('search-input').value.trim();
@@ -5384,53 +5384,75 @@ async function searchProfiles() {
   const results = document.getElementById('search-results');
   results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:12px 0;">Searching…</div>';
 
+  const found = [];
+
+  // Strategy 1: HTTP API via nostr.band (most reliable for profile search)
   try {
-    // Use nostr.band search API — NIP-50 search
-    const ws = new WebSocket('wss://relay.nostr.band');
-    const sub = 'search-' + Date.now();
-    const found = [];
-    const timer = setTimeout(() => {
-      ws.close();
-      renderSearchResults(found, query);
-    }, 6000);
+    const resp = await fetch(
+      'https://api.nostr.band/v0/search/profiles?q=' + encodeURIComponent(query) + '&limit=20',
+      { signal: AbortSignal.timeout(6000) }
+    );
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data && data.profiles && data.profiles.length > 0) {
+        data.profiles.forEach(item => {
+          const pubkey = item.pubkey;
+          const p = item.profile || {};
+          if (p.name || p.display_name) {
+            found.push({ pubkey, profile: p });
+            state.profiles[pubkey] = p;
+            _profileCacheDirty = true;
+          }
+        });
+        renderSearchResults(found, query);
+        return;
+      }
+    }
+  } catch(e) {}
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify(['REQ', sub, {
-        kinds: [0],
-        search: query,
-        limit: 20
-      }]));
-    };
+  // Strategy 2: NIP-50 WebSocket search on multiple relays
+  const SEARCH_RELAYS = ['wss://relay.nostr.band', 'wss://nostr.wine'];
+  let resolved = false;
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data);
-        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+  for (const relayUrl of SEARCH_RELAYS) {
+    if (resolved) break;
+    try {
+      await new Promise((resolve) => {
+        let ws;
+        try { ws = new WebSocket(relayUrl); } catch(e) { resolve(); return; }
+        const sub = 'search-' + Date.now();
+        const timer = setTimeout(() => { try { ws.close(); } catch(e) {} resolve(); }, 5000);
+
+        ws.onopen = () => {
+          ws.send(JSON.stringify(['REQ', sub, { kinds: [0], search: query, limit: 20 }]));
+        };
+        ws.onmessage = (e) => {
           try {
-            const p = JSON.parse(msg[2].content || '{}');
-            if (p.name || p.display_name) {
-              found.push({ pubkey: msg[2].pubkey, profile: p });
-              state.profiles[msg[2].pubkey] = p;
-              _profileCacheDirty = true;
+            const msg = JSON.parse(e.data);
+            if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+              try {
+                const p = JSON.parse(msg[2].content || '{}');
+                if (p.name || p.display_name) {
+                  found.push({ pubkey: msg[2].pubkey, profile: p });
+                  state.profiles[msg[2].pubkey] = p;
+                  _profileCacheDirty = true;
+                }
+              } catch(e) {}
+            }
+            if (msg[0] === 'EOSE') {
+              clearTimeout(timer);
+              try { ws.close(); } catch(e) {}
+              if (found.length > 0) resolved = true;
+              resolve();
             }
           } catch(e) {}
-        }
-        if (msg[0] === 'EOSE') {
-          clearTimeout(timer);
-          ws.close();
-          renderSearchResults(found, query);
-        }
-      } catch(e) {}
-    };
-
-    ws.onerror = () => {
-      clearTimeout(timer);
-      results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:12px 0;">Search unavailable — try again</div>';
-    };
-
-  } catch(e) {
-    results.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted);">Error: ' + e.message + '</div>';
+        };
+        ws.onerror = () => { clearTimeout(timer); resolve(); };
+      });
+    } catch(e) {}
   }
+
+  renderSearchResults(found, query);
 }
 
 function renderSearchResults(found, query) {
@@ -5814,4 +5836,208 @@ initTheme();
 
 </script>
 
+
+<script>
+// ── Pull-to-refresh ────────────────────────────────────────────────────────
+(function() {
+  var startY = 0;
+  var pulling = false;
+  var triggered = false;
+  var THRESHOLD = 80;
+
+  function atTop() {
+    var wrap = document.querySelector('.wrap');
+    if (wrap && wrap.scrollTop > 2) return false;
+    if (window.scrollY > 2) return false;
+    return true;
+  }
+
+  function onFeedSection() {
+    var feed = document.getElementById('section-feed');
+    return feed && feed.classList.contains('active');
+  }
+
+  document.addEventListener('touchstart', function(e) {
+    var tag = e.target.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'A') return;
+    if (e.target.closest('button, input, textarea, select, a, .note-action, #spark-nav, #compose-fab')) return;
+    if (!atTop()) return;
+    startY = e.touches[0].clientY;
+    pulling = false;
+    triggered = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', function(e) {
+    if (startY === 0) return;
+    var dy = e.touches[0].clientY - startY;
+    if (dy < 8) return;
+    if (!atTop() && !pulling) { startY = 0; return; }
+    pulling = true;
+
+    var h = Math.min(dy * 0.45, THRESHOLD);
+    var progress = h / THRESHOLD;
+
+    var indicator = document.getElementById('ptr-indicator');
+    var label = document.getElementById('ptr-label');
+    if (indicator) { indicator.style.height = h + 'px'; }
+    if (label) {
+      label.style.opacity = progress;
+      label.textContent = h >= THRESHOLD ? 'Release to refresh' : 'Pull to refresh';
+    }
+    var key = document.getElementById('ptr-key');
+    if (key) {
+      key.style.opacity = progress;
+      key.style.transform = 'rotate(' + (progress * 180) + 'deg)';
+    }
+    if (h >= THRESHOLD && !triggered) {
+      triggered = true;
+      if (window.navigator && window.navigator.vibrate) navigator.vibrate(8);
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', function() {
+    if (!pulling) { startY = 0; return; }
+    pulling = false; startY = 0;
+    var indicator = document.getElementById('ptr-indicator');
+    var key = document.getElementById('ptr-key');
+    var label = document.getElementById('ptr-label');
+    if (triggered) {
+      if (indicator) { indicator.style.transition = 'height 0.1s'; indicator.style.height = '48px'; }
+      if (label) label.textContent = 'Refreshing…';
+      if (key) key.style.transform = 'rotate(360deg)';
+      setTimeout(function() { window.location.reload(); }, 500);
+    } else {
+      if (indicator) { indicator.style.transition = 'height 0.25s'; indicator.style.height = '0'; }
+      if (key) { key.style.opacity = '0'; key.style.transform = ''; }
+      if (label) label.style.opacity = '0';
+      setTimeout(function() { if (indicator) indicator.style.transition = 'none'; }, 260);
+    }
+  });
+})();
+
+// ── Infinite scroll — load older notes at bottom ──────────────────────────
+(function() {
+  var loading = false;
+  var oldestTimestamp = null;
+
+  function updateOldest() {
+    var feed = document.getElementById('feed');
+    if (!feed) return;
+    var cards = feed.querySelectorAll('.note-card');
+    cards.forEach(function(card) {
+      var noteId = card.id.replace('note-', '');
+      var note = state.notes.find(function(n) { return n.id === noteId; });
+      if (note) {
+        if (!oldestTimestamp || note.created_at < oldestTimestamp) {
+          oldestTimestamp = note.created_at;
+        }
+      }
+    });
+  }
+
+  function loadOlder() {
+    if (loading || !oldestTimestamp) return;
+    var feedSection = document.getElementById('section-feed');
+    if (!feedSection || !feedSection.classList.contains('active')) return;
+
+    loading = true;
+    var indicator = document.getElementById('scroll-loading-indicator');
+    if (indicator) indicator.style.display = 'block';
+
+    var filter = Object.assign({}, buildFeedFilter(), {
+      until: oldestTimestamp - 1,
+      limit: 30
+    });
+
+    var loaded = 0;
+    var open = state.sockets;
+    var relayUrls = Object.keys(open).filter(function(url) {
+      return open[url] && open[url].readyState === WebSocket.OPEN;
+    });
+
+    if (!relayUrls.length) { loading = false; if (indicator) indicator.style.display = 'none'; return; }
+
+    var ws = open[relayUrls[0]];
+    var sub = 'older-' + Date.now();
+    var eose = false;
+
+    ws.send(JSON.stringify(['REQ', sub, filter]));
+    var prev = ws.onmessage;
+    var timer = setTimeout(function() {
+      try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
+      ws.onmessage = prev;
+      loading = false;
+      if (indicator) indicator.style.display = 'none';
+      updateOldest();
+    }, 6000);
+
+    ws.onmessage = function(e) {
+      if (prev) prev(e);
+      try {
+        var msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+          var ev = msg[2];
+          if (!state.knownIds.has(ev.id)) {
+            state.notes.push(ev);
+            if (state.notes.length > 1000) state.notes.shift();
+            if (noteMatchesMode(ev, feedState.mode)) {
+              state.knownIds.add(ev.id);
+              var feed = document.getElementById('feed');
+              if (feed && !document.getElementById('note-' + ev.id)) {
+                renderNote(ev, false);
+                loaded++;
+              }
+            }
+          }
+        }
+        if (msg[0] === 'EOSE' && msg[1] === sub && !eose) {
+          eose = true;
+          clearTimeout(timer);
+          try { ws.send(JSON.stringify(['CLOSE', sub])); } catch(e) {}
+          ws.onmessage = prev;
+          loading = false;
+          if (indicator) indicator.style.display = 'none';
+          updateOldest();
+        }
+      } catch(err) {}
+    };
+  }
+
+  window.addEventListener('scroll', function() {
+    var scrollBottom = window.innerHeight + window.scrollY;
+    var docHeight = document.documentElement.scrollHeight;
+    if (scrollBottom >= docHeight - 200) {
+      updateOldest();
+      loadOlder();
+    }
+  });
+
+  // Also check on feed mode change
+  var origSetFeed = window.setFeedMode;
+  document.addEventListener('DOMContentLoaded', function() {
+    oldestTimestamp = null;
+  });
+})();
+</script>
+
+<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);border-bottom:1px solid transparent;transition:none;pointer-events:none;">
+  <div style="display:flex;align-items:center;gap:10px;">
+    <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transform-origin:center;transition:opacity 0.15s,transform 0.05s;">
+      <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+      <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
+      <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      <circle cx="26" cy="25" r="5" fill="var(--acid)">
+        <animate attributeName="r" values="5;9;5" dur="1.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+        <animate attributeName="opacity" values="1;0.2;1" dur="1.2s" repeatCount="indefinite"/>
+      </circle>
+    </svg>
+    <span id="ptr-label" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.1em;opacity:0;transition:opacity 0.15s;">Pull to refresh</span>
+  </div>
+</div>
+
+<div id="scroll-loading-indicator" style="display:none;text-align:center;padding:16px;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.08em;">
+  Loading older notes…
+</div>
 </body>
