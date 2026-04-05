@@ -2506,7 +2506,7 @@ function renderNote(ev,prepend=false){
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
     ${parentId ? `<div class="reply-parent" id="parent-${ev.id}" onclick="event.stopPropagation();openThread('${parentId}')"><div class="reply-parent-loading">Loading reply context…</div></div>` : ''}
-    <div class="note-content">${escHtml(ev.content||'')}</div>
+    <div class="note-content">${renderContent(ev.content||'')} </div>
     <div class="note-actions">
       <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
@@ -4075,7 +4075,7 @@ function uppRenderNote(ev) {
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
     ${parentId ? `<div class="reply-parent" id="parent-${ev.id}" onclick="event.stopPropagation();openThread('${parentId}')"><div class="reply-parent-loading">Loading reply context…</div></div>` : ''}
-    <div class="note-content">${escHtml(ev.content || '')}</div>
+    <div class="note-content">${renderContent(ev.content||'')} </div>
     <div class="note-actions">
       <button class="note-action reply" id="btn-reply-${ev.id}" onclick="noteReply('${ev.id}')" title="Reply">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
@@ -4420,6 +4420,52 @@ function quickZapCopyInvoice() {
 }
 
 function quickZapReset() { quickZapShowStep('build'); }
+
+
+// ── Content rendering ─────────────────────────────────────────────────────
+
+const IMAGE_EXTS = /\.(jpg|jpeg|png|gif|webp|svg)(\?[^\s]*)?$/i;
+const URL_RE = /(https?:\/\/[^\s<>"]+)/g;
+
+function renderContent(text) {
+  if (!text) return '';
+  const parts = text.split(URL_RE);
+  let html = '';
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    if (part.match(/^https?:\/\//)) {
+      if (IMAGE_EXTS.test(part)) {
+        // Render as image
+        html += `<img src="${escHtml(part)}" 
+          style="max-width:100%;border-radius:10px;margin:6px 0;display:block;cursor:pointer;"
+          onclick="event.stopPropagation();openImageFullscreen('${escHtml(part)}')"
+          onerror="this.style.display='none'"
+          loading="lazy">`;
+      } else {
+        // Render as link
+        html += `<a href="${escHtml(part)}" target="_blank" 
+          onclick="event.stopPropagation();"
+          style="color:var(--acid2);text-decoration:none;word-break:break-all;">${escHtml(part)}</a>`;
+      }
+    } else {
+      html += escHtml(part);
+    }
+  }
+  return html;
+}
+
+function openImageFullscreen(url) {
+  const overlay = document.getElementById('image-fullscreen-overlay');
+  const img = document.getElementById('image-fullscreen-img');
+  if (!overlay || !img) return;
+  img.src = url;
+  overlay.style.display = 'flex';
+}
+
+function closeImageFullscreen() {
+  document.getElementById('image-fullscreen-overlay').style.display = 'none';
+  document.getElementById('image-fullscreen-img').src = '';
+}
 
 // ── QR Fullscreen ─────────────────────────────────────────────────────────
 
@@ -4946,7 +4992,7 @@ function buildThreadNote(ev, isRoot) {
       </div>
       <div class="thread-time">${timeAgo(ev.created_at)}</div>
     </div>
-    <div class="thread-content">${escHtml(ev.content || '')}</div>
+    <div class="thread-content">${renderContent(ev.content||'')} </div>
     <div class="note-actions" style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);">
       <button class="note-action reply" onclick="noteReply('${ev.id}')" title="Reply">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>
