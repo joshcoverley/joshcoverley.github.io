@@ -1837,6 +1837,48 @@ const feedState = {
   }
 })();
 
+
+// ── Persistent profile resolver ───────────────────────────────────────────
+// Scans DOM every few seconds for note cards missing names/avatars and refetches
+
+function resolveUnloadedProfiles() {
+  const missing = new Set();
+
+  // Find all avatar elements that still show a single letter (not an image)
+  document.querySelectorAll('.note-avatar, .thread-avatar, .up-avatar-wrap').forEach(av => {
+    // If it has no img child, it hasn't loaded yet
+    if (!av.querySelector('img')) {
+      // Extract pubkey from onclick
+      const onclick = av.getAttribute('onclick') || '';
+      const match = onclick.match(/openUserProfilePage\('([0-9a-f]{64})'\)/);
+      if (match) missing.add(match[1]);
+    }
+  });
+
+  // Also scan nm- elements that still show a hex snippet (not a real name)
+  document.querySelectorAll('[id^="nm-"]').forEach(el => {
+    const text = el.textContent || '';
+    // Still showing hex snippet like "abc123de…"
+    if (/^[0-9a-f]{8}…$/.test(text)) {
+      const noteId = el.id.replace('nm-', '');
+      const note = state.notes.find(n => n.id === noteId) || parentNoteCache[noteId];
+      if (note) missing.add(note.pubkey);
+    }
+  });
+
+  // Queue any missing profiles that aren't already being fetched
+  missing.forEach(pk => {
+    if (!state.profiles[pk] || !state.profiles[pk].name) {
+      _profileQueue.add(pk);
+    }
+  });
+
+  if (_profileQueue.size > 0) _drainProfileQueue();
+}
+
+// Run every 3 seconds
+setInterval(resolveUnloadedProfiles, 3000);
+
 (function boot() {
   if(state.pubkeyHex) {
     document.getElementById('pubkey-input').value = state.pubkeyHex;
