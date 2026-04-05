@@ -3443,13 +3443,14 @@ async function resolveLud16(lud16) {
   const [name, domain] = lud16.split('@');
   if (!name || !domain) throw new Error('Invalid lud16');
   const url = 'https://' + domain + '/.well-known/lnurlp/' + name;
-  zapSetStatus('Fetching ' + url + '...');
   let resp;
   try {
     resp = await fetch(url);
   } catch(e) {
-    zapSetStatus('Direct fetch failed, trying proxy...');
-    resp = await fetch('https://corsproxy.io/?' + encodeURIComponent(url));
+    // CORS blocked or network error — try proxy
+    try { resp = await fetch('https://corsproxy.io/?' + encodeURIComponent(url)); } catch(e2) {
+      throw new Error('Network error fetching LNURL: ' + e.message);
+    }
   }
   if (!resp.ok) throw new Error('HTTP ' + resp.status);
   const data = await resp.json();
@@ -4782,8 +4783,10 @@ function openQuickZapModal_direct(pubkey) {
 const quickZapState = { eventId: null, recipientHex: null, stopScan: null, invoiceText: '' };
 
 function openQuickZapModal(eventId) {
-  const note = state.notes.find(n => n.id === eventId);
-  if (!note) return;
+  const note = state.notes.find(n => n.id === eventId)
+    || parentNoteCache[eventId]
+    || (() => { try { return JSON.parse(document.querySelector('[id="note-'+eventId+'"]')?.dataset?.ev||'null'); } catch(e) {} return null; })();
+  if (!note) { showToast('Note not found — try again'); return; }
   quickZapState.eventId = eventId;
   quickZapState.recipientHex = note.pubkey;
 
@@ -4824,25 +4827,32 @@ async function quickZapBuild() {
   const comment = document.getElementById('quick-zap-comment').value.trim() || '⚡';
   const statusEl = document.getElementById('quick-zap-status');
 
-  statusEl.textContent = 'Fetching profile…';
-
-  let profile;
-  for (const relay of RELAYS) {
-    try {
-      profile = await fetchProfileOnce(quickZapState.recipientHex, relay);
-      if (profile && profile.lud16) break;
-    } catch(e) {}
+  // Use cached profile first, only fetch if missing lud16
+  let profile = state.profiles[quickZapState.recipientHex] || {};
+  if (!profile.lud16) {
+    statusEl.textContent = 'Fetching lightning address…';
+    for (const relay of RELAYS) {
+      try {
+        const fetched = await fetchProfileOnce(quickZapState.recipientHex, relay);
+        if (fetched && fetched.lud16) { profile = fetched; break; }
+      } catch(e) {}
+    }
   }
 
-  if (!profile || !profile.lud16) {
-    statusEl.textContent = 'No lightning address found for this user';
+  if (!profile.lud16) {
+    statusEl.textContent = '✗ This user has no lightning address set';
     return;
   }
 
   statusEl.textContent = 'Resolving LNURL…';
   let lnurlData;
-  try { lnurlData = await resolveLud16(profile.lud16); }
-  catch(e) { statusEl.textContent = 'LNURL error: ' + e.message; return; }
+  try {
+    statusEl.textContent = 'Fetching LNURL for ' + profile.lud16 + '…';
+    lnurlData = await resolveLud16(profile.lud16);
+  } catch(e) {
+    statusEl.textContent = '✗ LNURL error: ' + e.message;
+    return;
+  }
 
   const relay = RELAYS[0] || 'wss://relay.damus.io';
   const senderPubkey = state.pubkeyHex || '0'.repeat(64);
@@ -4918,17 +4928,20 @@ function quickZapCancelScan() {
 async function quickZapGotSignedEvent(data) {
   quickZapShowStep('invoice-step');
   const statusEl = document.getElementById('quick-zap-invoice-status');
-  statusEl.textContent = 'Sending to LNURL…';
+  statusEl.textContent = 'Processing signed event…';
 
   let signedJson;
   try {
     signedJson = data.length === 192 && /^[0-9a-f]{192}$/.test(data)
       ? decodeCompactQR(data, zapState.unsignedEvent)
       : JSON.parse(data);
-    if (!signedJson || !signedJson.sig) throw new Error('Missing sig');
-  } catch(e) { statusEl.textContent = 'Bad read: ' + e.message; return; }
+    if (!signedJson || !signedJson.sig) throw new Error('Missing sig — device may not have signed');
+  } catch(e) { statusEl.textContent = '✗ ' + e.message; return; }
 
-  const amount = parseInt(zapState.unsignedEvent.tags.find(t=>t[0]==='amount')?.[1] || '21000');
+  if (!zapState.lnurlData) { statusEl.textContent = '✗ LNURL data missing — tap back and retry'; return; }
+
+  const amount = parseInt(zapState.unsignedEvent?.tags?.find(t=>t[0]==='amount')?.[1] || '21000');
+  statusEl.textContent = 'Requesting invoice (' + Math.floor(amount/1000) + ' sats)…';
 
   try {
     const resp = await fetch(ZAP_PROXY, {
@@ -4936,9 +4949,11 @@ async function quickZapGotSignedEvent(data) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ callbackUrl: zapState.lnurlData.callback, signedEvent: signedJson, amount })
     });
-    const result = JSON.parse(await resp.text());
-    if (result.error || result.status === 'ERROR') throw new Error(result.error || result.reason);
-    if (!result.pr) throw new Error('No invoice returned');
+    const rawText = await resp.text();
+    let result;
+    try { result = JSON.parse(rawText); } catch(e) { throw new Error('Proxy bad response: ' + rawText.slice(0,80)); }
+    if (result.error || result.status === 'ERROR') throw new Error(result.reason || result.error || JSON.stringify(result));
+    if (!result.pr) throw new Error('No invoice in response: ' + rawText.slice(0,80));
 
     quickZapState.invoiceText = result.pr;
     statusEl.textContent = 'Invoice ready — scan with Lightning wallet';
