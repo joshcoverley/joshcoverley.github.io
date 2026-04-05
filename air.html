@@ -4563,10 +4563,22 @@ async function uppFetchZapTotal(pubkey) {
       const msg = JSON.parse(e.data);
       if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
         const ev = msg[2];
+        let msats = 0;
         const amountTag = ev.tags.find(t => t[0] === 'amount');
-        if (amountTag) {
-          totalSats += Math.floor((parseInt(amountTag[1]) || 0) / 1000);
+        if (amountTag && amountTag[1]) {
+          msats = parseInt(amountTag[1]) || 0;
         }
+        if (!msats) {
+          const descTag = ev.tags.find(t => t[0] === 'description');
+          if (descTag) {
+            try {
+              const zapReq = JSON.parse(descTag[1]);
+              const amtTag = zapReq.tags?.find(t => t[0] === 'amount');
+              if (amtTag) msats = parseInt(amtTag[1]) || 0;
+            } catch(e) {}
+          }
+        }
+        if (msats > 0) totalSats += Math.floor(msats / 1000);
         // Update live as they come in
         el.textContent = totalSats >= 1000
           ? (totalSats / 1000).toFixed(1) + 'k'
@@ -5189,17 +5201,24 @@ const statsCache = {}; // eventId → { likes, likedByMe, zapTotal, zappedByMe, 
 const statsFetchQueue = new Set();
 let statsFetchTimer = null;
 
+const statsFetched = new Set(); // IDs we've actually sent a fetch for
+
 const statsObserver = new IntersectionObserver((entries) => {
   entries.forEach(entry => {
     if (!entry.isIntersecting) return;
-    const noteId = entry.target.id.replace('note-', '');
-    if (!statsCache[noteId]) {
+    // Support both note-XXXX and thread notes (which have class but id may differ)
+    let noteId = entry.target.id.replace('note-', '');
+    if (!noteId || noteId === entry.target.id) {
+      // Try data-ev
+      try { const ev = JSON.parse(entry.target.dataset.ev||'{}'); if (ev.id) noteId = ev.id; } catch(e) {}
+    }
+    if (noteId && !statsFetched.has(noteId)) {
       statsFetchQueue.add(noteId);
       if (!statsFetchTimer) statsFetchTimer = setTimeout(flushStatsQueue, 300);
     }
     statsObserver.unobserve(entry.target);
   });
-}, { rootMargin: '100px' });
+}, { rootMargin: '200px' });
 
 function observeNoteForStats(el) {
   statsObserver.observe(el);
@@ -5220,6 +5239,7 @@ function fetchStatsForNotes(eventIds) {
   try { ws = new WebSocket(relayUrl); } catch(e) { return; }
 
   eventIds.forEach(id => {
+    statsFetched.add(id);
     if (!statsCache[id]) statsCache[id] = {
       likes: 0, likedByMe: false,
       zapTotal: 0, zappedByMe: false,
@@ -5231,11 +5251,38 @@ function fetchStatsForNotes(eventIds) {
 
   ws.onopen = () => {
     ws.send(JSON.stringify(['REQ', sub, {
-      kinds: [1, 6, 7, 9735],
+      kinds: [7, 9735],  // Focus on reactions and zaps — replies fetched separately in thread
       '#e': eventIds,
       limit: 500,
     }]));
   };
+  // Also fetch reply counts on main relay
+  const ws2 = (() => { try { return new WebSocket(RELAYS[1] || RELAYS[0]); } catch(e) { return null; } })();
+  if (ws2) {
+    const sub2 = 'stats2-' + Date.now();
+    ws2.onopen = () => ws2.send(JSON.stringify(['REQ', sub2, { kinds:[9735], '#e': eventIds, limit:500 }]));
+    ws2.onmessage = (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'EVENT' && msg[1] === sub2 && msg[2] && msg[2].kind === 9735) {
+          const ev = msg[2];
+          const targetTag = ev.tags.find(t => t[0] === 'e' && statsCache[t[1]]);
+          if (!targetTag) return;
+          const targetId = targetTag[1];
+          let msats = 0;
+          const at = ev.tags.find(t => t[0] === 'amount');
+          if (at) msats = parseInt(at[1]) || 0;
+          if (!msats) {
+            const dt = ev.tags.find(t => t[0] === 'description');
+            if (dt) { try { const zr = JSON.parse(dt[1]); const a2 = zr.tags?.find(t=>t[0]==='amount'); if(a2) msats=parseInt(a2[1])||0; } catch(e){} }
+          }
+          if (msats > 0) { statsCache[targetId].zapTotal += Math.floor(msats/1000); updateNoteStats(targetId); }
+        }
+        if (msg[0] === 'EOSE') { try { ws2.close(); } catch(e) {} }
+      } catch(e) {}
+    };
+    ws2.onerror = () => {};
+  }
 
   const timer = setTimeout(() => {
     try { ws.close(); } catch(e) {}
@@ -5263,18 +5310,25 @@ function fetchStatsForNotes(eventIds) {
             if (state.pubkeyHex && ev.pubkey === state.pubkeyHex) statsCache[targetId].likedByMe = true;
           }
         } else if (ev.kind === 9735) {
+          // NIP-57: amount can be in 'amount' tag (msats) OR derived from description
+          let msats = 0;
           const amountTag = ev.tags.find(t => t[0] === 'amount');
-          if (amountTag) {
-            const msats = parseInt(amountTag[1]) || 0;
-            statsCache[targetId].zapTotal += Math.floor(msats / 1000);
+          if (amountTag && amountTag[1]) {
+            msats = parseInt(amountTag[1]) || 0;
           }
-          const descTag = ev.tags.find(t => t[0] === 'description');
-          if (descTag && state.pubkeyHex) {
-            try {
-              const zapReq = JSON.parse(descTag[1]);
-              if (zapReq.pubkey === state.pubkeyHex) statsCache[targetId].zappedByMe = true;
-            } catch(e) {}
+          // Fallback: parse amount from description (zap request)
+          if (!msats) {
+            const descTag = ev.tags.find(t => t[0] === 'description');
+            if (descTag) {
+              try {
+                const zapReq = JSON.parse(descTag[1]);
+                const amtInReq = zapReq.tags?.find(t => t[0] === 'amount');
+                if (amtInReq) msats = parseInt(amtInReq[1]) || 0;
+                if (zapReq.pubkey === state.pubkeyHex) statsCache[targetId].zappedByMe = true;
+              } catch(e) {}
+            }
           }
+          if (msats > 0) statsCache[targetId].zapTotal += Math.floor(msats / 1000);
         }
         updateNoteStats(targetId);
 
