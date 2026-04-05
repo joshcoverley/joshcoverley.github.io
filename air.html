@@ -566,6 +566,61 @@ footer strong { color: var(--muted); }
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
 @keyframes blink  { 0%,49%{ opacity:1; } 50%,100%{ opacity:0.15; } }
+
+/* ── Key mark draw-on ── */
+@keyframes kBow   { from{stroke-dashoffset:120}to{stroke-dashoffset:0} }
+@keyframes kShaft { from{stroke-dashoffset:80} to{stroke-dashoffset:0} }
+@keyframes kT1    { from{stroke-dashoffset:40} to{stroke-dashoffset:0} }
+@keyframes kT2    { from{stroke-dashoffset:30} to{stroke-dashoffset:0} }
+@keyframes kHole  { from{opacity:0}to{opacity:1} }
+.km-bow   { stroke-dasharray:120;stroke-dashoffset:120;animation:kBow   0.55s 0.1s  cubic-bezier(.4,0,.2,1) forwards; }
+.km-shaft { stroke-dasharray:80; stroke-dashoffset:80; animation:kShaft 0.35s 0.55s ease forwards; }
+.km-t1    { stroke-dasharray:40; stroke-dashoffset:40; animation:kT1    0.22s 0.82s ease forwards; }
+.km-t2    { stroke-dasharray:30; stroke-dashoffset:30; animation:kT2    0.18s 0.96s ease forwards; }
+.km-hole  { opacity:0;                                 animation:kHole  0.2s  0.6s  ease forwards; }
+
+/* ── Nav key mark — draw on load, then idle pulse ── */
+@keyframes navKBow   { from{stroke-dashoffset:120}to{stroke-dashoffset:0} }
+@keyframes navKShaft { from{stroke-dashoffset:80} to{stroke-dashoffset:0} }
+@keyframes navKT1    { from{stroke-dashoffset:40} to{stroke-dashoffset:0} }
+@keyframes navKT2    { from{stroke-dashoffset:30} to{stroke-dashoffset:0} }
+@keyframes navKHole  { from{opacity:0}to{opacity:1} }
+@keyframes navKPulse { 0%,100%{opacity:0.7;r:6} 50%{opacity:0.2;r:4} }
+
+.nk-bow   { stroke-dasharray:120; stroke-dashoffset:120; animation: navKBow   0.55s 0.15s cubic-bezier(.4,0,.2,1) forwards; }
+.nk-shaft { stroke-dasharray:80;  stroke-dashoffset:80;  animation: navKShaft 0.35s 0.6s  ease forwards; }
+.nk-t1    { stroke-dasharray:40;  stroke-dashoffset:40;  animation: navKT1    0.22s 0.86s ease forwards; }
+.nk-t2    { stroke-dasharray:30;  stroke-dashoffset:30;  animation: navKT2    0.18s 1.0s  ease forwards; }
+.nk-hole  { opacity:0;                                   animation: navKHole  0.2s  0.65s ease forwards, navKPulse 2.8s 1.5s ease-in-out infinite; }
+
+/* Override nav-item sizing for the key mark button */
+#nav-feed svg.key-mark {
+  width: 38px;
+  height: 18px;
+}
+#nav-feed {
+  flex: 1.3;
+}
+
+/* ── Floating compose button ── */
+#compose-fab {
+  position: fixed;
+  bottom: 76px;
+  right: 20px;
+  width: 52px; height: 52px;
+  background: var(--acid2);
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 4000;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 2px 12px rgba(160,120,48,0.4);
+  transition: transform 0.15s, background 0.15s;
+  -webkit-tap-highlight-color: transparent;
+}
+#compose-fab:hover { background: var(--acid); transform: scale(1.06); }
+#compose-fab:active { transform: scale(0.96); }
+#compose-fab svg { width: 24px; height: 24px; stroke: #fff; fill: none; stroke-width: 2.5; stroke-linecap: round; }
 </style>
 </head>
 <body>
@@ -573,9 +628,29 @@ footer strong { color: var(--muted); }
 
   <!-- Compact header -->
   <header style="padding:14px 0 10px;border-bottom:1px solid var(--border2);margin-bottom:0;flex-direction:row;align-items:center;justify-content:space-between;">
-    <div>
-      <div style="font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:0.3em;color:var(--text);line-height:1;">FAVILLA <span style="color:var(--acid);">KEY</span></div>
-      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.1em;margin-top:3px;">Airgap Portal</div>
+    <div style="display:flex;align-items:center;">
+      <svg width="260" height="36" viewBox="0 0 260 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Key mark: bow centre at y=14 (cap height midpoint), teeth drop to y=28 -->
+        <circle style="stroke-dasharray:76;stroke-dashoffset:76;animation:kBow 0.55s 0.1s cubic-bezier(.4,0,.2,1) forwards;" cx="18" cy="14" r="12" stroke="var(--acid)" stroke-width="4" fill="none"/>
+        <!-- Profile picture fills the bow — clipped to circle -->
+        <defs>
+          <clipPath id="bow-clip">
+            <circle cx="18" cy="14" r="11"/>
+          </clipPath>
+        </defs>
+        <!-- Default keyhole dot — visible when no profile pic -->
+        <circle id="header-keyhole" style="opacity:0;animation:kHole 0.2s 0.6s ease forwards, navKPulse 2.8s 1.5s ease-in-out infinite;" cx="18" cy="14" r="4" fill="var(--bg)"/>
+        <!-- Profile picture — hidden by default, shown when pic loaded -->
+        <image id="header-avatar" href="" x="6" y="2" width="24" height="24" clip-path="url(#bow-clip)" style="display:none;"/>
+        <line   style="stroke-dasharray:40;stroke-dashoffset:40;animation:kShaft 0.35s 0.55s ease forwards;" x1="30" y1="14" x2="68" y2="14" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <line   style="stroke-dasharray:12;stroke-dashoffset:12;animation:kT1 0.22s 0.82s ease forwards;" x1="50" y1="14" x2="50" y2="25" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <line   style="stroke-dasharray:8;stroke-dashoffset:8;animation:kT2 0.18s 0.96s ease forwards;" x1="61" y1="14" x2="61" y2="21" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <!-- Wordmark text -->
+        <text x="78" y="22" font-family="'Bebas Neue',sans-serif" font-size="22" letter-spacing="5" fill="var(--text)">FAVILLA </text>
+        <text x="174" y="22" font-family="'Bebas Neue',sans-serif" font-size="22" letter-spacing="5" fill="var(--acid)">KEY</text>
+        <!-- Subtitle -->
+        <text x="78" y="32" font-family="'JetBrains Mono',monospace" font-size="8" letter-spacing="1.5" fill="var(--muted)">Airgap Portal</text>
+      </svg>
     </div>
     <div style="display:flex;align-items:center;gap:8px;">
       <div id="pubkey-hint" style="font-size:9px;color:var(--dim);letter-spacing:0.06em;text-align:right;"></div>
@@ -607,7 +682,16 @@ footer strong { color: var(--muted); }
       </div>
     </div>
     <div id="follow-status" style="font-size:10px;color:var(--dim);letter-spacing:0.08em;margin-bottom:8px;min-height:14px;"></div>
-    <div id="feed-empty" class="feed-empty" style="display:none">// No notes yet</div>
+    <div id="feed-empty" class="feed-empty" style="display:none;flex-direction:column;align-items:center;gap:16px;padding:48px 0;">
+      <svg width="88" height="40" viewBox="0 0 110 50" fill="none" style="opacity:0.2;">
+        <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+        <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
+        <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+        <line x1="72" y1="25" x2="72"  y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+        <line x1="88" y1="25" x2="88"  y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+      </svg>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:0.1em;">No notes yet</span>
+    </div>
     <div id="feed"></div>
   </div>
 
@@ -885,34 +969,92 @@ footer strong { color: var(--muted); }
 
   <!-- ── PROFILE section ── -->
   <div class="app-section" id="section-profile">
-    <div class="section-header">
-      <span class="section-title">Profile</span>
-    </div>
-    <div style="margin-bottom:16px;">
-      <div class="field-label"><span class="dot"></span>Your Pubkey</div>
-      <div class="pubkey-row">
-        <input type="text" id="pubkey-input-visible" placeholder="npub1… or hex pubkey"
-          oninput="onPubkeyInputVisible()" autocomplete="off" autocorrect="off" spellcheck="false">
-        <button class="btn-sm-accent" onclick="openPubkeyScan()">⬡ SCAN</button>
-        <button class="btn-sm" onclick="clearPubkey()">CLEAR</button>
+    <div class="section-header"><span class="section-title">Profile</span></div>
+
+    <!-- Avatar + identity -->
+    <div style="display:flex;align-items:center;gap:16px;padding:20px 16px 16px;border-bottom:1px solid var(--border);">
+      <div id="profile-avatar-large" style="width:68px;height:68px;border-radius:50%;background:var(--bg2);border:2px solid var(--acid2);display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:24px;color:var(--dim);overflow:hidden;">⬡</div>
+      <div style="flex:1;min-width:0;">
+        <div id="profile-display-name" style="font-size:17px;font-weight:700;color:var(--text);margin-bottom:2px;">—</div>
+        <div id="profile-nip05" style="font-family:var(--mono);font-size:10px;color:var(--acid2);margin-bottom:4px;display:none;"></div>
+        <div id="profile-about" style="font-size:13px;color:var(--dim);line-height:1.4;"></div>
       </div>
-      <div class="pubkey-hint" id="pubkey-hint-profile">Scan from device or enter manually.</div>
     </div>
-    <div style="margin-bottom:16px;">
-      <div class="field-label"><span class="dot"></span>Lightning Wallet (NWC)</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input id="nwc-string" type="text" placeholder="nostr+walletconnect://..."
-          autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false"
-          style="flex:1;" oninput="nwcOnInput()">
-        <button class="btn-sm-accent" onclick="nwcSave()">SAVE</button>
-        <button class="btn-sm" onclick="nwcClear()">CLEAR</button>
+
+    <!-- Fields -->
+    <div style="display:flex;flex-direction:column;">
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Public key</div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input id="pubkey-input-visible" type="text" placeholder="npub1… or hex"
+            oninput="onPubkeyInputVisible()" autocomplete="off" autocorrect="off" spellcheck="false"
+            style="flex:1;background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--mono);font-size:12px;color:var(--text);outline:none;">
+          <button class="btn-sm-accent" onclick="openPubkeyScan()" style="flex-shrink:0;">⬡ Scan</button>
+          <button class="btn-sm" onclick="clearPubkey()" style="flex-shrink:0;">Clear</button>
+        </div>
+        <div id="pubkey-hint-profile" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px;min-height:14px;"></div>
       </div>
-      <div id="nwc-status" style="font-size:10px;color:var(--muted);margin-top:4px;min-height:14px;letter-spacing:0.06em;"></div>
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Display name</div>
+        <input id="edit-name" type="text" placeholder="Your name" autocomplete="off"
+          style="background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--sans);font-size:15px;color:var(--text);outline:none;width:100%;">
+      </div>
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Bio</div>
+        <input id="edit-about" type="text" placeholder="About you…" autocomplete="off"
+          style="background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--sans);font-size:15px;color:var(--text);outline:none;width:100%;">
+      </div>
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Lightning address</div>
+        <input id="edit-lud16" type="text" placeholder="you@wallet.com" autocomplete="off" autocorrect="off" autocapitalize="off"
+          style="background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;width:100%;">
+        <div id="profile-lud16" style="display:none;"></div>
+      </div>
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><span style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--muted);">Avatar URL</span><a href="https://nostr.build" target="_blank" style="font-family:var(--mono);font-size:10px;color:var(--acid2);text-decoration:none;letter-spacing:0.06em;">⬆ Upload at nostr.build</a></div>
+        <input id="edit-picture" type="text" placeholder="https://…" autocomplete="off" autocorrect="off" autocapitalize="off"
+          style="background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;width:100%;">
+      </div>
+
+      <div style="padding:14px 16px;border-bottom:1px solid var(--border);">
+        <div style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--text);margin-bottom:6px;">Website</div>
+        <input id="edit-website" type="text" placeholder="https://…" autocomplete="off" autocorrect="off" autocapitalize="off"
+          style="background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--mono);font-size:13px;color:var(--text);outline:none;width:100%;">
+      </div>
+
+      <!-- Generate QR -->
+      <div style="padding:16px;">
+        <button onclick="editProfileGenerateQR()"
+          style="width:100%;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:11px;border-radius:9999px;cursor:pointer;transition:background 0.15s;">
+          Generate profile update QR
+        </button>
+        <div id="edit-profile-qr" style="display:flex;justify-content:center;margin-top:16px;"></div>
+        <div id="edit-profile-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-top:8px;min-height:14px;"></div>
+      </div>
+
+      <!-- NWC -->
+      <div style="padding:14px 16px;border-top:1px solid var(--border);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><span style="font-family:var(--sans);font-size:11px;font-weight:600;color:var(--muted);">Lightning wallet (NWC)</span><span style="font-family:var(--mono);font-size:9px;color:var(--dim);letter-spacing:0.06em;">Optional · advanced</span></div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <input id="nwc-string" type="text" placeholder="nostr+walletconnect://…"
+            autocorrect="off" autocapitalize="off" autocomplete="off" spellcheck="false"
+            oninput="nwcOnInput()"
+            style="flex:1;background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--mono);font-size:11px;color:var(--text);outline:none;">
+          <button class="btn-sm-accent" onclick="nwcSave()" style="flex-shrink:0;">Save</button>
+          <button class="btn-sm" onclick="nwcClear()" style="flex-shrink:0;">Clear</button>
+        </div>
+        <div id="nwc-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:5px;min-height:14px;letter-spacing:0.06em;">Connect a wallet to auto-pay zaps. Supported: Coinos, Cashu.me, LNbits, Alby Hub.</div>
+      </div>
+
     </div>
-    <div id="relay-status-profile" style="font-size:10px;color:var(--dim);letter-spacing:0.06em;margin-bottom:16px;"></div>
   </div>
 
-  <!-- ── LISTS section ── -->
+    <!-- ── LISTS section ── -->
   <div class="app-section" id="section-lists">
     <div class="section-header">
       <span class="section-title">Lists</span>
@@ -929,6 +1071,15 @@ footer strong { color: var(--muted); }
   <div id="qr-fullscreen-overlay">
     <div id="qr-fullscreen-canvas"></div>
     <div id="qr-fullscreen-hint">HOLD DEVICE CAMERA UP TO SCREEN · BRIGHTNESS MAX</div>
+    <div style="position:absolute;bottom:20px;right:20px;opacity:0.12;">
+      <svg width="52" height="24" viewBox="0 0 110 50" fill="none">
+        <circle cx="26" cy="25" r="18" stroke="#c9a84c" stroke-width="6" fill="none"/>
+        <circle cx="26" cy="25" r="6" fill="#fff"/>
+        <line x1="44" y1="25" x2="102" y2="25" stroke="#c9a84c" stroke-width="6" stroke-linecap="square"/>
+        <line x1="72" y1="25" x2="72"  y2="41" stroke="#c9a84c" stroke-width="6" stroke-linecap="square"/>
+        <line x1="88" y1="25" x2="88"  y2="36" stroke="#c9a84c" stroke-width="6" stroke-linecap="square"/>
+      </svg>
+    </div>
     <button id="qr-fullscreen-close" onclick="closeQRFullscreen()">✕ CLOSE</button>
   </div>
 
@@ -1063,12 +1214,14 @@ footer strong { color: var(--muted); }
   <!-- Floating nav -->
   <nav id="spark-nav">
     <button class="nav-item active" id="nav-feed" onclick="showSection('feed')">
-      <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <svg class="key-mark" viewBox="0 0 110 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle class="nk-bow"   cx="26" cy="25" r="18" stroke="currentColor" stroke-width="6" fill="none"/>
+        <circle class="nk-hole"  cx="26" cy="25" r="6"  fill="var(--bg)"/>
+        <line   class="nk-shaft" x1="44" y1="25" x2="102" y2="25" stroke="currentColor" stroke-width="6" stroke-linecap="square"/>
+        <line   class="nk-t1"    x1="72" y1="25" x2="72"  y2="41" stroke="currentColor" stroke-width="6" stroke-linecap="square"/>
+        <line   class="nk-t2"    x1="88" y1="25" x2="88"  y2="36" stroke="currentColor" stroke-width="6" stroke-linecap="square"/>
+      </svg>
       FEED
-    </button>
-    <button class="nav-item" id="nav-notes" onclick="showSection('notes')">
-      <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
-      NOTES
     </button>
     <button class="nav-item" id="nav-zap" onclick="showSection('zap')">
       <svg viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -1086,7 +1239,55 @@ footer strong { color: var(--muted); }
       <svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       LISTS
     </button>
+    <button class="nav-item" id="nav-settings" onclick="showSection('settings')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      SETTINGS
+    </button>
   </nav>
+
+  <!-- Floating compose button -->
+  <button id="compose-fab" onclick="openCompose()" title="New note">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="none"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+  </button>
+
+  <!-- ── SETTINGS section ── -->
+  <div class="app-section" id="section-settings">
+    <div class="section-header"><span class="section-title">Settings</span></div>
+    <div style="padding:16px;display:flex;flex-direction:column;gap:24px;">
+
+      <div>
+        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>Relays</div>
+        <div id="settings-relay-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px;"></div>
+        <div style="display:flex;gap:8px;">
+          <input id="settings-relay-input" type="text" placeholder="wss://relay.example.com"
+            style="flex:1;font-family:var(--mono);font-size:11px;"
+            autocomplete="off" autocorrect="off" spellcheck="false">
+          <button class="btn-sm-accent" onclick="settingsAddRelay()">Add</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>Appearance</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;color:var(--text);">Dark mode</span>
+          <button onclick="toggleTheme()" id="settings-theme-btn"
+            style="font-family:var(--mono);font-size:10px;color:var(--muted);border:1px solid var(--border2);background:none;padding:5px 14px;border-radius:9999px;cursor:pointer;letter-spacing:0.08em;">
+            Toggle
+          </button>
+        </div>
+      </div>
+
+      <div>
+        <div class="field-label" style="margin-bottom:10px;"><span class="dot"></span>About</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:2;letter-spacing:0.06em;">
+          FAVILLA KEY · Airgap Portal<br>
+          Open Source · No Tracking · No Key Online<br>
+          <a href="https://github.com/nostr-protocol/nostr" target="_blank" style="color:var(--acid2);">Nostr Protocol</a>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
   <footer>
     Your signing key never leaves your FAVILLA Key hardware.<br>
@@ -1212,6 +1413,7 @@ const feedState = {
   }
   connectRelays();
   showStep('compose');
+  // Avatar loads once relay connects and profile is fetched
 })();
 
 // ── Pubkey scan modal ─────────────────────────────────────────────────────
@@ -1297,10 +1499,14 @@ function onPubkeyInput() {
     feedState.followListLoaded = false;
     fetchFollowList(hex);
     setFeedMode('following');
+    // Fetch own profile for header avatar
+    if(state.profiles[hex]) updateHeaderAvatar(state.profiles[hex]);
+    else fetchProfile(hex);
   } else {
     LS.del('kv_pubkey');
     document.getElementById('pubkey-hint').textContent = 'Scan the npub QR from your FAVILLA Key, or enter manually. Leave blank to post anonymously.';
     setFeedMode('global');
+    updateHeaderAvatar(null);
   }
 }
 function clearPubkey() {
@@ -1850,11 +2056,27 @@ function fetchProfile(pubkey){
         const p=JSON.parse(msg[2].content||'{}');
         state.profiles[pubkey]=p;
         updateNotesWithProfile(pubkey,p);
+        // Update header avatar and profile card if this is our own profile
+        if(pubkey===state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
         ws.send(JSON.stringify(['CLOSE',sub]));
       }
     }catch(er){}
   };
 }
+function updateHeaderAvatar(p) {
+  const img = document.getElementById('header-avatar');
+  const hole = document.getElementById('header-keyhole');
+  if (!img || !hole) return;
+  if (p && p.picture) {
+    img.setAttribute('href', p.picture);
+    img.style.display = 'block';
+    hole.style.display = 'none';
+  } else {
+    img.style.display = 'none';
+    hole.style.display = 'block';
+  }
+}
+
 function updateNotesWithProfile(pubkey,p){
   const name=p.name||p.display_name||(pubkey.slice(0,8)+'…');
   document.querySelectorAll('[id^="nm-"]').forEach(el=>{
@@ -3294,6 +3516,15 @@ function closeAllModals() {
   document.getElementById('onboard-modal').style.display = 'none';
 }
 
+function openCompose() {
+  showSection('notes');
+  showStep('compose');
+  setTimeout(() => {
+    const ta = document.getElementById('compose-area');
+    if (ta) ta.focus();
+  }, 100);
+}
+
 function showSection(name) {
   // Close everything first
   closeAllModals();
@@ -3316,6 +3547,7 @@ function showSection(name) {
 
   if (name === 'profile') initProfileSection();
   if (name === 'lists') initListsSection();
+  if (name === 'settings') initSettingsSection();
   if (name === 'notes') {
     if (!state.unsignedEvent) showStep('compose');
   }
@@ -3324,20 +3556,96 @@ function showSection(name) {
 }
 
 function initProfileSection() {
+  // Populate pubkey field
   const visibleInput = document.getElementById('pubkey-input-visible');
-  if (visibleInput) {
-    const hex = state.pubkeyHex;
-    if (hex) {
-      const npubVal = document.getElementById('pubkey-input').value;
-      visibleInput.value = npubVal || hex;
-    }
+  if (visibleInput && state.pubkeyHex) {
+    const npubVal = document.getElementById('pubkey-input').value;
+    visibleInput.value = npubVal || state.pubkeyHex;
   }
   const hint = document.getElementById('pubkey-hint-profile');
   if (hint) {
     hint.textContent = state.pubkeyHex
-      ? '// Set — ' + state.pubkeyHex.slice(0,8) + '…' + state.pubkeyHex.slice(-6)
-      : '// No key set — scan your npub QR from the device';
+      ? state.pubkeyHex.slice(0,8) + '…' + state.pubkeyHex.slice(-6)
+      : 'Scan your npub QR from the device, or paste manually.';
   }
+
+  // Populate profile card from cached profile
+  const p = state.pubkeyHex ? (state.profiles[state.pubkeyHex] || {}) : {};
+  updateProfileCard(p);
+
+  // Pre-fill edit fields
+  if (p.name)    document.getElementById('edit-name').value    = p.name || '';
+  if (p.about)   document.getElementById('edit-about').value   = p.about || '';
+  if (p.lud16)   document.getElementById('edit-lud16').value   = p.lud16 || '';
+  if (p.website) document.getElementById('edit-website').value = p.website || '';
+  if (p.picture) document.getElementById('edit-picture').value = p.picture || '';
+
+  // NWC
+  const saved = localStorage.getItem('nwc_string');
+  if (saved) document.getElementById('nwc-string').value = saved;
+}
+
+function updateProfileCard(p) {
+  // Avatar
+  const av = document.getElementById('profile-avatar-large');
+  if (av) {
+    if (p.picture) {
+      av.innerHTML = '<img src="' + escHtml(p.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
+    } else {
+      av.textContent = '⬡';
+    }
+  }
+  // Name
+  const nm = document.getElementById('profile-display-name');
+  if (nm) nm.textContent = p.name || p.display_name || (state.pubkeyHex ? state.pubkeyHex.slice(0,12) + '…' : '—');
+
+  // NIP-05
+  const nip = document.getElementById('profile-nip05');
+  if (nip) {
+    if (p.nip05) { nip.textContent = '✓ ' + p.nip05; nip.style.display = 'block'; }
+    else { nip.style.display = 'none'; }
+  }
+  // About
+  const ab = document.getElementById('profile-about');
+  if (ab) ab.textContent = p.about || '';
+
+  // Lightning address
+  const lud = document.getElementById('profile-lud16');
+  if (lud) lud.textContent = p.lud16 || '—';
+}
+
+function editProfileGenerateQR() {
+  const pubkey = state.pubkeyHex || '0'.repeat(64);
+  const existing = state.profiles[pubkey] || {};
+  const content = JSON.stringify({
+    name:    document.getElementById('edit-name').value.trim()    || existing.name    || '',
+    about:   document.getElementById('edit-about').value.trim()   || existing.about   || '',
+    lud16:   document.getElementById('edit-lud16').value.trim()   || existing.lud16   || '',
+    website: document.getElementById('edit-website').value.trim() || existing.website || '',
+    picture: document.getElementById('edit-picture').value.trim() || existing.picture || '',
+  });
+
+  const event = {
+    kind: 0,
+    content,
+    tags: [],
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey,
+  };
+  state.unsignedEvent = event;
+
+  const qrEl = document.getElementById('edit-profile-qr');
+  qrEl.innerHTML = '';
+  document.getElementById('edit-profile-status').textContent = 'Scan with FAVILLA Key · approve · scan back to publish';
+
+  (window._qrReady || Promise.resolve()).then(() => {
+    new QRCode(qrEl, {
+      text: JSON.stringify(event),
+      width: 240, height: 240,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  });
 }
 
 function onPubkeyInputVisible() {
@@ -3512,6 +3820,43 @@ function fetchThreadReplies(eventId) {
       }
     } catch(err) {}
   };
+}
+
+// ── Settings ─────────────────────────────────────────────────
+function initSettingsSection() {
+  const list = document.getElementById('settings-relay-list');
+  if (!list) return;
+  list.innerHTML = RELAYS.map((url, i) => `
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--border2);border-radius:8px;">
+      <div style="width:7px;height:7px;border-radius:50%;background:${relayConnected[url] ? 'var(--acid2)' : 'var(--dim)'};flex-shrink:0;"></div>
+      <span style="flex:1;font-family:var(--mono);font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${url.replace('wss://','')}</span>
+      <button onclick="settingsRemoveRelay(${i})" style="background:none;border:none;color:var(--dim);font-size:14px;cursor:pointer;padding:0 4px;line-height:1;">✕</button>
+    </div>
+  `).join('');
+}
+
+function settingsAddRelay() {
+  const input = document.getElementById('settings-relay-input');
+  const url = (input.value || '').trim();
+  if (!url.startsWith('wss://')) { showToast('Must start with wss://'); return; }
+  if (RELAYS.includes(url)) { showToast('Already added'); return; }
+  RELAYS.push(url);
+  openRelay(url);
+  input.value = '';
+  initSettingsSection();
+  showToast('Relay added');
+}
+
+function settingsRemoveRelay(idx) {
+  const url = RELAYS[idx];
+  const ws = state.sockets[url];
+  if (ws) { try { ws.close(); } catch(e) {} }
+  delete state.sockets[url];
+  delete relayConnected[url];
+  RELAYS.splice(idx, 1);
+  initSettingsSection();
+  updateRelayPill();
+  showToast('Relay removed');
 }
 
 // ── Theme ────────────────────────────────────────────────────────────────
