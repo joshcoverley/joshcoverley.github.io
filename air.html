@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Favilla Key">
+<meta name="theme-color" content="#0a0908">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>SPARK — FAVILLA KEY AIRGAP PORTAL</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -622,6 +630,41 @@ footer strong { color: var(--muted); }
 #compose-fab:hover { background: var(--acid); transform: scale(1.06); }
 #compose-fab:active { transform: scale(0.96); }
 #compose-fab svg { width: 24px; height: 24px; stroke: #fff; fill: none; stroke-width: 2.5; stroke-linecap: round; }
+
+/* ── Header key — correct dasharray for r=12 geometry ── */
+@keyframes hkBow   { from{stroke-dashoffset:76}to{stroke-dashoffset:0} }
+@keyframes hkShaft { from{stroke-dashoffset:40}to{stroke-dashoffset:0} }
+@keyframes hkT1    { from{stroke-dashoffset:12}to{stroke-dashoffset:0} }
+@keyframes hkT2    { from{stroke-dashoffset:8} to{stroke-dashoffset:0} }
+
+/* ── Waiting for scan animation ── */
+@keyframes bowPulse {
+  0%, 100% { r: 6; opacity: 0.9; }
+  50%       { r: 10; opacity: 0.3; }
+}
+@keyframes ringExpand {
+  0%   { r: 6;  opacity: 0.5; stroke-width: 2; }
+  100% { r: 20; opacity: 0;   stroke-width: 1; }
+}
+@keyframes waitingFadeIn {
+  from { opacity: 0; } to { opacity: 1; }
+}
+#waiting-animation {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px 0 8px;
+  animation: waitingFadeIn 0.4s ease;
+}
+#waiting-animation.visible { display: flex; }
+#waiting-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-align: center;
+}
 </style>
 </head>
 <body>
@@ -632,7 +675,7 @@ footer strong { color: var(--muted); }
     <div style="display:flex;align-items:center;">
       <svg width="260" height="36" viewBox="0 0 260 36" fill="none" xmlns="http://www.w3.org/2000/svg">
         <!-- Key mark: bow centre at y=14 (cap height midpoint), teeth drop to y=28 -->
-        <circle style="stroke-dasharray:76;stroke-dashoffset:76;animation:kBow 0.55s 0.1s cubic-bezier(.4,0,.2,1) forwards;" cx="18" cy="14" r="12" stroke="var(--acid)" stroke-width="4" fill="none"/>
+        <circle style="stroke-dasharray:76;stroke-dashoffset:76;animation:hkBow 0.55s 0.1s cubic-bezier(.4,0,.2,1) forwards;" cx="18" cy="14" r="12" stroke="var(--acid)" stroke-width="4" fill="none"/>
         <!-- Profile picture fills the bow — clipped to circle -->
         <defs>
           <clipPath id="bow-clip">
@@ -643,9 +686,9 @@ footer strong { color: var(--muted); }
         <circle id="header-keyhole" style="opacity:0;animation:kHole 0.2s 0.6s ease forwards, navKPulse 2.8s 1.5s ease-in-out infinite;" cx="18" cy="14" r="4" fill="var(--bg)"/>
         <!-- Profile picture — hidden by default, shown when pic loaded -->
         <image id="header-avatar" href="" x="6" y="2" width="24" height="24" clip-path="url(#bow-clip)" style="display:none;"/>
-        <line   style="stroke-dasharray:40;stroke-dashoffset:40;animation:kShaft 0.35s 0.55s ease forwards;" x1="30" y1="14" x2="68" y2="14" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
-        <line   style="stroke-dasharray:12;stroke-dashoffset:12;animation:kT1 0.22s 0.82s ease forwards;" x1="50" y1="14" x2="50" y2="25" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
-        <line   style="stroke-dasharray:8;stroke-dashoffset:8;animation:kT2 0.18s 0.96s ease forwards;" x1="61" y1="14" x2="61" y2="21" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <line   style="stroke-dasharray:40;stroke-dashoffset:40;animation:hkShaft 0.35s 0.55s ease forwards;" x1="30" y1="14" x2="68" y2="14" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <line   style="stroke-dasharray:12;stroke-dashoffset:12;animation:hkT1 0.22s 0.82s ease forwards;" x1="50" y1="14" x2="50" y2="25" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
+        <line   style="stroke-dasharray:8;stroke-dashoffset:8;animation:hkT2 0.18s 0.96s ease forwards;" x1="61" y1="14" x2="61" y2="21" stroke="var(--acid)" stroke-width="4" stroke-linecap="square"/>
         <!-- Wordmark text -->
         <text x="78" y="22" font-family="'Bebas Neue',sans-serif" font-size="22" letter-spacing="5" fill="var(--text)">FAVILLA </text>
         <text x="174" y="22" font-family="'Bebas Neue',sans-serif" font-size="22" letter-spacing="5" fill="var(--acid)">KEY</text>
@@ -653,14 +696,19 @@ footer strong { color: var(--muted); }
         <text x="78" y="32" font-family="'JetBrains Mono',monospace" font-size="8" letter-spacing="1.5" fill="var(--muted)">Airgap Portal</text>
       </svg>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;">
-      <div id="pubkey-hint" style="font-size:9px;color:var(--dim);letter-spacing:0.06em;text-align:right;"></div>
-      <button id="theme-toggle" onclick="toggleTheme()" style="background:none;border:1px solid var(--border2);color:var(--muted);width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:14px;display:inline-flex;align-items:center;justify-content:center;">☀</button>
-      <button class="btn-sm-accent" onclick="openPubkeyScan()" title="Scan npub QR">⬡</button>
+    <div style="display:flex;align-items:center;gap:10px;">
+      <!-- Tap to go to profile — shows avatar if set, scan icon if not -->
+      <button onclick="showSection('profile')" title="Profile"
+        style="background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;">
+        <div id="header-profile-btn" style="width:34px;height:34px;border-radius:50%;background:var(--bg2);border:1.5px solid var(--border2);display:flex;align-items:center;justify-content:center;overflow:hidden;font-size:16px;color:var(--muted);transition:border-color 0.2s;">
+          ⬡
+        </div>
+      </button>
     </div>
   </header>
 
-  <!-- Hidden pubkey input — managed by profile section -->
+  <!-- Hidden elements -->
+  <div id="pubkey-hint" style="display:none;"></div>
   <input type="text" id="pubkey-input" style="display:none"
     oninput="onPubkeyInput()" autocomplete="off" autocorrect="off" spellcheck="false">
 
@@ -723,21 +771,39 @@ footer strong { color: var(--muted); }
   <div class="card" id="card-qr" style="border-radius:16px;overflow:hidden;margin:16px 0;">
     <div style="padding:16px 16px 0;">
       <div style="font-family:var(--sans);font-size:15px;font-weight:600;color:var(--text);margin-bottom:4px;">Hold up to your FAVILLA Key</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px;">Menu → Scan QR · press BTN1 to approve</div>
-      <div style="display:flex;justify-content:center;margin-bottom:16px;">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:14px;">Menu → Scan QR · press BTN1 to approve · tap QR to enlarge</div>
+      <!-- QR — tappable, goes fullscreen -->
+      <div style="display:flex;justify-content:center;margin-bottom:16px;cursor:pointer;"
+        onclick="showQRFullscreen(JSON.stringify(state.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX · MENU → SCAN QR')">
         <div id="qr-canvas" style="background:#fff;padding:12px;border-radius:12px;line-height:0;"></div>
       </div>
     </div>
-    <div style="display:flex;gap:8px;padding:10px 16px 14px;border-top:1px solid var(--border2);">
+    <div style="display:flex;gap:8px;padding:10px 16px 14px;border-top:1px solid var(--border2);align-items:center;">
       <button onclick="backToCompose()"
         style="background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:8px 16px;border-radius:9999px;cursor:pointer;">
         ← Back
       </button>
-      <button onclick="showQRFullscreen(JSON.stringify(state.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX · MENU → SCAN QR')"
-        style="background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:8px 16px;border-radius:9999px;cursor:pointer;">
-        ⛶ Fullscreen
-      </button>
-      <div style="flex:1;"></div>
+      <!-- Waiting animation centred between buttons -->
+      <div style="flex:1;display:flex;justify-content:center;">
+        <svg width="72" height="32" viewBox="0 0 110 50" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+          <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+          <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+          <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+          <circle cx="26" cy="25" r="5" fill="var(--acid)">
+            <animate attributeName="r" values="5;9;5" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+            <animate attributeName="opacity" values="1;0.2;1" dur="1.8s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="26" cy="25" r="5" fill="none" stroke="var(--acid)" stroke-width="1.5">
+            <animate attributeName="r" values="5;18;5" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0 0 1 1"/>
+            <animate attributeName="opacity" values="0.8;0;0.8" dur="1.8s" repeatCount="indefinite"/>
+          </circle>
+          <circle cx="26" cy="25" r="5" fill="none" stroke="var(--acid)" stroke-width="1">
+            <animate attributeName="r" values="5;18;5" dur="1.8s" begin="0.5s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0 0 1 1"/>
+            <animate attributeName="opacity" values="0.5;0;0.5" dur="1.8s" begin="0.5s" repeatCount="indefinite"/>
+          </circle>
+        </svg>
+      </div>
       <button onclick="startScan()"
         style="background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:8px 20px;border-radius:9999px;cursor:pointer;">
         Scan signed QR
@@ -1068,7 +1134,7 @@ footer strong { color: var(--muted); }
   </div>
 
   <!-- QR fullscreen overlay -->
-  <div id="qr-fullscreen-overlay">
+  <div id="qr-fullscreen-overlay" onclick="closeQRFullscreen()" style="cursor:pointer;">
     <div id="qr-fullscreen-canvas"></div>
     <div id="qr-fullscreen-hint">HOLD DEVICE CAMERA UP TO SCREEN · BRIGHTNESS MAX</div>
     <div style="position:absolute;bottom:20px;right:20px;opacity:0.12;">
@@ -1080,7 +1146,7 @@ footer strong { color: var(--muted); }
         <line x1="88" y1="25" x2="88"  y2="36" stroke="#c9a84c" stroke-width="6" stroke-linecap="square"/>
       </svg>
     </div>
-    <button id="qr-fullscreen-close" onclick="closeQRFullscreen()">✕ CLOSE</button>
+    <button id="qr-fullscreen-close" onclick="closeQRFullscreen()" style="opacity:0.4;font-size:10px;">tap to close</button>
   </div>
 
   <!-- Reply modal -->
@@ -1125,6 +1191,161 @@ footer strong { color: var(--muted); }
           <button onclick="replySubmit()"
             style="background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:8px 20px;border-radius:9999px;cursor:pointer;">
             Generate QR
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- User profile modal -->
+  <div id="user-profile-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-start;justify-content:center;padding-top:60px;">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:420px;">
+      <div style="padding:16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">Profile</span>
+        <button onclick="closeUserProfile()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
+      </div>
+      <div style="padding:20px 16px;">
+        <!-- Avatar + name -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+          <div id="up-avatar" style="width:56px;height:56px;border-radius:50%;background:var(--bg2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--muted);overflow:hidden;flex-shrink:0;">?</div>
+          <div style="flex:1;min-width:0;">
+            <div id="up-name" style="font-family:var(--sans);font-size:16px;font-weight:700;color:var(--text);margin-bottom:2px;"></div>
+            <div id="up-nip05" style="font-family:var(--mono);font-size:10px;color:var(--acid2);display:none;margin-bottom:4px;"></div>
+            <div id="up-pubkey" style="font-family:var(--mono);font-size:10px;color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+          </div>
+        </div>
+        <!-- Bio -->
+        <div id="up-about" style="font-size:14px;color:var(--muted);line-height:1.6;margin-bottom:16px;"></div>
+        <!-- Lightning -->
+        <div id="up-lud16-row" style="display:none;font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:16px;">⚡ <span id="up-lud16"></span></div>
+        <!-- Actions -->
+        <div style="display:flex;gap:8px;">
+          <button onclick="quickZapFromProfile()" id="up-zap-btn"
+            style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+            ⚡ Zap
+          </button>
+          <button onclick="closeUserProfile()"
+            style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:13px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Quick zap modal — from feed -->
+  <div id="quick-zap-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:2000;align-items:flex-start;justify-content:center;padding-top:60px;">
+    <div style="background:var(--panel);border:1px solid var(--border2);border-radius:16px;width:100%;max-width:420px;">
+
+      <!-- Header -->
+      <div style="padding:16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;">
+        <span style="font-family:var(--sans);font-size:15px;font-weight:700;color:var(--text);">⚡ Zap</span>
+        <button onclick="closeQuickZapModal()" style="background:var(--bg2);border:none;color:var(--muted);font-size:18px;width:30px;height:30px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1;">✕</button>
+      </div>
+
+      <!-- Build step -->
+      <div id="quick-zap-build" style="padding:16px;">
+        <div id="quick-zap-recipient-name" style="font-family:var(--sans);font-size:13px;color:var(--muted);margin-bottom:16px;"></div>
+
+        <!-- Amount -->
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;">
+          <span style="font-size:20px;">⚡</span>
+          <input id="quick-zap-amount" type="number" min="1" value="21"
+            style="width:80px;background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:4px 0!important;font-family:var(--mono);font-size:22px;font-weight:600;color:var(--acid);outline:none;">
+          <span style="font-family:var(--mono);font-size:12px;color:var(--muted);">sats</span>
+        </div>
+
+        <!-- Quick amounts -->
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <button onclick="quickZapSetAmount(21)"  style="flex:1;padding:7px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">21</button>
+          <button onclick="quickZapSetAmount(100)" style="flex:1;padding:7px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">100</button>
+          <button onclick="quickZapSetAmount(500)" style="flex:1;padding:7px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">500</button>
+          <button onclick="quickZapSetAmount(1000)" style="flex:1;padding:7px;border-radius:9999px;font-family:var(--mono);font-size:11px;cursor:pointer;border:1px solid var(--border2);background:none;color:var(--muted);">1k</button>
+        </div>
+
+        <!-- Comment -->
+        <input id="quick-zap-comment" type="text" placeholder="Add a comment… (optional)" maxlength="100"
+          style="width:100%;background:transparent!important;border:none!important;border-bottom:1px solid var(--border2)!important;border-radius:0!important;padding:6px 0!important;font-family:var(--sans);font-size:14px;color:var(--text);outline:none;margin-bottom:16px;">
+
+        <div id="quick-zap-status" style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;min-height:14px;"></div>
+
+        <button onclick="quickZapBuild()"
+          style="width:100%;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:11px;border-radius:9999px;cursor:pointer;">
+          Zap
+        </button>
+      </div>
+
+      <!-- QR step -->
+      <div id="quick-zap-qr-step" style="display:none;padding:16px;">
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:4px;">Scan with FAVILLA Key</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:12px;">Menu → Scan QR · press BTN1 to approve</div>
+        <div style="display:flex;justify-content:center;margin-bottom:12px;cursor:pointer;" onclick="showQRFullscreen(JSON.stringify(zapState.unsignedEvent), 'HOLD DEVICE CAMERA UP · BRIGHTNESS MAX')">
+          <div id="quick-zap-qr-canvas" style="background:#fff;padding:10px;border-radius:10px;line-height:0;"></div>
+        </div>
+        <!-- Waiting animation -->
+        <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:16px;">
+          <svg width="60" height="26" viewBox="0 0 110 50" fill="none">
+            <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+            <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+            <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+            <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+            <circle cx="26" cy="25" r="5" fill="var(--acid)">
+              <animate attributeName="r" values="5;9;5" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+              <animate attributeName="opacity" values="1;0.2;1" dur="1.8s" repeatCount="indefinite"/>
+            </circle>
+            <circle cx="26" cy="25" r="5" fill="none" stroke="var(--acid)" stroke-width="1.5">
+              <animate attributeName="r" values="5;18;5" dur="1.8s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0 0 1 1"/>
+              <animate attributeName="opacity" values="0.8;0;0.8" dur="1.8s" repeatCount="indefinite"/>
+            </circle>
+          </svg>
+          <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:0.06em;">Waiting for device…</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="quickZapBack()"
+            style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+            ← Back
+          </button>
+          <button onclick="quickZapStartScan()"
+            style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
+            Scan signed
+          </button>
+        </div>
+      </div>
+
+      <!-- Scan step -->
+      <div id="quick-zap-scan-step" style="display:none;padding:16px;">
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:10px;">Scan device screen</div>
+        <div style="position:relative;background:#000;border-radius:10px;overflow:hidden;margin-bottom:10px;">
+          <video id="quick-zap-scan-video" autoplay playsinline muted style="width:100%;display:block;max-height:220px;object-fit:cover;"></video>
+          <div style="position:absolute;bottom:8px;left:50%;transform:translateX(-50%);">
+            <div style="display:flex;align-items:center;gap:6px;background:rgba(0,0,0,0.6);padding:4px 12px;border-radius:9999px;">
+              <div class="pulse"></div>
+              <span id="quick-zap-scan-status" style="font-family:var(--mono);font-size:10px;color:var(--acid2);">Scanning…</span>
+            </div>
+          </div>
+        </div>
+        <button onclick="quickZapCancelScan()"
+          style="width:100%;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+          ← Back
+        </button>
+      </div>
+
+      <!-- Invoice step -->
+      <div id="quick-zap-invoice-step" style="display:none;padding:16px;">
+        <div style="font-family:var(--sans);font-size:14px;font-weight:600;color:var(--text);margin-bottom:12px;">Lightning Invoice</div>
+        <div style="display:flex;justify-content:center;margin-bottom:12px;">
+          <div id="quick-zap-invoice-qr" style="background:#fff;padding:10px;border-radius:10px;line-height:0;"></div>
+        </div>
+        <div id="quick-zap-invoice-status" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;">
+          <button onclick="quickZapReset()"
+            style="flex:1;background:none;border:1px solid var(--border2);color:var(--muted);font-family:var(--sans);font-size:13px;padding:10px;border-radius:9999px;cursor:pointer;">
+            New zap
+          </button>
+          <button onclick="quickZapCopyInvoice()"
+            style="flex:1;background:var(--acid2);color:#fff;border:none;font-family:var(--sans);font-size:14px;font-weight:600;padding:10px;border-radius:9999px;cursor:pointer;">
+            Copy invoice
           </button>
         </div>
       </div>
@@ -1630,7 +1851,7 @@ function generateQR() {
     new QRCode(el, { text:JSON.stringify(state.unsignedEvent), width:320, height:320, colorDark:'#000', colorLight:'#fff', correctLevel:QRCode.CorrectLevel.M });
   });
   showStep('qr');
-  document.getElementById('pill-compose').className = 'step-pill done';
+  const _pill = document.getElementById('pill-compose'); if (_pill) _pill.className = 'step-pill done';
 }
 
 function backToCompose() { showStep('compose'); }
@@ -1874,14 +2095,61 @@ async function publishEvent() {
 }
 
 function resetAll() {
-  state.unsignedEvent=null;state.signedEvent=null;
-  document.getElementById('compose-area').value='';
-  document.getElementById('gen-qr-btn').disabled=true;
-  document.getElementById('char-count').textContent='0 / 460 · airgap limit';
-  document.getElementById('pill-compose').className='step-pill active';
-  document.getElementById('publish-btn').disabled=false;
-  document.getElementById('publish-btn').textContent='Publish to Relays';
+  // Clear state
+  state.unsignedEvent = null;
+  state.signedEvent = null;
+
+  // Stop any active camera
+  if (typeof state.scanTimer === 'function') state.scanTimer();
+  state.scanTimer = null;
+  if (state.scanStream) { state.scanStream.getTracks().forEach(t => t.stop()); state.scanStream = null; }
+
+  // Reset compose textarea
+  const ta = document.getElementById('compose-area');
+  if (ta) ta.value = '';
+
+  // Reset char count
+  const cc = document.getElementById('char-count');
+  if (cc) { cc.textContent = '460'; cc.style.color = 'var(--dim)'; }
+
+  // Reset generate QR button
+  const btn = document.getElementById('gen-qr-btn');
+  if (btn) { btn.disabled = true; btn.style.opacity = '0.38'; btn.style.cursor = 'not-allowed'; }
+
+  // Reset pill
+  const pill = document.getElementById('pill-compose');
+  if (pill) pill.className = 'step-pill active';
+
+  // Reset publish button
+  const pub = document.getElementById('publish-btn');
+  if (pub) { pub.disabled = false; pub.textContent = 'Publish'; }
+
+  // Clear QR canvas
+  const qrEl = document.getElementById('qr-canvas');
+  if (qrEl) qrEl.innerHTML = '';
+
+  // Clear relay list
+  const relayList = document.getElementById('relay-list');
+  if (relayList) relayList.innerHTML = '';
+
+  // Clear preview
+  const prevContent = document.getElementById('preview-content');
+  if (prevContent) prevContent.textContent = '';
+  const prevMeta = document.getElementById('preview-meta');
+  if (prevMeta) prevMeta.innerHTML = '';
+
+  // Reset scan view
+  const scanVideo = document.getElementById('scan-video');
+  if (scanVideo) stopCameraStream(scanVideo);
+  const scanCamera = document.getElementById('scan-camera-mode');
+  if (scanCamera) scanCamera.style.display = 'block';
+  const scanPaste = document.getElementById('scan-paste-mode');
+  if (scanPaste) scanPaste.style.display = 'none';
+  const scanStatus = document.getElementById('scan-status-text');
+  if (scanStatus) scanStatus.textContent = 'Starting camera…';
+
   showStep('compose');
+  if (ta) ta.focus();
 }
 
 function showStep(name){
@@ -2064,9 +2332,11 @@ function renderNote(ev,prepend=false){
   div.style.cursor = 'pointer';
   div.innerHTML=`
     <div class="note-header">
-      <div class="note-avatar" id="av-${ev.id}">${name[0]||'?'}</div>
-      <div><div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
-      <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div></div>
+      <div class="note-avatar" id="av-${ev.id}" onclick="event.stopPropagation();openUserProfile('${ev.pubkey}')" style="cursor:pointer;">${name[0]||'?'}</div>
+      <div onclick="event.stopPropagation();openUserProfile('${ev.pubkey}')" style="cursor:pointer;">
+        <div class="note-name" id="nm-${ev.id}">${escHtml(name)}</div>
+        <div class="note-pubkey">${ev.pubkey.slice(0,12)}…</div>
+      </div>
       <div class="note-time">${timeAgo(ev.created_at)}</div>
     </div>
     <div class="note-content">${escHtml(ev.content||'')}</div>
@@ -2139,6 +2409,8 @@ function fetchProfile(pubkey){
         updateNotesWithProfile(pubkey,p);
         // Update header avatar and profile card if this is our own profile
         if(pubkey===state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
+        // Refresh user profile modal if open
+        if(pubkey===userProfilePubkey) openUserProfile(pubkey);
         ws.send(JSON.stringify(['CLOSE',sub]));
       }
     }catch(er){}
@@ -2147,14 +2419,22 @@ function fetchProfile(pubkey){
 function updateHeaderAvatar(p) {
   const img = document.getElementById('header-avatar');
   const hole = document.getElementById('header-keyhole');
+  const btn = document.getElementById('header-profile-btn');
+
   if (!img || !hole) return;
   if (p && p.picture) {
     img.setAttribute('href', p.picture);
     img.style.display = 'block';
     hole.style.display = 'none';
+    // Also update the profile button
+    if (btn) btn.innerHTML = '<img src="' + p.picture + '" style="width:100%;height:100%;object-fit:cover;">';
   } else {
     img.style.display = 'none';
     hole.style.display = 'block';
+    if (btn) {
+      btn.innerHTML = '⬡';
+      btn.style.borderColor = state.pubkeyHex ? 'var(--acid2)' : 'var(--border2)';
+    }
   }
 }
 
@@ -3188,7 +3468,7 @@ function replySubmit() {
   });
   showSection('notes');
   showStep('qr');
-  document.getElementById('pill-compose').className = 'step-pill done';
+  const _pill = document.getElementById('pill-compose'); if (_pill) _pill.className = 'step-pill done';
   document.getElementById('reply-status').textContent = '';
 }
 
@@ -3326,21 +3606,279 @@ function noteRepost(eventId) {
   // Navigate to notes section first, then show QR step
   showSection('notes');
   showStep('qr');
-  document.getElementById('pill-compose').className = 'step-pill done';
+  const _pill = document.getElementById('pill-compose'); if (_pill) _pill.className = 'step-pill done';
 }
 
 // ── ZAP from note ─────────────────────────────────────────────────────────
 function noteZap(eventId) {
-  const note = state.notes.find(n => n.id === eventId);
-  if (!note) return;
-  const pubkey = note.pubkey;
-  noteActionState.targetId = eventId;
-  document.getElementById('zap-recipient').value = pubkey;
-  document.getElementById('zap-noteid').value = eventId;
-  zapState.recipientHex = pubkey;
-  showSection('zap');
+  openQuickZapModal(eventId);
 }
 
+
+
+
+// ── User profile modal ────────────────────────────────────────────────────
+
+let userProfilePubkey = null;
+
+function openUserProfile(pubkey) {
+  userProfilePubkey = pubkey;
+  const profile = state.profiles[pubkey] || {};
+  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
+
+  // Avatar
+  const av = document.getElementById('up-avatar');
+  if (profile.picture) {
+    av.innerHTML = '<img src="' + escHtml(profile.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
+  } else {
+    av.textContent = name[0] || '?';
+  }
+
+  document.getElementById('up-name').textContent = name;
+  document.getElementById('up-pubkey').textContent = pubkey.slice(0,16) + '…' + pubkey.slice(-8);
+
+  const nip05El = document.getElementById('up-nip05');
+  if (profile.nip05) { nip05El.textContent = '✓ ' + profile.nip05; nip05El.style.display = 'block'; }
+  else { nip05El.style.display = 'none'; }
+
+  document.getElementById('up-about').textContent = profile.about || '';
+
+  const lud16Row = document.getElementById('up-lud16-row');
+  if (profile.lud16) { document.getElementById('up-lud16').textContent = profile.lud16; lud16Row.style.display = 'block'; }
+  else { lud16Row.style.display = 'none'; }
+
+  document.getElementById('user-profile-modal').style.display = 'flex';
+
+  // Fetch profile if not cached
+  if (!state.profiles[pubkey] || !state.profiles[pubkey].name) fetchProfile(pubkey);
+}
+
+function closeUserProfile() {
+  document.getElementById('user-profile-modal').style.display = 'none';
+  userProfilePubkey = null;
+}
+
+function quickZapFromProfile() {
+  if (!userProfilePubkey) return;
+  // Find a note by this pubkey to use as context, or zap without note
+  closeUserProfile();
+  // Create a fake noteZap without a specific eventId
+  const fakeNote = { id: null, pubkey: userProfilePubkey };
+  if (!state.notes.find(n => n.pubkey === userProfilePubkey)) {
+    state.notes.push(fakeNote);
+  }
+  openQuickZapModal_direct(userProfilePubkey);
+}
+
+function openQuickZapModal_direct(pubkey) {
+  quickZapState.eventId = null;
+  quickZapState.recipientHex = pubkey;
+
+  const profile = state.profiles[pubkey] || {};
+  const name = profile.name || profile.display_name || pubkey.slice(0,12) + '…';
+  document.getElementById('quick-zap-recipient-name').textContent = 'To: ' + name;
+
+  const defaultZap = LS.get('default_zap') || '21';
+  document.getElementById('quick-zap-amount').value = defaultZap;
+  document.getElementById('quick-zap-comment').value = '';
+  document.getElementById('quick-zap-status').textContent = '';
+
+  quickZapShowStep('build');
+  document.getElementById('quick-zap-modal').style.display = 'flex';
+}
+
+// ── Quick zap modal (from feed) ───────────────────────────────────────────
+
+const quickZapState = { eventId: null, recipientHex: null, stopScan: null, invoiceText: '' };
+
+function openQuickZapModal(eventId) {
+  const note = state.notes.find(n => n.id === eventId);
+  if (!note) return;
+  quickZapState.eventId = eventId;
+  quickZapState.recipientHex = note.pubkey;
+
+  const profile = state.profiles[note.pubkey] || {};
+  const name = profile.name || profile.display_name || note.pubkey.slice(0,12) + '…';
+  document.getElementById('quick-zap-recipient-name').textContent = 'To: ' + name;
+
+  // Pre-fill default zap amount
+  const defaultZap = LS.get('default_zap') || '21';
+  document.getElementById('quick-zap-amount').value = defaultZap;
+  document.getElementById('quick-zap-comment').value = '';
+  document.getElementById('quick-zap-status').textContent = '';
+
+  quickZapShowStep('build');
+  document.getElementById('quick-zap-modal').style.display = 'flex';
+}
+
+function closeQuickZapModal() {
+  if (quickZapState.stopScan) { quickZapState.stopScan(); quickZapState.stopScan = null; }
+  stopCameraStream(document.getElementById('quick-zap-scan-video'));
+  document.getElementById('quick-zap-modal').style.display = 'none';
+}
+
+function quickZapShowStep(step) {
+  ['build','qr-step','scan-step','invoice-step'].forEach(s => {
+    document.getElementById('quick-zap-' + s).style.display = s === step ? 'block' : 'none';
+  });
+}
+
+function quickZapSetAmount(amt) {
+  document.getElementById('quick-zap-amount').value = amt;
+}
+
+function quickZapBack() { quickZapShowStep('build'); }
+
+async function quickZapBuild() {
+  const amount = parseInt(document.getElementById('quick-zap-amount').value) || 21;
+  const comment = document.getElementById('quick-zap-comment').value.trim() || '⚡';
+  const statusEl = document.getElementById('quick-zap-status');
+
+  statusEl.textContent = 'Fetching profile…';
+
+  let profile;
+  for (const relay of RELAYS) {
+    try {
+      profile = await fetchProfileOnce(quickZapState.recipientHex, relay);
+      if (profile && profile.lud16) break;
+    } catch(e) {}
+  }
+
+  if (!profile || !profile.lud16) {
+    statusEl.textContent = 'No lightning address found for this user';
+    return;
+  }
+
+  statusEl.textContent = 'Resolving LNURL…';
+  let lnurlData;
+  try { lnurlData = await resolveLud16(profile.lud16); }
+  catch(e) { statusEl.textContent = 'LNURL error: ' + e.message; return; }
+
+  const relay = RELAYS[0] || 'wss://relay.damus.io';
+  const senderPubkey = state.pubkeyHex || '0'.repeat(64);
+  const tags = [
+    ['relays', relay],
+    ['amount', String(amount * 1000)],
+    ['lnurl', lnurlData.lnurl],
+    ['p', quickZapState.recipientHex],
+  ];
+  if (quickZapState.eventId) tags.push(['e', quickZapState.eventId]);
+
+  const event = {
+    kind: 9734, content: comment, tags,
+    created_at: Math.floor(Date.now() / 1000),
+    pubkey: senderPubkey,
+  };
+
+  zapState.unsignedEvent = event;
+  zapState.lnurlData = lnurlData;
+  zapState.recipientHex = quickZapState.recipientHex;
+
+  statusEl.textContent = '';
+
+  const qrEl = document.getElementById('quick-zap-qr-canvas');
+  qrEl.innerHTML = '';
+  (window._qrReady || Promise.resolve()).then(() => {
+    const size = Math.min(260, window.innerWidth - 80);
+    new QRCode(qrEl, {
+      text: JSON.stringify(event),
+      width: size, height: size,
+      colorDark: '#000', colorLight: '#fff',
+      correctLevel: getQRLevel()
+    });
+  });
+
+  quickZapShowStep('qr-step');
+}
+
+async function quickZapStartScan() {
+  quickZapShowStep('scan-step');
+  const video = document.getElementById('quick-zap-scan-video');
+  const statusEl = document.getElementById('quick-zap-scan-status');
+  statusEl.textContent = 'Starting camera…';
+
+  let stream = null;
+  for (const c of [
+    { video: { facingMode: { exact: 'environment' } } },
+    { video: { facingMode: 'environment' } },
+    { video: true }
+  ]) { try { stream = await navigator.mediaDevices.getUserMedia(c); break; } catch(e) {} }
+
+  if (!stream) { statusEl.textContent = 'Camera error'; return; }
+  video.srcObject = stream;
+  await video.play();
+  statusEl.textContent = 'Scanning…';
+
+  quickZapState.stopScan = startQRScanner(video, (data) => {
+    const isCompact = data.length === 192 && /^[0-9a-f]{192}$/.test(data);
+    const isJSON = data.startsWith('{') && data.endsWith('}');
+    if (!isCompact && !isJSON) return;
+    quickZapState.stopScan = null;
+    stopCameraStream(video);
+    quickZapGotSignedEvent(data);
+  }, (msg) => { statusEl.textContent = msg; });
+}
+
+function quickZapCancelScan() {
+  if (quickZapState.stopScan) { quickZapState.stopScan(); quickZapState.stopScan = null; }
+  stopCameraStream(document.getElementById('quick-zap-scan-video'));
+  quickZapShowStep('qr-step');
+}
+
+async function quickZapGotSignedEvent(data) {
+  quickZapShowStep('invoice-step');
+  const statusEl = document.getElementById('quick-zap-invoice-status');
+  statusEl.textContent = 'Sending to LNURL…';
+
+  let signedJson;
+  try {
+    signedJson = data.length === 192 && /^[0-9a-f]{192}$/.test(data)
+      ? decodeCompactQR(data, zapState.unsignedEvent)
+      : JSON.parse(data);
+    if (!signedJson || !signedJson.sig) throw new Error('Missing sig');
+  } catch(e) { statusEl.textContent = 'Bad read: ' + e.message; return; }
+
+  const amount = parseInt(zapState.unsignedEvent.tags.find(t=>t[0]==='amount')?.[1] || '21000');
+
+  try {
+    const resp = await fetch(ZAP_PROXY, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callbackUrl: zapState.lnurlData.callback, signedEvent: signedJson, amount })
+    });
+    const result = JSON.parse(await resp.text());
+    if (result.error || result.status === 'ERROR') throw new Error(result.error || result.reason);
+    if (!result.pr) throw new Error('No invoice returned');
+
+    quickZapState.invoiceText = result.pr;
+    statusEl.textContent = 'Invoice ready — scan with Lightning wallet';
+
+    const qrEl = document.getElementById('quick-zap-invoice-qr');
+    qrEl.innerHTML = '';
+    (window._qrReady || Promise.resolve()).then(() => {
+      new QRCode(qrEl, { text: result.pr, width: 200, height: 200, colorDark: '#000', colorLight: '#fff', correctLevel: QRCode.CorrectLevel.L });
+    });
+
+    // Auto-pay via NWC if connected
+    if (nwcState.pubkey) {
+      const paid = await nwcPayInvoice(result.pr, statusEl);
+      if (paid) { showToast('⚡ Zap paid!'); closeQuickZapModal(); }
+    }
+
+    if (quickZapState.eventId) markZappedOptimistic(quickZapState.eventId, Math.floor(amount/1000));
+  } catch(e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  }
+}
+
+function quickZapCopyInvoice() {
+  if (quickZapState.invoiceText) {
+    navigator.clipboard.writeText(quickZapState.invoiceText)
+      .then(() => showToast('Invoice copied'));
+  }
+}
+
+function quickZapReset() { quickZapShowStep('build'); }
 
 // ── QR Fullscreen ─────────────────────────────────────────────────────────
 
@@ -3565,6 +4103,12 @@ function closeAllModals() {
   // Close reply modal
   document.getElementById('reply-modal').style.display = 'none';
 
+  // Close quick zap modal
+  if (document.getElementById('quick-zap-modal').style.display !== 'none') closeQuickZapModal();
+
+  // Close user profile modal
+  if (document.getElementById('user-profile-modal') && document.getElementById('user-profile-modal').style.display !== 'none') closeUserProfile();
+
   // Close like modal + stop its camera
   const likeVideo = document.getElementById('like-scan-video');
   if (likeVideo && likeVideo._stopScan) { likeVideo._stopScan(); likeVideo._stopScan = null; }
@@ -3736,7 +4280,7 @@ function editProfileGenerateQR() {
   // Show the notes section at the QR step
   showSection('notes');
   showStep('qr');
-  document.getElementById('pill-compose').className = 'step-pill done';
+  const _pill = document.getElementById('pill-compose'); if (_pill) _pill.className = 'step-pill done';
 }
 
 function onPubkeyInputVisible() {
