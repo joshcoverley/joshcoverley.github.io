@@ -1739,9 +1739,13 @@ footer strong { color: var(--muted); }
           <div class="up-stat-num" id="upp-followers-count">—</div>
           <div class="up-stat-label">Followers</div>
         </div>
-        <div class="up-stat" style="flex:1;">
+        <div class="up-stat" style="flex:1;border-right:1px solid var(--border);">
           <div class="up-stat-num" id="upp-notes-count">—</div>
           <div class="up-stat-label">Notes</div>
+        </div>
+        <div class="up-stat" style="flex:1;">
+          <div class="up-stat-num" id="upp-zaps-total">—</div>
+          <div class="up-stat-label">Sats rcvd</div>
         </div>
       </div>
     </div>
@@ -3605,6 +3609,95 @@ const nwcState = {
   raw: null,
 };
 
+
+async function nwcTest() {
+  if (!nwcState.pubkey) {
+    document.getElementById('nwc-status').textContent = 'No wallet connected — paste a NWC string first';
+    return;
+  }
+  const statusEl = document.getElementById('nwc-status');
+  statusEl.textContent = 'Connecting to relay…';
+
+  try {
+    const privkeyBytes = hexToBytes(nwcState.secret);
+    const pubkeyBytes = secp256k1GetPublicKey(privkeyBytes);
+    const ourPubkey = bytesToHex(pubkeyBytes);
+
+    const req = { method: 'get_balance', params: {} };
+    const encrypted = await nip04Encrypt(nwcState.secret, nwcState.pubkey, JSON.stringify(req));
+    const event = {
+      kind: 23194,
+      created_at: Math.floor(Date.now() / 1000),
+      tags: [['p', nwcState.pubkey]],
+      content: encrypted,
+      pubkey: ourPubkey,
+    };
+    event.id = await nostrEventId(event);
+    event.sig = await schnorrSign(event.id, nwcState.secret);
+
+    const subId = 'nwc-test-' + Date.now();
+    const ws = new WebSocket(nwcState.relayUrl);
+
+    const timer = setTimeout(() => {
+      ws.close();
+      statusEl.textContent = '✗ Timeout — relay did not respond in 10s. Check your NWC string.';
+    }, 10000);
+
+    ws.onopen = () => {
+      statusEl.textContent = 'Connected — waiting for wallet response…';
+      ws.send(JSON.stringify(['EVENT', event]));
+      ws.send(JSON.stringify(['REQ', subId, {
+        kinds: [23195],
+        authors: [nwcState.pubkey],
+        '#p': [ourPubkey],
+        since: Math.floor(Date.now()/1000) - 5,
+      }]));
+    };
+
+    ws.onmessage = async (e) => {
+      try {
+        const msg = JSON.parse(e.data);
+        if (msg[0] === 'OK') {
+          if (msg[2] === false) {
+            statusEl.textContent = '✗ Relay rejected event: ' + (msg[3] || 'unknown reason');
+          }
+        }
+        if (msg[0] === 'EVENT' && msg[2]?.kind === 23195) {
+          clearTimeout(timer);
+          ws.close();
+          try {
+            const decrypted = await nip04Decrypt(nwcState.secret, nwcState.pubkey, msg[2].content);
+            const resp = JSON.parse(decrypted);
+            if (resp.error) {
+              statusEl.textContent = '⚠ Wallet error: ' + resp.error.message + ' (code: ' + resp.error.code + ')';
+            } else if (resp.result?.balance !== undefined) {
+              const sats = Math.floor(resp.result.balance / 1000);
+              statusEl.textContent = '⚡ Connected! Balance: ' + sats.toLocaleString() + ' sats';
+              nwcSetConnected(true, nwcState.relayUrl);
+            } else {
+              statusEl.textContent = '⚡ Wallet responded — response: ' + JSON.stringify(resp.result).slice(0,80);
+              nwcSetConnected(true, nwcState.relayUrl);
+            }
+          } catch(decryptErr) {
+            statusEl.textContent = '✗ Decrypt failed — wrong secret key? ' + decryptErr.message;
+          }
+        }
+        if (msg[0] === 'EOSE') {
+          // EOSE with no response yet is fine — keep waiting
+        }
+      } catch(e) {}
+    };
+
+    ws.onerror = (err) => {
+      clearTimeout(timer);
+      statusEl.textContent = '✗ WebSocket error — relay unreachable: ' + nwcState.relayUrl;
+    };
+
+  } catch(err) {
+    statusEl.textContent = '✗ Error: ' + err.message;
+  }
+}
+
 function nwcOnInput() {
   const val = document.getElementById('nwc-string').value.trim();
   document.getElementById('nwc-status').textContent = val ? 'Press SAVE to connect' : '';
@@ -3616,9 +3709,20 @@ function nwcSave() {
   try {
     nwcParse(val);
     localStorage.setItem('nwc_string', val);
-    document.getElementById('nwc-status').textContent = '// Wallet connected — ' + nwcState.relayUrl;
+    nwcSetConnected(true, nwcState.relayUrl);
+    document.getElementById('nwc-status').textContent = 'Saved — tap Test to verify connection';
   } catch(e) {
-    document.getElementById('nwc-status').textContent = '// Invalid NWC string: ' + e.message;
+    document.getElementById('nwc-status').textContent = '✗ Invalid: ' + e.message;
+  }
+}
+
+function nwcSetConnected(connected, label) {
+  const badge = document.getElementById('nwc-badge');
+  if (badge) badge.style.display = connected ? 'block' : 'none';
+  const statusEl = document.getElementById('nwc-status');
+  if (connected && label && statusEl) {
+    const host = label.replace('wss://','').replace('ws://','').split('/')[0];
+    statusEl.textContent = 'Relay: ' + host;
   }
 }
 
@@ -3626,7 +3730,8 @@ function nwcClear() {
   nwcState.pubkey = nwcState.secret = nwcState.relayUrl = nwcState.raw = null;
   localStorage.removeItem('nwc_string');
   document.getElementById('nwc-string').value = '';
-  document.getElementById('nwc-status').textContent = '// Wallet disconnected';
+  document.getElementById('nwc-status').textContent = 'Wallet disconnected';
+  nwcSetConnected(false);
 }
 
 function nwcParse(str) {
@@ -3651,7 +3756,7 @@ function nwcParse(str) {
     try {
       nwcParse(saved);
       document.getElementById('nwc-string').value = saved;
-      document.getElementById('nwc-status').textContent = '// Wallet connected — ' + nwcState.relayUrl;
+      nwcSetConnected(true, nwcState.relayUrl);
     } catch(e) {}
   }
 })();
@@ -4261,6 +4366,7 @@ function openUserProfilePage(pubkey) {
   document.getElementById('upp-following-count').textContent = '—';
   document.getElementById('upp-followers-count').textContent = '—';
   document.getElementById('upp-notes-count').textContent = '—';
+  document.getElementById('upp-zaps-total').textContent = '—';
 
   // Populate from cached profile
   uppPopulateProfile(pubkey);
@@ -4269,6 +4375,7 @@ function openUserProfilePage(pubkey) {
   if (!state.profiles[pubkey] || !state.profiles[pubkey].name) fetchProfile(pubkey);
   uppFetchStats(pubkey);
   uppFetchNotes(pubkey);
+  uppFetchZapTotal(pubkey);
 }
 
 function closeUserProfilePage() {
@@ -4392,6 +4499,61 @@ async function uppFetchStats(pubkey) {
     } catch(e) {}
   };
   ws.onerror = () => { clearTimeout(timer); };
+}
+
+async function uppFetchZapTotal(pubkey) {
+  const el = document.getElementById('upp-zaps-total');
+  if (!el) return;
+  el.textContent = '…';
+
+  const relayUrl = RELAYS[0] || 'wss://relay.damus.io';
+  let ws;
+  try { ws = new WebSocket(relayUrl); } catch(e) { el.textContent = '?'; return; }
+
+  const sub = 'upzaps-' + Date.now();
+  let totalSats = 0;
+
+  ws.onopen = () => {
+    // Fetch zap receipts where the recipient is this pubkey
+    ws.send(JSON.stringify(['REQ', sub, {
+      kinds: [9735],
+      '#p': [pubkey],
+      limit: 1000,
+    }]));
+  };
+
+  const timer = setTimeout(() => {
+    try { ws.close(); } catch(e) {}
+    el.textContent = totalSats >= 1000
+      ? (totalSats / 1000).toFixed(1) + 'k'
+      : totalSats || '0';
+  }, 10000);
+
+  ws.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
+        const ev = msg[2];
+        const amountTag = ev.tags.find(t => t[0] === 'amount');
+        if (amountTag) {
+          totalSats += Math.floor((parseInt(amountTag[1]) || 0) / 1000);
+        }
+        // Update live as they come in
+        el.textContent = totalSats >= 1000
+          ? (totalSats / 1000).toFixed(1) + 'k'
+          : totalSats;
+      }
+      if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer);
+        try { ws.close(); } catch(e) {}
+        el.textContent = totalSats >= 1000
+          ? (totalSats / 1000).toFixed(1) + 'k'
+          : totalSats || '0';
+      }
+    } catch(e) {}
+  };
+
+  ws.onerror = () => { clearTimeout(timer); el.textContent = '?'; };
 }
 
 async function uppFetchNotes(pubkey) {
@@ -4978,10 +5140,11 @@ function flushStatsQueue() {
 }
 
 function fetchStatsForNotes(eventIds) {
-  const ws = Object.values(state.sockets).find(w => w && w.readyState === WebSocket.OPEN);
-  if (!ws) return;
+  // Dedicated WebSocket — never touches main relay onmessage
+  const relayUrl = RELAYS[0] || 'wss://relay.damus.io';
+  let ws;
+  try { ws = new WebSocket(relayUrl); } catch(e) { return; }
 
-  // Init cache entries with all fields including replies + reposts
   eventIds.forEach(id => {
     if (!statsCache[id]) statsCache[id] = {
       likes: 0, likedByMe: false,
@@ -4990,48 +5153,42 @@ function fetchStatsForNotes(eventIds) {
     };
   });
 
-  const sub = 'stats-' + Math.random().toString(36).slice(2, 8);
+  const sub = 'stats-' + Date.now();
 
-  // CHANGE 3: kinds now includes 1 (replies) and 6 (reposts) in addition to 7 and 9735
-  ws.send(JSON.stringify(['REQ', sub, {
-    kinds: [1, 6, 7, 9735],
-    '#e': eventIds,
-    limit: 500,
-  }]));
+  ws.onopen = () => {
+    ws.send(JSON.stringify(['REQ', sub, {
+      kinds: [1, 6, 7, 9735],
+      '#e': eventIds,
+      limit: 500,
+    }]));
+  };
 
-  const prevMsg = ws.onmessage;
+  const timer = setTimeout(() => {
+    try { ws.close(); } catch(e) {}
+    eventIds.forEach(id => updateNoteStats(id));
+  }, 8000);
+
   ws.onmessage = (e) => {
-    if (prevMsg) prevMsg(e);
     try {
       const msg = JSON.parse(e.data);
-      if (msg[0] === 'EVENT' && msg[1] === sub) {
+      if (msg[0] === 'EVENT' && msg[1] === sub && msg[2]) {
         const ev = msg[2];
-        const targetTag = ev.tags.find(t => t[0] === 'e');
+        // Find which of our eventIds this event references
+        const targetTag = ev.tags.find(t => t[0] === 'e' && statsCache[t[1]]);
         if (!targetTag) return;
         const targetId = targetTag[1];
-        if (!statsCache[targetId]) return;
 
         if (ev.kind === 1) {
-          // Kind 1 with an e-tag = reply to our note
-          // Only count if it has a reply/mention marker or is a direct e-tag ref
           statsCache[targetId].replies++;
-
         } else if (ev.kind === 6) {
-          // Kind 6 = repost
           statsCache[targetId].reposts++;
-
         } else if (ev.kind === 7) {
-          // Reaction
           const reaction = ev.content || '+';
-          if (reaction === '+' || reaction === '❤️' || reaction === '🤙') {
+          if (reaction === '+' || reaction === '❤️' || reaction === '🤙' || reaction === '👍') {
             statsCache[targetId].likes++;
-            if (state.pubkeyHex && ev.pubkey === state.pubkeyHex) {
-              statsCache[targetId].likedByMe = true;
-            }
+            if (state.pubkeyHex && ev.pubkey === state.pubkeyHex) statsCache[targetId].likedByMe = true;
           }
-
         } else if (ev.kind === 9735) {
-          // Zap receipt
           const amountTag = ev.tags.find(t => t[0] === 'amount');
           if (amountTag) {
             const msats = parseInt(amountTag[1]) || 0;
@@ -5041,21 +5198,21 @@ function fetchStatsForNotes(eventIds) {
           if (descTag && state.pubkeyHex) {
             try {
               const zapReq = JSON.parse(descTag[1]);
-              if (zapReq.pubkey === state.pubkeyHex) {
-                statsCache[targetId].zappedByMe = true;
-              }
+              if (zapReq.pubkey === state.pubkeyHex) statsCache[targetId].zappedByMe = true;
             } catch(e) {}
           }
         }
         updateNoteStats(targetId);
 
       } else if (msg[0] === 'EOSE' && msg[1] === sub) {
+        clearTimeout(timer);
         eventIds.forEach(id => updateNoteStats(id));
-        ws.send(JSON.stringify(['CLOSE', sub]));
-        ws.onmessage = prevMsg;
+        try { ws.close(); } catch(e) {}
       }
     } catch(e) {}
   };
+
+  ws.onerror = () => { clearTimeout(timer); eventIds.forEach(id => updateNoteStats(id)); };
 }
 
 function updateNoteStats(eventId) {
