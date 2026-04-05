@@ -1821,6 +1821,35 @@ const state = {
   pubkeyScanStream: null, pubkeyScanStop: null,
 };
 
+
+// ── Profile localStorage cache ─────────────────────────────────────────────
+(function() {
+  try {
+    const saved = localStorage.getItem('profile_cache');
+    if (saved) {
+      const cache = JSON.parse(saved);
+      Object.assign(state.profiles, cache);
+    }
+  } catch(e) {}
+})();
+
+function saveProfileCache() {
+  try {
+    // Only save profiles that have meaningful data
+    const toSave = {};
+    Object.entries(state.profiles).forEach(([k, v]) => {
+      if (v && (v.name || v.picture || v.lud16)) toSave[k] = v;
+    });
+    localStorage.setItem('profile_cache', JSON.stringify(toSave));
+  } catch(e) {}
+}
+
+// Save profile cache every 10 seconds if anything changed
+let _profileCacheDirty = false;
+setInterval(() => {
+  if (_profileCacheDirty) { saveProfileCache(); _profileCacheDirty = false; }
+}, 10000);
+
 // ── Feed state ───────────────────────────────────────────────────────────
 const feedState = {
   mode: 'global',
@@ -1845,29 +1874,45 @@ const feedState = {
 function resolveUnloadedProfiles() {
   const missing = new Set();
 
-  // Find all avatar elements that still show a single letter (not an image)
+  // Find all avatar elements without an image
   document.querySelectorAll('.note-avatar, .thread-avatar, .up-avatar-wrap').forEach(av => {
-    // If it has no img child, it hasn't loaded yet
     if (!av.querySelector('img')) {
-      // Extract pubkey from onclick
       const onclick = av.getAttribute('onclick') || '';
       const match = onclick.match(/openUserProfilePage\('([0-9a-f]{64})'\)/);
-      if (match) missing.add(match[1]);
+      if (match) {
+        const pubkey = match[1];
+        // Apply cached profile immediately if available
+        const p = state.profiles[pubkey];
+        if (p && p.picture) {
+          av.innerHTML = '<img src="' + escHtml(p.picture) + '" style="width:100%;height:100%;object-fit:cover;">';
+        } else if (p && p.name) {
+          av.textContent = p.name[0] || '?';
+        } else {
+          missing.add(pubkey);
+        }
+      }
     }
   });
 
-  // Also scan nm- elements that still show a hex snippet (not a real name)
+  // Find nm- elements still showing hex
   document.querySelectorAll('[id^="nm-"]').forEach(el => {
     const text = el.textContent || '';
-    // Still showing hex snippet like "abc123de…"
     if (/^[0-9a-f]{8}…$/.test(text)) {
       const noteId = el.id.replace('nm-', '');
       const note = state.notes.find(n => n.id === noteId) || parentNoteCache[noteId];
-      if (note) missing.add(note.pubkey);
+      if (note) {
+        const p = state.profiles[note.pubkey];
+        if (p && p.name) {
+          // Apply cached name immediately
+          el.textContent = p.name || p.display_name || note.pubkey.slice(0,8) + '…';
+        } else {
+          missing.add(note.pubkey);
+        }
+      }
     }
   });
 
-  // Queue any missing profiles that aren't already being fetched
+  // Queue truly missing profiles for network fetch
   missing.forEach(pk => {
     if (!state.profiles[pk] || !state.profiles[pk].name) {
       _profileQueue.add(pk);
@@ -1878,9 +1923,14 @@ function resolveUnloadedProfiles() {
 }
 
 // Run every 3 seconds
-setInterval(resolveUnloadedProfiles, 3000);
+setInterval(resolveUnloadedProfiles, 2000);
 
 (function boot() {
+  // Immediately apply any cached profiles to the DOM
+  Object.entries(state.profiles).forEach(([pubkey, p]) => {
+    if (p && (p.name || p.picture)) updateNotesWithProfile(pubkey, p);
+  });
+
   // Check for WebLN extension (Alby)
   setTimeout(checkWebLN, 1500);
 
@@ -2680,6 +2730,7 @@ function fetchProfile(pubkey){
       if(msg[0]==='EVENT'&&msg[1]===sub&&msg[2]){
         const p=JSON.parse(msg[2].content||'{}');
         state.profiles[pubkey]=p;
+        _profileCacheDirty = true;
         updateNotesWithProfile(pubkey,p);
         // Update header avatar and profile card if this is our own profile
         if(pubkey===state.pubkeyHex) { updateHeaderAvatar(p); updateProfileCard(p); }
