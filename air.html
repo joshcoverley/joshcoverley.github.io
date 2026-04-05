@@ -1705,7 +1705,7 @@ footer strong { color: var(--muted); }
     <!-- Notes feed -->
     <div id="upp-notes-feed" style=""></div>
     <div id="upp-replies-feed" style="display:none;"></div>
-    <div id="upp-loading" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:32px 0;letter-spacing:0.08em;">Loading…</div>
+    <div id="upp-loading" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;padding:48px 0;letter-spacing:0.08em;">Loading<span id="upp-dots"></span></div>
 
   </div>
 
@@ -3871,7 +3871,8 @@ function openUserProfilePage(pubkey) {
   document.getElementById('upp-notes-feed').innerHTML = '';
   document.getElementById('upp-replies-feed').innerHTML = '';
   document.getElementById('upp-loading').style.display = 'block';
-  document.getElementById('upp-loading').textContent = 'Loading…';
+  document.getElementById('upp-loading').textContent = 'Loading';
+  startLoadingDots('upp-dots');
   document.getElementById('upp-following-count').textContent = '—';
   document.getElementById('upp-followers-count').textContent = '—';
   document.getElementById('upp-notes-count').textContent = '—';
@@ -3993,7 +3994,7 @@ async function uppFetchStats(pubkey) {
   const timer = setTimeout(() => {
     ws.close();
     document.getElementById('upp-followers-count').textContent = followerCount + '+';
-  }, 5000);
+  }, 10000);
   ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[3], '#p':[pubkey], limit:500 }]));
   ws.onmessage = (e) => {
     try {
@@ -4017,7 +4018,7 @@ async function uppFetchNotes(pubkey) {
   let noteCount = 0;
   let replyCount = 0;
 
-  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 8000);
+  const timer = setTimeout(() => { ws.close(); uppDoneLoading(noteCount, replyCount); }, 12000);
 
   ws.onopen = () => ws.send(JSON.stringify(['REQ', sub, { kinds:[1], authors:[pubkey], limit:50 }]));
   ws.onmessage = (e) => {
@@ -4040,6 +4041,7 @@ async function uppFetchNotes(pubkey) {
 }
 
 function uppDoneLoading(noteCount, replyCount) {
+  stopLoadingDots();
   document.getElementById('upp-loading').style.display = 'none';
   document.getElementById('upp-notes-count').textContent = noteCount + replyCount;
   document.getElementById('upp-notes-tab-count').textContent = noteCount ? '(' + noteCount + ')' : '';
@@ -4467,6 +4469,18 @@ function closeImageFullscreen() {
   document.getElementById('image-fullscreen-img').src = '';
 }
 
+
+// Animate loading dots
+let _dotsTimer = null;
+function startLoadingDots(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let n = 0;
+  _dotsTimer = setInterval(() => { el.textContent = '.'.repeat((n++ % 3) + 1); }, 400);
+}
+function stopLoadingDots() {
+  if (_dotsTimer) { clearInterval(_dotsTimer); _dotsTimer = null; }
+}
 // ── QR Fullscreen ─────────────────────────────────────────────────────────
 
 function showQRFullscreen(text, hint) {
@@ -4687,45 +4701,42 @@ function markZappedOptimistic(eventId, sats) {
 // ── Navigation ────────────────────────────────────────────────────────────
 
 function closeAllModals() {
-  // Close reply modal
-  document.getElementById('reply-modal').style.display = 'none';
+  // Force hide all modals — no conditionals
+  const forceHide = ['reply-modal','quick-zap-modal','user-profile-modal',
+    'like-modal','onboard-modal','image-fullscreen-overlay','zap-recipient-modal'];
+  forceHide.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
 
-  // Close quick zap modal
-  if (document.getElementById('quick-zap-modal').style.display !== 'none') closeQuickZapModal();
+  // Close class-based modals
+  ['thread-modal','pubkey-scan-modal','qr-fullscreen-overlay'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('open');
+  });
 
-  // Close user profile modal
-  if (document.getElementById('user-profile-modal') && document.getElementById('user-profile-modal').style.display !== 'none') closeUserProfile();
+  // Reset like modal internal state
+  const likeCamera = document.getElementById('like-view-camera');
+  const likeQR = document.getElementById('like-view-qr');
+  if (likeCamera) likeCamera.style.display = 'none';
+  if (likeQR) likeQR.style.display = 'block';
 
-  // Close like modal + stop its camera
-  const likeVideo = document.getElementById('like-scan-video');
-  if (likeVideo && likeVideo._stopScan) { likeVideo._stopScan(); likeVideo._stopScan = null; }
-  stopCameraStream(likeVideo);
-  document.getElementById('like-view-camera').style.display = 'none';
-  document.getElementById('like-view-qr').style.display = 'block';
-  document.getElementById('like-modal').style.display = 'none';
+  // Reset quick zap modal internal state
+  ['quick-zap-build','quick-zap-qr-step','quick-zap-scan-step','quick-zap-invoice-step'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = id === 'quick-zap-build' ? 'block' : 'none';
+  });
 
-  // Close thread modal
-  if (document.getElementById('thread-modal').classList.contains('open')) {
-    closeThread();
-  }
-
-  // Close pubkey scan modal
-  if (document.getElementById('pubkey-scan-modal').classList.contains('open')) {
-    closePubkeyScan();
-  }
-
-  // Close QR fullscreen
-  if (document.getElementById('qr-fullscreen-overlay').classList.contains('open')) {
-    closeQRFullscreen();
-  }
-
-  // Stop any active camera scan
+  // Stop all cameras
+  [document.getElementById('like-scan-video'),
+   document.getElementById('quick-zap-scan-video'),
+   document.getElementById('pubkey-scan-video')].forEach(v => {
+    if (v) stopCameraStream(v);
+  });
   if (typeof state.scanTimer === 'function') state.scanTimer();
   state.scanTimer = null;
   if (state.scanStream) { state.scanStream.getTracks().forEach(t => t.stop()); state.scanStream = null; }
-
-  // Close onboard modal
-  document.getElementById('onboard-modal').style.display = 'none';
+  if (quickZapState && quickZapState.stopScan) { quickZapState.stopScan(); quickZapState.stopScan = null; }
 }
 
 function openCompose() {
