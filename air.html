@@ -4572,7 +4572,6 @@ async function uppFetchStatsPrimal(pubkey) {
 
     ws.onerror = () => { clearTimeout(timer); resolve(false); };
   });
-  }); // end Primal WS promise
 }
 
 function uppFetchStatsFromRelay(pubkey) {
