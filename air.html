@@ -4611,5 +4611,77 @@ function toggleTheme() {
 initTheme();
 
 </script>
+
+<div id="ptr-indicator" style="position:fixed;top:0;left:0;right:0;z-index:9998;display:flex;align-items:center;justify-content:center;height:0;overflow:hidden;background:var(--bg);transition:height 0.15s;pointer-events:none;">
+  <svg id="ptr-key" width="52" height="24" viewBox="0 0 110 50" fill="none" style="opacity:0;transition:opacity 0.2s;">
+    <circle cx="26" cy="25" r="18" stroke="var(--acid)" stroke-width="5.5" fill="none"/>
+    <circle cx="26" cy="25" r="6" fill="var(--bg)"/>
+    <line x1="44" y1="25" x2="102" y2="25" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+    <line x1="72" y1="25" x2="72" y2="41" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+    <line x1="88" y1="25" x2="88" y2="36" stroke="var(--acid)" stroke-width="5.5" stroke-linecap="square"/>
+    <circle cx="26" cy="25" r="5" fill="var(--acid)" id="ptr-dot">
+      <animate id="ptr-anim" attributeName="r" values="5;9;5" dur="1s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.2 1;0.4 0 0.2 1"/>
+    </circle>
+  </svg>
+</div>
+
+<script>
+(function() {
+  let startY = 0;
+  let pulling = false;
+  let triggered = false;
+  const THRESHOLD = 72;
+  const indicator = document.getElementById('ptr-indicator');
+  const key = document.getElementById('ptr-key');
+
+  function atTop() {
+    return window.scrollY <= 0;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (!atTop()) return;
+    startY = e.touches[0].clientY;
+    pulling = true;
+    triggered = false;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (!pulling) return;
+    const dy = e.touches[0].clientY - startY;
+    if (dy <= 0) { pulling = false; return; }
+
+    const h = Math.min(dy * 0.5, THRESHOLD);
+    indicator.style.height = h + 'px';
+    key.style.opacity = Math.min(h / THRESHOLD, 1);
+
+    // Rotate key based on pull distance
+    const rotate = Math.min((h / THRESHOLD) * 180, 180);
+    key.style.transform = 'rotate(' + rotate + 'deg)';
+
+    if (h >= THRESHOLD && !triggered) {
+      triggered = true;
+      // Haptic if available
+      if (window.navigator && window.navigator.vibrate) navigator.vibrate(10);
+      key.style.transform = 'rotate(180deg)';
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!pulling) return;
+    pulling = false;
+
+    if (triggered) {
+      // Hold indicator for a moment then refresh
+      indicator.style.height = THRESHOLD + 'px';
+      key.style.opacity = '1';
+      setTimeout(() => { window.location.reload(); }, 400);
+    } else {
+      indicator.style.height = '0';
+      key.style.opacity = '0';
+      key.style.transform = '';
+    }
+  });
+})();
+</script>
 </body>
 </html>
