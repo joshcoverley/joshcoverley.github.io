@@ -76,6 +76,8 @@ html[data-theme="dark"] {
   }
 }
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { overflow-x: hidden; max-width: 100vw; }
+html { touch-action: pan-y; overscroll-behavior-x: none; }
 
 html, body {
   background: var(--bg);
@@ -5819,6 +5821,10 @@ function closeAllModals() {
     const el = document.getElementById(id);
     if (el) el.classList.remove('open');
   });
+
+  // Always reset body scroll lock — openThread() sets overflow:hidden
+  // and closeThread() may not always be the exit path
+  document.body.style.overflow = '';
 
   // Reset like modal internal state
   const likeCamera = document.getElementById('like-view-camera');
