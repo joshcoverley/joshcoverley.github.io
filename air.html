@@ -855,27 +855,41 @@ footer strong { color: var(--muted); }
     // If user explicitly chose airgap mode, skip launcher
     if (localStorage.getItem(SKIP_KEY) === '1') return;
 
-    const savedHost = localStorage.getItem(STORAGE_KEY);
-    if (!savedHost) {
-      // No saved host — show launcher
-      const el = document.getElementById('fk-launcher');
-      el.style.display = 'flex';
-      return;
-    }
-
-    // Try saved host silently
-    document.getElementById('fk-status').textContent = 'Looking for your device…';
     const el = document.getElementById('fk-launcher');
     el.style.display = 'flex';
 
-    const ok = await tryHost(savedHost);
-    if (ok) {
-      redirect(savedHost);
-    } else {
-      // Device not found — show connect screen with last host pre-filled
+    const savedHost = localStorage.getItem(STORAGE_KEY);
+
+    // Try saved host first
+    if (savedHost) {
+      document.getElementById('fk-status').textContent = 'Looking for your device…';
+      const ok = await tryHost(savedHost);
+      if (ok) { redirect(savedHost); return; }
       document.getElementById('fk-host-input').value = savedHost;
-      document.getElementById('fk-status').textContent = 'Device not found at ' + savedHost + ' — check address';
+      document.getElementById('fk-status').textContent = 'Device not found at ' + savedHost + ' — check address or scan QR again';
+      return;
     }
+
+    // No saved host — auto-scan common subnets
+    document.getElementById('fk-status').textContent = 'Scanning for your FAVILLA KEY…';
+    const subnets = ['192.168.1', '192.168.0', '192.168.20', '192.168.4', '10.0.0', '172.20.10'];
+    const commonHosts = [1, 2, 3, 4, 5, 10, 20, 100, 101, 150, 200];
+    
+    for (const subnet of subnets) {
+      const checks = commonHosts.map(h => {
+        const host = subnet + '.' + h;
+        return tryHost(host).then(ok => ok ? host : null);
+      });
+      const results = await Promise.all(checks);
+      const found = results.find(r => r !== null);
+      if (found) {
+        document.getElementById('fk-status').textContent = 'Found device at ' + found;
+        redirect(found);
+        return;
+      }
+    }
+
+    document.getElementById('fk-status').textContent = 'Device not found — enter address below or scan QR on device screen';
   }
 
   // Run after page loads
