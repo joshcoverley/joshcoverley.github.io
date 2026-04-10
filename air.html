@@ -780,6 +780,110 @@ footer strong { color: var(--muted); }
 </style>
 </head>
 <body>
+
+<!-- ── FAVILLA KEY LAUNCHER ──────────────────────────────────────────────── -->
+<!-- Runs on every page load. If saved device host is reachable, redirects    -->
+<!-- immediately. Otherwise shows connect screen. Same shortcut for all users -->
+<div id="fk-launcher" style="display:none;position:fixed;inset:0;z-index:9999;background:#0a0908;font-family:'JetBrains Mono',monospace;color:#e8e0d0;flex-direction:column;align-items:center;justify-content:center;padding:32px;">
+  <div style="max-width:360px;width:100%;text-align:center;">
+    <!-- Logo -->
+    <div style="font-size:11px;letter-spacing:0.35em;color:#7a6a50;text-transform:uppercase;margin-bottom:8px;">// FAVILLA KEY</div>
+    <div style="font-size:36px;font-weight:900;letter-spacing:0.25em;color:#c9a84c;line-height:1;margin-bottom:4px;font-family:'Inter',sans-serif;">CONNECT</div>
+    <div style="font-size:10px;letter-spacing:0.2em;color:#7a6a50;text-transform:uppercase;margin-bottom:32px;">Your self-hosted Nostr client</div>
+
+    <!-- Status -->
+    <div id="fk-status" style="font-size:11px;color:#7a6a50;letter-spacing:0.08em;margin-bottom:24px;min-height:18px;"></div>
+
+    <!-- Manual entry -->
+    <div style="margin-bottom:16px;">
+      <div style="font-size:9px;letter-spacing:0.2em;color:#7a6a50;text-transform:uppercase;margin-bottom:6px;text-align:left;">DEVICE ADDRESS</div>
+      <input id="fk-host-input" type="text" placeholder="192.168.x.x or favilla-xxxx.local"
+        style="width:100%;box-sizing:border-box;background:#111;border:1px solid #2f3336;color:#e8e0d0;font-family:'JetBrains Mono',monospace;font-size:13px;padding:10px 12px;outline:none;"/>
+    </div>
+    <button id="fk-connect-btn" onclick="fkConnect()"
+      style="width:100%;padding:12px;background:#c9a84c;color:#0a0908;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.15em;text-transform:uppercase;border:none;cursor:pointer;font-weight:700;margin-bottom:12px;">
+      CONNECT TO DEVICE
+    </button>
+    <button onclick="fkSkip()"
+      style="width:100%;padding:10px;background:transparent;color:#7a6a50;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;border:1px solid #2f3336;cursor:pointer;">
+      USE AIRGAP PORTAL INSTEAD
+    </button>
+    <div style="font-size:9px;color:#4a4a4a;margin-top:20px;letter-spacing:0.04em;line-height:1.6;">
+      Scan the QR code on your FAVILLA KEY screen<br>or enter the IP address shown on the device.
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const STORAGE_KEY = 'fk_device_host';
+  const SKIP_KEY = 'fk_skip_launcher';
+
+  async function tryHost(host) {
+    try {
+      const r = await fetch('http://' + host + '/api/info', { signal: AbortSignal.timeout(3000) });
+      const j = await r.json();
+      return j && (j.paired !== undefined || j.firmware);
+    } catch(e) { return false; }
+  }
+
+  function redirect(host) {
+    localStorage.setItem(STORAGE_KEY, host);
+    window.location.href = 'http://' + host;
+  }
+
+  window.fkConnect = async function() {
+    const input = document.getElementById('fk-host-input').value.trim();
+    const host = input || localStorage.getItem(STORAGE_KEY);
+    if (!host) { document.getElementById('fk-status').textContent = 'Enter your device address above'; return; }
+    document.getElementById('fk-status').textContent = 'Connecting to ' + host + '…';
+    document.getElementById('fk-connect-btn').disabled = true;
+    const ok = await tryHost(host);
+    if (ok) { redirect(host); }
+    else {
+      document.getElementById('fk-status').textContent = '✗ Device not found at ' + host;
+      document.getElementById('fk-connect-btn').disabled = false;
+    }
+  };
+
+  window.fkSkip = function() {
+    localStorage.setItem(SKIP_KEY, '1');
+    document.getElementById('fk-launcher').style.display = 'none';
+  };
+
+  async function fkInit() {
+    // If user explicitly chose airgap mode, skip launcher
+    if (localStorage.getItem(SKIP_KEY) === '1') return;
+
+    const savedHost = localStorage.getItem(STORAGE_KEY);
+    if (!savedHost) {
+      // No saved host — show launcher
+      const el = document.getElementById('fk-launcher');
+      el.style.display = 'flex';
+      return;
+    }
+
+    // Try saved host silently
+    document.getElementById('fk-status').textContent = 'Looking for your device…';
+    const el = document.getElementById('fk-launcher');
+    el.style.display = 'flex';
+
+    const ok = await tryHost(savedHost);
+    if (ok) {
+      redirect(savedHost);
+    } else {
+      // Device not found — show connect screen with last host pre-filled
+      document.getElementById('fk-host-input').value = savedHost;
+      document.getElementById('fk-status').textContent = 'Device not found at ' + savedHost + ' — check address';
+    }
+  }
+
+  // Run after page loads
+  document.addEventListener('DOMContentLoaded', fkInit);
+})();
+</script>
+<!-- ── END LAUNCHER ──────────────────────────────────────────────────────── -->
+
 <div class="wrap">
 
   <!-- Compact header -->
