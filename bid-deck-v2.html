@@ -116,10 +116,43 @@
   .destgrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
 
   /* ---- bid builder ---- */
-  .bg{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);margin-bottom:12px;overflow:hidden}
+  .bg{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+  /* status chips — one vocabulary everywhere */
+  .sc{display:inline-flex;align-items:center;font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--ground);color:var(--ground-ink);white-space:nowrap}
+  .sc.ok{background:var(--ok-soft);color:var(--ok)}
+  .sc.warn{background:var(--warn-soft);color:var(--warn)}
+  .sc.amber{background:var(--amber-soft);color:var(--amber-ink)}
+  .sc.money{background:var(--ok-soft);color:var(--ok);font-weight:600}
+  /* group header: numbered rail (priority order is real information) */
+  .ghead{width:100%;display:flex;align-items:center;gap:11px;padding:0;background:var(--surface);border:none;cursor:pointer;text-align:left;font-family:var(--sans)}
+  .ghead .gh-ix{align-self:stretch;display:flex;align-items:center;justify-content:center;min-width:40px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.04em}
+  .bg.bank .ghead .gh-ix{background:var(--amber)}
+  .ghead .gh-l{flex:1;padding:11px 0}
+  .ghead .gh-name{font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .ghead .gh-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:3px}
+  .ghead .gh-caret{font-size:12px;color:var(--muted);flex:0 0 auto;padding-right:13px;transition:transform .15s}
+  .bg.open .gh-caret{transform:rotate(90deg)}
+  .gbody{display:none;border-top:1px solid var(--line-soft)}
+  .bg.open .gbody{display:block}
+  .gtriplist{max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* one disclosure style for commands + add-flight */
+  .addwrap{border-top:1px solid var(--line-soft)}
+  .addwrap summary{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--amber-ink);padding:11px 13px;cursor:pointer;list-style:none}
+  .addwrap summary::-webkit-details-marker{display:none}
+  .addwrap summary::before{content:"▸";font-size:10px;transition:transform .15s}
+  .addwrap[open] summary::before{transform:rotate(90deg)}
+  .addsearch{width:calc(100% - 26px);margin:0 13px 8px;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:12px;background:var(--surface)}
+  .addlist{max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 13px 10px}
+  .addrow{display:block;width:100%;text-align:left;font-family:var(--mono);font-size:12px;padding:9px 11px;margin-bottom:5px;border:1px solid var(--line-soft);border-radius:7px;background:var(--surface);cursor:pointer}
+  .addrow:active{background:var(--ok-soft)}
+  /* command checklist rows */
+  .cmdrow{display:flex;gap:9px;align-items:flex-start;font-family:var(--mono);font-size:11.5px;padding:6px 0;border-bottom:1px solid var(--line-soft)}
+  .cmdrow:last-child{border-bottom:none}
+  .cmdrow input{margin-top:2px;accent-color:var(--amber);flex:0 0 auto}
   .bg .head{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--bg)}
   .bg .head h4{font-size:14px}
   .bg .meter{padding:11px 13px}
+  .gnote{font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:9px 13px 0;line-height:1.55}
   .bar{height:22px;border-radius:6px;background:var(--bg);position:relative;overflow:hidden;margin:6px 0}
   .bar .fill{position:absolute;top:0;bottom:0;left:0;background:var(--amber);opacity:.85}
   .bar .band{position:absolute;top:0;bottom:0;border-left:2px solid var(--ink);opacity:.5}
@@ -189,7 +222,15 @@
       <div class="destgrid" id="prefDests" style="display:none"></div>
     </div>
     <div class="card">
+      <h3>Pay (optional)</h3>
+      <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:8px">From your payscale — stays on this device. Estimates variable pay only (credit × hourly + TAFB × allowance), not base salary.</div>
+      <div class="pref"><div><label>Hourly flying pay</label><div class="desc">£ per credit hour</div></div><input type="number" inputmode="decimal" min="0" step="0.01" class="payin" data-pay="payHourly" style="width:90px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono)"></div>
+      <div class="pref"><div><label>TAFB allowance</label><div class="desc">£ per hour away from base</div></div><input type="number" inputmode="decimal" min="0" step="0.01" class="payin" data-pay="payTafb" style="width:90px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono)"></div>
+      <div id="payFeedback" style="font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:8px"></div>
+    </div>
+    <div class="card">
       <h3>What matters to you</h3>
+      <div class="pref"><div><label>Max earnings</label><div class="desc">rank everything by best £ per day away</div></div><button class="toggle" data-pref="maxEarnings"></button></div>
       <div class="pref"><div><label>Weekends off</label><div class="desc">soft-penalise weekend trips (keeps some)</div></div><button class="toggle" data-pref="weekendsOff"></button></div>
       <div class="pref"><div><label>Prefer more credit</label><div class="desc">rank higher-credit trips up</div></div><input type="range" min="0" max="3" step="1" data-pref="creditWeight"></div>
       <div class="pref"><div><label>Prefer shorter trips</label><div class="desc">favour fewer days away</div></div><input type="range" min="0" max="3" step="1" data-pref="shortWeight"></div>
@@ -203,6 +244,7 @@
       <h3 style="margin-bottom:4px">Auto-build your bid</h3>
       <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:10px">Uses your preferences to build a laddered bid — ideal first, safe fallbacks below. Everything stays editable.</div>
       <button class="btn" id="autoBuild" style="width:100%">⚡ Build my 15-group bid</button>
+      <button class="btn ghost" id="copyBid" style="width:100%;margin:8px 0 0">⧉ Copy full bid for CrewBid</button>
     </div>
     <div class="controls" style="justify-content:space-between">
       <div class="eyebrow">Bid groups (priority order)</div>
@@ -315,7 +357,8 @@ function parseCRA(text){
 /* ================= STATE ================= */
 const S={trips:null,fp:null,roster:null,cra:null,
   prefs:{weekendsOff:false,creditWeight:1,shortWeight:0,avoidHeavy:false,protectBank:false,
-         avoidRegions:new Set(),avoid2Crew:false,hardAvoidWeekends:false,dests:new Set(),autoDest:true},
+         avoidRegions:new Set(),avoid2Crew:false,hardAvoidWeekends:false,dests:new Set(),autoDest:true,
+         payHourly:0,payTafb:0,maxEarnings:false},
   bidgroups:[{id:1,name:'Bidgroup 1',trips:new Set()}],filterDest:null};
 // station → region (covers this fleet's network; unknown codes → 'Other')
 const REGION={
@@ -348,7 +391,7 @@ function renderSlots(){
       else if(s.key==='roster'&&S.roster.pilot)sub=S.roster.pilot.name_code+' · bank '+(S.roster.pilot.bank_out?S.roster.pilot.bank_out.hhmm:'?');
       else if(s.key==='cra')sub=S.cra.length+' pilots · reach on';}
     return `<div class="slot ${loaded?'loaded':''}">
-      <div><div class="lab">${s.lab}</div><div class="sub">${esc(sub)}</div></div>
+      <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:11px;margin-top:3px;color:${loaded?'var(--ok)':'var(--line)'}">${loaded?'●':'○'}</span><div><div class="lab">${s.lab}</div><div class="sub">${loaded?'✓ ':''}${esc(sub)}</div></div></div>
       <button class="pick" data-slot="${s.key}">${loaded?'Replace':'Load'}</button>
     </div>`;
   }).join('');
@@ -474,7 +517,17 @@ function autoDests(){
 function activeDests(){ return S.prefs.autoDest ? new Set(autoDests()) : S.prefs.dests; }
 function score(t){
   if(!tripAllowed(t)) return -1e6;           // ruled out → never selected
-  let sc=0;const p=S.prefs;
+  const p=S.prefs;
+  if(p.maxEarnings){
+    // money IS the objective. The binding constraint is the monthly credit band,
+    // so maximise £ per CREDIT HOUR (TAFB pay makes some trips earn far more per credit hour)
+    const crHrs=Math.max(0.5,creditMin(t)/60);
+    const perCr=(payOn()?(earnings(t)||0):crHrs*25)/crHrs;
+    let sc=perCr*0.8;
+    if(!p.autoDest&&p.dests.size&&t.destinations.some(d=>p.dests.has(d)))sc+=6; // hand-picked dests = mild tiebreak
+    return sc;
+  }
+  let sc=0;
   const dests=activeDests();
   if(dests.size){ if(t.destinations.some(d=>dests.has(d)))sc+=40; else sc-=8; }
   sc+=p.creditWeight*(creditMin(t)/60);
@@ -497,6 +550,21 @@ function reach(t){ if(!reachAvailable())return null;
 }
 function reachLabel(r){return r==null?null:r>=0.66?'likely':r>=0.4?'contested':'long shot';}
 function reachClass(r){return r==null?'':r>=0.66?'ok':r>=0.4?'info':'warn';}
+// ---- earnings (variable pay estimate; rates supplied by the pilot) ----
+function payOn(){return S.prefs.payHourly>0||S.prefs.payTafb>0;}
+function earnings(t){ if(!payOn())return null;
+  const cr=(creditMin(t)/60)*S.prefs.payHourly;
+  const tafb=t.tafb?(t.tafb.minutes/60)*S.prefs.payTafb:0;
+  return cr+tafb; }
+function gbp(n){return n==null?'':'£'+Math.round(n).toLocaleString();}
+function rosterEarnings(rr){ if(!payOn())return null; return rr.trips.reduce((a,t)=>a+(earnings(t)||0),0); }
+function payFeedback(){
+  const el=$('payFeedback'); if(!el)return;
+  if(!payOn()){el.textContent='Enter your rates to see £ on every trip and roster.';el.style.color='var(--muted)';return;}
+  const best=uniqueTrips().slice().sort((a,b)=>(earnings(b)||0)-(earnings(a)||0))[0];
+  el.style.color='var(--ok)';
+  el.innerHTML=best?`✓ Rates set — e.g. trip ${best.trip_number} (${esc(best.destinations[0]||'')} ${best.trip_days}d) ≈ <b>${gbp(earnings(best))}</b>. £ now shows on Trips and Bid tabs.`:'✓ Rates set.';
+}
 
 // ---- laddered optimiser: preferences → N bid groups as broadening PERMITTED sets ----
 // A bid group permits a set of trips; JSS falls through to the next group when it can't
@@ -534,6 +602,61 @@ function buildAutoPlan(N){
   return groups;
 }
 function bankDelta(credit){const cap=S.fp.cap?S.fp.cap.minutes:null;return cap==null?null:credit-cap;}
+
+// ---- JSS command generator: prefs → real AWARD/AVOID property commands per group ----
+const POOLS=['H++','H+','H','M','L','L−','L−−']; // 7 ranked trip pools, high → low
+function stationsInRegion(r){ return [...new Set(S.trips.flatMap(t=>t.destinations))].filter(d=>regionOf(d)===r).sort(); }
+function rankedDests(){ // active destinations ranked by best trip score (desirability)
+  const best={};
+  for(const t of uniqueTrips()){ if(!tripAllowed(t))continue;
+    for(const d of t.destinations){ const sc=score(t); if(best[d]===undefined||sc>best[d])best[d]=sc; } }
+  const act=[...activeDests()].filter(d=>best[d]!==undefined);
+  return act.sort((a,b)=>best[b]-best[a]);
+}
+function commandsForGroup(gi,N){
+  const p=S.prefs, last=gi===N-1, frac=(N-2)?Math.min(1,gi/(N-2)):0;
+  const lines=[];
+  // Bank protection: exact syntax, FIRST command in LAST group
+  if(last&&p.protectBank){
+    lines.push({cmd:'AWARD',body:'Work contained within · 1st – month-end (or blank)',pool:'L−−',first:true});
+    lines.push({cmd:'AWARD',body:'Trip length 1–99 · entire period',pool:'L'});
+    return lines;
+  }
+  // AVOIDs — freeze what you never want (kept through most of the ladder, relaxed near the bottom)
+  const keepAvoids=frac<0.85;
+  if(keepAvoids){
+    for(const r of p.avoidRegions){ const st=stationsInRegion(r);
+      if(st.length)lines.push({cmd:'AVOID',body:'Stop = '+st.join(', ')+' · entire period'}); }
+    if(p.avoid2Crew)lines.push({cmd:'AVOID',body:'Flight crewing level = 2 · entire period'});
+    if(p.hardAvoidWeekends)lines.push({cmd:'AVOID',body:'Work touching · Sat–Sun (repeating)'});
+  }
+  // AWARDs — destinations into ranked pools; more dests + lower pools as the ladder descends
+  const dests=rankedDests();
+  const nD=Math.max(1,Math.round((0.25+0.75*frac)*dests.length));
+  const use=dests.slice(0,nD);
+  use.forEach((d,i)=>{
+    const poolIdx=Math.min(POOLS.length-2, Math.floor(i/Math.max(1,use.length)* (3+Math.round(frac*3))));
+    lines.push({cmd:'AWARD',body:'Stop = '+d+' · entire period',pool:POOLS[poolIdx]});
+  });
+  // soft prefs as property awards
+  if(p.shortWeight>0&&frac<0.6)lines.push({cmd:'AWARD',body:'Trip length 1–3 · entire period',pool:'H'});
+  if(p.weekendsOff&&frac<0.6)lines.push({cmd:'AWARD',body:'Work contained within · Mon–Fri (repeating)',pool:'H+'});
+  return lines.slice(0,40); // JSS limit: ≤40 Award/Avoid bids per group
+}
+function bidAsText(){
+  const N=S.bidgroups.length;
+  return S.bidgroups.map((g,gi)=>{
+    const lines=commandsForGroup(gi,N);
+    return g.name.toUpperCase()+'\n'+lines.map((l,i)=>`  ${i+1}. ${l.cmd} ${l.body}${l.pool?' → '+l.pool:''}${l.first?'   (enter FIRST)':''}`).join('\n');
+  }).join('\n\n');
+}
+function copyBid(){
+  const txt=bidAsText();
+  const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  const b=$('copyBid');if(b){const old=b.textContent;b.textContent='✓ Copied';setTimeout(()=>b.textContent=old,1500);}
+}
 // unique trips (collapse instances → best/first per number) for the browser
 function uniqueTrips(){
   const by={};for(const t of S.trips){(by[t.trip_number]=by[t.trip_number]||[]).push(t);}
@@ -561,13 +684,14 @@ function renderStrips(){
     return `<div class="strip ${a?'assigned':''}" data-t="${t.trip_number}">
       <div class="rail">${t.trip_number}${$('sort').value==='score'?`<span class="score">${sc>0?'+':''}${sc}</span>`:''}</div>
       <div><div class="body">
-        <div class="row1"><div class="route">${esc(t.route||'—')}</div><div class="credit">${cr}</div></div>
+        <div class="row1"><div class="route">${esc(t.route||'—')}</div><div class="credit">${cr}<span style="font-size:9px;color:var(--muted);font-weight:500"> CR</span></div></div>
         <div class="row2">
           <span>${t.trip_days??'—'}d · ${t.instances}× this month</span>
           <span>TAFB ${t.tafb?t.tafb.hhmm:'—'}</span>
-          ${t.heavy?'<span class="tag heavy">heavy</span>':''}
-          ${(()=>{const rl=reachLabel(reach(t));return rl?`<span class="tag ${reachClass(reach(t))==='warn'?'heavy':''}" style="${reachClass(reach(t))==='ok'?'color:var(--ok);background:var(--ok-soft)':reachClass(reach(t))==='warn'?'color:var(--warn);background:var(--warn-soft)':''}">${rl}</span>`:'';})()}
-          ${a?'<span class="tag">on roster</span>':''}
+          ${payOn()?`<span class="sc money">${gbp(earnings(t))}</span>`:''}
+          ${t.heavy?'<span class="sc">aug crew</span>':'<span class="sc">2-crew</span>'}
+          ${(()=>{const rl=reachLabel(reach(t)),rc=reachClass(reach(t));return rl?`<span class="sc ${rc==='ok'?'ok':rc==='warn'?'warn':''}">${rl}</span>`:'';})()}
+          ${a?'<span class="sc amber">on roster</span>':''}
         </div></div>
         <div class="detail">${detailHtml(t)}
           <button class="addbtn ${inBid.has(t.trip_number)?'in':''}" data-add="${t.trip_number}">${inBid.has(t.trip_number)?'✓ in a bid group':'+ add to bid group 1'}</button>
@@ -588,6 +712,12 @@ function detailHtml(t){
 
 /* ================= PREFERENCES ================= */
 function renderPrefs(){
+  document.querySelectorAll('.payin').forEach(el=>{
+    const k=el.dataset.pay; if(S.prefs[k])el.value=S.prefs[k];
+    el.oninput=()=>{S.prefs[k]=parseFloat(el.value)||0;payFeedback();};           // cheap: just the sample line
+    el.onchange=()=>{renderStrips();renderBidgroups();};                          // heavy recompute on blur only
+  });
+  payFeedback();
   document.querySelectorAll('[data-pref]').forEach(el=>{
     const k=el.dataset.pref,v=S.prefs[k];
     if(el.classList.contains('toggle')){el.classList.toggle('on',!!v);el.onclick=()=>{S.prefs[k]=!S.prefs[k];renderPrefs();renderPrefDests();renderStrips();};}
@@ -618,24 +748,65 @@ function renderPrefDests(){
 
 /* ================= BID BUILDER + LEGALITY ================= */
 let bgSeq=1;
-function addToBid(num){ S.bidgroups[0].trips.add(num); renderBidgroups(); renderStrips(); }
+function addToBid(num,gi){ S.bidgroups[gi==null?0:gi].trips.add(num); renderBidgroups(); renderStrips(); }
 function tripByNum(n){return S.trips.find(t=>t.trip_number===n);}
+let openGroup=null; // index of expanded group (null = all collapsed)
 function renderBidgroups(){
   $('bidgroups').innerHTML=S.bidgroups.map((g,gi)=>{
-    const trips=[...g.trips].map(tripByNum).filter(Boolean);
+    const trips=[...g.trips].map(tripByNum).filter(Boolean)
+      .sort((a,b)=>score(b)-score(a));
     const {out:checks,rr}=legality(g,trips);
     const rosterSet=new Set(rr.trips.map(t=>t.trip_number));
-    const shown=trips.slice(0,8), more=trips.length-shown.length;
-    return `<div class="bg" style="${g.bankProtect?'border-color:var(--amber)':''}">
-      <div class="head"><h4>${esc(g.name)}</h4><span class="eyebrow">${g.bankProtect?'🛡 protects bank':'permits '+trips.length}</span></div>
-      ${g.note?`<div style="font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:0 13px 4px">${esc(g.note)}</div>`:''}
-      <div class="meter">${creditBar(rr.credit)}</div>
-      <div class="checks">${checks.map(c=>`<div class="check ${c.type}"><span class="mk">${c.type==='ok'?'✓':c.type==='warn'?'!':'·'}</span><span>${esc(c.msg)}</span></div>`).join('')}</div>
-      ${shown.length?shown.map(t=>{const rl=reachLabel(reach(t)),inR=rosterSet.has(t.trip_number);return `<div class="bgtrip" style="${inR?'background:var(--ok-soft)':''}"><span>${inR?'★ ':''}${t.trip_number} · ${esc(t.route||'')} · ${t.trip_credit?t.trip_credit.hhmm:'—'}${rl?` · <span style="color:${reachClass(reach(t))==='ok'?'var(--ok)':reachClass(reach(t))==='warn'?'var(--warn)':'var(--muted)'}">${rl}</span>`:''}</span><button class="rm" data-rm="${gi}:${t.trip_number}">✕</button></div>`;}).join(''):'<div class="empty">Add trips from the Trips tab, or tap Build my bid.</div>'}
-      ${more>0?`<div style="font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:6px 13px">+ ${more} more permitted trips${rr.trips.length?` · ★ = likely on your awarded roster`:''}</div>`:(rr.trips.length?`<div style="font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:6px 13px">★ = likely on your awarded roster</div>`:'')}
+    const open=openGroup===gi;
+    const rEarn=rosterEarnings(rr);
+    const summary=rr.trips.length?`~${minToHHMM(rr.credit)} roster${rEarn!=null?' · ~'+gbp(rEarn):''}`:'no roster — falls through';
+    // trips NOT yet in this group, to offer as adds
+    const inGroup=g.trips;
+    const addable=uniqueTrips().filter(t=>tripAllowed(t)&&!inGroup.has(t.trip_number))
+      .sort((a,b)=>score(b)-score(a));
+    return `<div class="bg ${open?'open':''} ${g.bankProtect?'bank':''}" style="${g.bankProtect?'border-color:var(--amber)':''}">
+      <button class="ghead" data-tog="${gi}">
+        <span class="gh-ix">${g.bankProtect?'🛡':String(gi+1).padStart(2,'0')}</span>
+        <div class="gh-l">
+          <div class="gh-name">${esc(g.name.replace(/^Group \d+\s*(—\s*)?/,'')||'Bid group')}</div>
+          <div class="gh-sub">permits ${trips.length} · ${esc(summary)}</div>
+        </div>
+        <span class="gh-caret">▸</span>
+      </button>
+      <div class="gbody">
+        ${g.note?`<div class="gnote">${esc(g.note)}</div>`:''}
+        <div class="meter">${creditBar(rr.credit)}</div>
+        <div class="checks">${checks.map(c=>`<div class="check ${c.type}"><span class="mk">${c.type==='ok'?'✓':c.type==='warn'?'!':'·'}</span><span>${esc(c.msg)}</span></div>`).join('')}</div>
+        <div class="gtriplist">
+          ${trips.length?trips.map(t=>{const rl=reachLabel(reach(t)),inR=rosterSet.has(t.trip_number),rc=reachClass(reach(t));const e=earnings(t);return `<div class="bgtrip" style="${inR?'background:var(--ok-soft)':''}"><span>${inR?'★ ':''}<b>${t.trip_number}</b> ${esc(t.route||'')} <span style="color:var(--muted)">cr ${t.trip_credit?t.trip_credit.hhmm:'—'}</span>${e!=null?' <span class="sc money">'+gbp(e)+'</span>':''}${rl?' <span class="sc '+(rc==='ok'?'ok':rc==='warn'?'warn':'')+'">'+rl+'</span>':''}</span><button class="rm" data-rm="${gi}:${t.trip_number}">✕</button></div>`;}).join(''):'<div class="empty">No trips yet — add some below.</div>'}
+        </div>
+        ${rr.trips.length?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 13px 8px">★ = likely on your awarded roster</div>`:''}
+        ${(()=>{const cl=commandsForGroup(gi,S.bidgroups.length);return cl.length?`<details class="addwrap"><summary>▤ CrewBid commands (${cl.length}) — enter these in order</summary>
+          <div style="padding:0 13px 10px">${cl.map((l,i)=>`<label class="cmdrow"><input type="checkbox"><span><b>${l.cmd}</b> ${esc(l.body)}${l.pool?` → <b>${l.pool}</b>`:''}${l.first?' <span class="sc amber">enter FIRST</span>':''}</span></label>`).join('')}</div>
+        </details>`:'';})()}
+        <details class="addwrap"><summary>+ Add a flight to this group</summary>
+          <input class="addsearch" data-search="${gi}" placeholder="filter by code or destination…">
+          <div class="addlist" id="addlist-${gi}">
+            ${addable.slice(0,40).map(t=>`<button class="addrow" data-addto="${gi}:${t.trip_number}">+ ${t.trip_number} · ${esc(t.route||'')} · ${t.trip_credit?t.trip_credit.hhmm:'—'}</button>`).join('')}
+          </div>
+        </details>
+      </div>
     </div>`;
   }).join('');
-  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=()=>{const[gi,n]=b.dataset.rm.split(':');S.bidgroups[+gi].trips.delete(n);renderBidgroups();renderStrips();});
+  // wire toggles
+  document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const i=+b.dataset.tog;openGroup=openGroup===i?null:i;renderBidgroups();});
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[gi,n]=b.dataset.rm.split(':');S.bidgroups[+gi].trips.delete(n);renderBidgroups();renderStrips();});
+  document.querySelectorAll('[data-addto]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[gi,n]=b.dataset.addto.split(':');S.bidgroups[+gi].trips.add(n);renderBidgroups();renderStrips();});
+  document.querySelectorAll('[data-search]').forEach(inp=>inp.oninput=()=>{
+    const gi=+inp.dataset.search,q=inp.value.trim().toUpperCase();
+    const inGroup=S.bidgroups[gi].trips;
+    const addable=uniqueTrips().filter(t=>tripAllowed(t)&&!inGroup.has(t.trip_number)&&
+      (!q||t.trip_number.includes(q)||(t.route||'').toUpperCase().includes(q)||t.destinations.some(d=>d.includes(q))))
+      .sort((a,b)=>score(b)-score(a));
+    const list=document.getElementById('addlist-'+gi);
+    if(list)list.innerHTML=addable.slice(0,40).map(t=>`<button class="addrow" data-addto="${gi}:${t.trip_number}">+ ${t.trip_number} · ${esc(t.route||'')} · ${t.trip_credit?t.trip_credit.hhmm:'—'}</button>`).join('')||'<div class="empty" style="padding:10px">no matches</div>';
+    list.querySelectorAll('[data-addto]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[g,n]=b.dataset.addto.split(':');S.bidgroups[+g].trips.add(n);renderBidgroups();renderStrips();});
+  });
 }
 function creditBar(credit){
   const fp=S.fp,ncr=fp.credit_ranges['100']?fp.credit_ranges['100'].neutral:null;
@@ -663,28 +834,42 @@ function tripRange(t){ const s=t.start_date?new Date(t.start_date+'T00:00Z'):nul
 function overlaps(a,b){ return a&&b&&a[0]<=b[1]&&a[1]>=b[0]; }
 function representativeRoster(poolTrips){
   const ncr=S.fp.credit_ranges['100']?S.fp.credit_ranges['100'].neutral:null;
-  const mid=ncr?(ncr.lo.minutes+ncr.hi.minutes)/2:(S.fp.cap?S.fp.cap.minutes:5400);
-  const ceil=ncr?ncr.hi.minutes:mid*1.15;
+  const midpoint=ncr?(ncr.lo.minutes+ncr.hi.minutes)/2:(S.fp.cap?S.fp.cap.minutes:5400);
+  const ceilBand=ncr?ncr.hi.minutes:midpoint*1.15;
+  // max-earnings: pack credit to the top of the band; otherwise aim for the comfortable middle
+  const mid=S.prefs.maxEarnings?ceilBand-30:midpoint;
+  const ceil=ceilBand;
   const prot=protectedRanges();
   // expand permitted trip NUMBERS to every dated instance in the month
   const permittedNums=new Set(poolTrips.map(t=>t.trip_number));
-  const instances=S.trips.filter(t=>permittedNums.has(t.trip_number)&&t.start_date)
-    .sort((a,b)=>score(b)-score(a));
-  const poolCount={};
-  const chosen=[]; let credit=0;
-  for(const t of instances){
-    if(credit>=mid)break;
-    const cm=creditMin(t); if(credit+cm>ceil)continue;
-    const tr=tripRange(t);
-    if(tr&&(chosen.some(c=>overlaps(tr,tripRange(c)))||prot.some(pr=>overlaps(tr,pr))))continue;
-    let blocked=false;
-    S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d))){
-      if((poolCount[pi]||0)>=pool.limit)blocked=true; } });
-    if(blocked)continue;
-    chosen.push(t); credit+=cm;
-    S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d)))poolCount[pi]=(poolCount[pi]||0)+1; });
+  const base=S.trips.filter(t=>permittedNums.has(t.trip_number)&&t.start_date);
+  function pack(list){
+    const poolCount={};const chosen=[];let credit=0;
+    for(const t of list){
+      if(credit>=mid)break;
+      const cm=creditMin(t); if(credit+cm>ceil)continue;
+      const tr=tripRange(t);
+      if(tr&&(chosen.some(c=>overlaps(tr,tripRange(c)))||prot.some(pr=>overlaps(tr,pr))))continue;
+      let blocked=false;
+      S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d))){
+        if((poolCount[pi]||0)>=pool.limit)blocked=true; } });
+      if(blocked)continue;
+      chosen.push(t); credit+=cm;
+      S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d)))poolCount[pi]=(poolCount[pi]||0)+1; });
+    }
+    return {trips:chosen,credit};
   }
-  return {trips:chosen,credit};
+  if(!S.prefs.maxEarnings) return pack(base.slice().sort((a,b)=>score(b)-score(a)));
+  // max earnings: try several packing orders, keep the roster that actually earns most
+  const orders=[
+    base.slice().sort((a,b)=>score(b)-score(a)),                                   // £ per credit hour
+    base.slice().sort((a,b)=>(earnings(b)||creditMin(b))-(earnings(a)||creditMin(a))), // total £ per trip
+    base.slice().sort((a,b)=>creditMin(b)-creditMin(a)),                           // credit-dense first
+  ];
+  let best=null,bestE=-1;
+  for(const o of orders){ const r=pack(o); const e=rosterEarnings(r)??r.credit;
+    if(e>bestE){bestE=e;best=r;} }
+  return best;
 }
 function reachMix(trips){ const m={likely:0,contested:0,'long shot':0,unknown:0};
   for(const t of trips){const l=reachLabel(reach(t));m[l||'unknown']++;} return m; }
@@ -694,7 +879,8 @@ function legality(g,poolTrips){
   const built = rr.trips.length && (!ncr || rr.credit>=ncr.lo.minutes);
   const destSet=[...new Set(rr.trips.flatMap(t=>t.destinations))];
   if(built){
-    out.push({type:'ok',msg:`Likely builds a ~${minToHHMM(rr.credit)} roster${destSet.length?' to '+destSet.slice(0,6).join(', ')+(destSet.length>6?'…':''):''}`});
+    const re=rosterEarnings(rr);
+    out.push({type:'ok',msg:`Likely builds a ~${minToHHMM(rr.credit)} roster${re!=null?' (~'+gbp(re)+' variable pay)':''}${destSet.length?' to '+destSet.slice(0,6).join(', ')+(destSet.length>6?'…':''):''}`});
   } else if(rr.trips.length){
     out.push({type:'info',msg:`Pool may be thin — best in-band roster ~${minToHHMM(rr.credit)}; JSS likely falls through to the next group`});
   } else {
@@ -715,12 +901,13 @@ $('tabs').querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 });
 $('sort').onchange=renderStrips;
 $('addBg').onclick=()=>{bgSeq++;S.bidgroups.push({id:bgSeq,name:'Bidgroup '+S.bidgroups.length+1,trips:new Set()});renderBidgroups();};
-$('autoBuild').onclick=()=>{ S.bidgroups=buildAutoPlan(15); renderBidgroups(); renderStrips();
+$('autoBuild').onclick=()=>{ S.bidgroups=buildAutoPlan(15); openGroup=0; renderBidgroups(); renderStrips();
   // jump user to the bid view
   $('tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
   const bt=[...$('tabs').querySelectorAll('.tab')].find(x=>x.dataset.v==='bid'); if(bt)bt.classList.add('on');
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));$('v-bid').classList.add('on');
 };
+$('copyBid').onclick=copyBid;
 
 /* ================= DEMO ================= */
 $('demoBtn').onclick=()=>{
