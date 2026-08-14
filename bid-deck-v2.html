@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Bid Deck — JSS bid planner</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#E9EAE6; --surface:#FCFCFB; --ink:#191A18; --muted:#6E7069;
+    --line:#D3D4CE; --line-soft:#E1E2DC;
+    --amber:#E8830A; --amber-soft:#FBEDD9; --amber-ink:#5A3200;
+    --ground:#DDDED8; --ground-ink:#4A4C46;
+    --ok:#2F7A3E; --ok-soft:#E4F0E5; --warn:#B4451B; --warn-soft:#F8E6DC;
+    --radius:10px;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+    --sans:'Archivo',system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.45;
+    padding:max(14px,env(safe-area-inset-top)) 14px calc(84px + env(safe-area-inset-bottom));
+    max-width:720px;margin:0 auto;}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
+  .wordmark{font-weight:800;font-size:20px;letter-spacing:-.02em}
+  .wordmark .slash{color:var(--amber)}
+  .eyebrow{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+  .device-note{font-family:var(--mono);font-size:10px;color:var(--muted);text-align:right;line-height:1.3}
+
+  .btn{display:inline-block;border:none;cursor:pointer;font-family:var(--sans);font-weight:600;font-size:14.5px;
+    padding:11px 18px;border-radius:8px;background:var(--ink);color:#fff}
+  .btn.ghost{background:transparent;color:var(--ink);border:1.5px solid var(--line)}
+  .btn:focus-visible,.chip:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  /* ---- import ---- */
+  .slots{display:grid;gap:8px;margin-bottom:12px}
+  .slot{display:grid;grid-template-columns:1fr auto;align-items:center;gap:10px;background:var(--surface);
+    border:1.5px dashed var(--line);border-radius:var(--radius);padding:13px 14px}
+  .slot.loaded{border-style:solid;border-color:var(--line-soft)}
+  .slot .lab{font-weight:600;font-size:14px}
+  .slot .sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:2px}
+  .slot.loaded .sub{color:var(--ok)}
+  .slot .pick{font-family:var(--mono);font-size:12px;color:var(--amber-ink);background:var(--amber-soft);
+    border:none;border-radius:7px;padding:8px 12px;cursor:pointer;white-space:nowrap}
+  .slot.loaded .pick{background:var(--ground);color:var(--ground-ink)}
+  .err{display:none;border-left:3px solid var(--warn);background:var(--surface);border-radius:0 8px 8px 0;
+    padding:10px 12px;font-size:13px;margin-bottom:12px}
+  .err.show{display:block}
+  .hint{font-family:var(--mono);font-size:11px;color:var(--muted);margin:2px 0 14px;line-height:1.6}
+
+  /* ---- readouts ---- */
+  .readouts{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);
+    display:grid;grid-template-columns:repeat(4,1fr);overflow:hidden;margin-bottom:10px}
+  .readout{padding:11px 10px 9px;border-right:1px solid var(--line-soft)}
+  .readout:last-child{border-right:none}
+  .readout .val{font-family:var(--mono);font-weight:600;font-size:17px;margin-top:2px}
+  .readout .sub{font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:2px}
+  .pilotline{display:flex;flex-wrap:wrap;gap:5px 13px;align-items:baseline;font-family:var(--mono);
+    font-size:12px;color:var(--ground-ink);padding:0 2px;margin-bottom:14px}
+  .pilotline b{color:var(--ink);font-weight:600}
+
+  /* ---- tabs ---- */
+  .tabs{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--surface);
+    border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom));z-index:50}
+  .tab{flex:1;text-align:center;font-family:var(--mono);font-size:11px;color:var(--muted);
+    padding:8px 4px;border-radius:8px;cursor:pointer;border:none;background:transparent}
+  .tab .ic{display:block;font-size:17px;margin-bottom:2px}
+  .tab.on{color:var(--ink);background:var(--bg)}
+  .view{display:none}.view.on{display:block}
+
+  /* ---- controls ---- */
+  .controls{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+  .chips{display:flex;gap:6px;overflow-x:auto;-webkit-overflow-scrolling:touch;flex:1;padding-bottom:2px}
+  .chip{flex:0 0 auto;font-family:var(--mono);font-size:12px;padding:6px 11px;border-radius:999px;
+    border:1.5px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+  .chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+  select{font-family:var(--mono);font-size:12px;padding:7px 8px;border-radius:8px;border:1.5px solid var(--line);
+    background:var(--surface);color:var(--ink)}
+  .count{font-family:var(--mono);font-size:11px;color:var(--muted);margin:2px 2px 8px}
+
+  /* ---- trip cards ---- */
+  .strip{display:grid;grid-template-columns:40px 1fr;background:var(--surface);border:1px solid var(--line-soft);
+    border-radius:var(--radius);margin-bottom:8px;overflow:hidden}
+  .strip .rail{background:var(--ink);color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:11px;font-weight:600;gap:2px;padding:6px 0}
+  .strip.assigned .rail{background:var(--amber)}
+  .strip .score{font-size:9px;opacity:.8}
+  .strip .body{padding:10px 12px 11px;cursor:pointer}
+  .strip .row1{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+  .strip .route{font-weight:700;font-size:15px;letter-spacing:-.01em}
+  .strip .credit{font-family:var(--mono);font-weight:600;font-size:15px}
+  .strip .row2{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:5px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .strip .tag{color:var(--amber-ink);background:var(--amber-soft);padding:1px 6px;border-radius:4px}
+  .strip .tag.heavy{color:#5a3a00;background:#f3e2c4}
+  .detail{display:none;border-top:1px dashed var(--line);padding:10px 12px 12px}
+  .strip.open .detail{display:block}
+  table.sec{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11.5px}
+  table.sec td{padding:3px 6px 3px 0;vertical-align:baseline}
+  .addbtn{margin-top:9px;font-family:var(--mono);font-size:11px;padding:6px 10px;border-radius:7px;
+    border:1.5px solid var(--line);background:transparent;cursor:pointer}
+  .addbtn.in{background:var(--ok-soft);border-color:var(--ok);color:var(--ok)}
+
+  /* ---- preferences ---- */
+  .card{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);padding:14px;margin-bottom:12px}
+  .card h3{font-size:13px;margin-bottom:10px;font-weight:700}
+  .pref{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line-soft)}
+  .pref:first-of-type{border-top:none}
+  .pref label{font-size:14px}
+  .pref .desc{font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+  input[type=range]{width:130px;accent-color:var(--amber)}
+  .toggle{width:46px;height:26px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;border:none;flex:0 0 auto}
+  .toggle.on{background:var(--amber)}
+  .toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:left .12s}
+  .toggle.on::after{left:23px}
+  .destgrid{display:flex;flex-wrap:wrap;gap:6px;margin-top:4px}
+
+  /* ---- bid builder ---- */
+  .bg{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--radius);margin-bottom:10px;overflow:hidden}
+  /* status chips — one vocabulary everywhere */
+  .sc{display:inline-flex;align-items:center;font-family:var(--mono);font-size:10.5px;padding:2px 7px;border-radius:5px;background:var(--ground);color:var(--ground-ink);white-space:nowrap}
+  .sc.ok{background:var(--ok-soft);color:var(--ok)}
+  .sc.warn{background:var(--warn-soft);color:var(--warn)}
+  .sc.amber{background:var(--amber-soft);color:var(--amber-ink)}
+  .sc.money{background:var(--ok-soft);color:var(--ok);font-weight:600}
+  /* group header: numbered rail (priority order is real information) */
+  .ghead{width:100%;display:flex;align-items:center;gap:11px;padding:0;background:var(--surface);border:none;cursor:pointer;text-align:left;font-family:var(--sans)}
+  .ghead .gh-ix{align-self:stretch;display:flex;align-items:center;justify-content:center;min-width:40px;background:var(--ink);color:#fff;font-family:var(--mono);font-size:12px;font-weight:600;letter-spacing:.04em}
+  .bg.bank .ghead .gh-ix{background:var(--amber)}
+  .ghead .gh-l{flex:1;padding:11px 0}
+  .ghead .gh-name{font-size:14px;font-weight:700;letter-spacing:-.01em}
+  .ghead .gh-sub{font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:3px}
+  .ghead .gh-caret{font-size:12px;color:var(--muted);flex:0 0 auto;padding-right:13px;transition:transform .15s}
+  .bg.open .gh-caret{transform:rotate(90deg)}
+  .gbody{display:none;border-top:1px solid var(--line-soft)}
+  .bg.open .gbody{display:block}
+  .gtriplist{max-height:340px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* one disclosure style for commands + add-flight */
+  .addwrap{border-top:1px solid var(--line-soft)}
+  .addwrap summary{display:flex;align-items:center;gap:7px;font-family:var(--mono);font-size:11.5px;color:var(--amber-ink);padding:11px 13px;cursor:pointer;list-style:none}
+  .addwrap summary::-webkit-details-marker{display:none}
+  .addwrap summary::before{content:"▸";font-size:10px;transition:transform .15s}
+  .addwrap[open] summary::before{transform:rotate(90deg)}
+  .addsearch{width:calc(100% - 26px);margin:0 13px 8px;padding:9px 11px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:12px;background:var(--surface)}
+  .addlist{max-height:240px;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 13px 10px}
+  .addrow{display:block;width:100%;text-align:left;font-family:var(--mono);font-size:12px;padding:9px 11px;margin-bottom:5px;border:1px solid var(--line-soft);border-radius:7px;background:var(--surface);cursor:pointer}
+  .addrow:active{background:var(--ok-soft)}
+  /* command checklist rows */
+  .cmdrow{display:flex;gap:9px;align-items:flex-start;font-family:var(--mono);font-size:11.5px;padding:6px 0;border-bottom:1px solid var(--line-soft)}
+  .cmdrow:last-child{border-bottom:none}
+  .cmdrow input{margin-top:2px;accent-color:var(--amber);flex:0 0 auto}
+  .bg .head{display:flex;align-items:center;justify-content:space-between;padding:11px 13px;background:var(--bg)}
+  .bg .head h4{font-size:14px}
+  .bg .meter{padding:11px 13px}
+  .gnote{font-family:var(--mono);font-size:10.5px;color:var(--muted);padding:9px 13px 0;line-height:1.55}
+  .bar{height:22px;border-radius:6px;background:var(--bg);position:relative;overflow:hidden;margin:6px 0}
+  .bar .fill{position:absolute;top:0;bottom:0;left:0;background:var(--amber);opacity:.85}
+  .bar .band{position:absolute;top:0;bottom:0;border-left:2px solid var(--ink);opacity:.5}
+  .bar .lbl{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-family:var(--mono);font-size:11px;font-weight:600;color:var(--ink)}
+  .checks{padding:0 13px 12px}
+  .check{display:flex;gap:8px;align-items:flex-start;font-family:var(--mono);font-size:11.5px;padding:4px 0}
+  .check .mk{flex:0 0 auto;font-weight:700}
+  .check.ok .mk{color:var(--ok)} .check.warn .mk{color:var(--warn)} .check.info .mk{color:var(--muted)}
+  .bgtrip{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 13px;border-top:1px solid var(--line-soft);font-size:13px}
+  .bgtrip .rm{font-family:var(--mono);font-size:15px;color:var(--warn);background:none;border:none;cursor:pointer;padding:0 4px}
+  .empty{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:center;padding:24px 12px}
+
+  footer{margin-top:22px}
+  .legend{font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="wordmark">BID<span class="slash">/</span>DECK</div>
+    <div class="eyebrow">JSS bid planner</div>
+  </div>
+  <div class="device-note">ON-DEVICE<br>NOTHING UPLOADED</div>
+</header>
+
+<!-- IMPORT -->
+<section id="setup">
+  <div class="err" id="err"></div>
+  <div class="slots" id="slots"></div>
+  <p class="hint">In CrewBid &rsaquo; Reports, open a report and Share &rarr; Bid Deck, or download it and load it here. PDFs are read on this device — nothing is uploaded. Trips + Front Page are enough to start; your roster adds bank &amp; skeleton.</p>
+  <button class="btn ghost" id="demoBtn">Load demo pack</button>
+</section>
+
+<!-- DASHBOARD (readouts shown once loaded) -->
+<div id="dash" style="display:none">
+  <div class="readouts" id="readouts"></div>
+  <div class="pilotline" id="pilotline"></div>
+
+  <!-- TRIPS -->
+  <section class="view on" id="v-trips">
+    <div class="controls">
+      <div class="chips" id="destChips"></div>
+      <select id="sort">
+        <option value="score">Sort: best match</option>
+        <option value="date">Sort: date</option>
+        <option value="credit">Sort: credit</option>
+        <option value="length">Sort: length</option>
+      </select>
+    </div>
+    <div class="count" id="count"></div>
+    <div id="strips"></div>
+  </section>
+
+  <!-- PREFERENCES -->
+  <section class="view" id="v-prefs">
+    <div class="card">
+      <h3>Rules — what to avoid</h3>
+      <div class="pref"><div><label>Avoid 2-crew trips</label><div class="desc">only augmented (heavy) trips</div></div><button class="toggle" data-pref="avoid2Crew"></button></div>
+      <div class="pref"><div><label>No trips over a weekend</label><div class="desc">exclude anything touching Sat/Sun</div></div><button class="toggle" data-pref="hardAvoidWeekends"></button></div>
+      <div style="padding:8px 0 2px"><div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:6px">Avoid regions</div><div class="destgrid" id="regionChips"></div></div>
+    </div>
+    <div class="card">
+      <h3>Destinations</h3>
+      <div class="pref"><div><label>Auto-pick for me</label><div class="desc">let the rules choose destinations</div></div><button class="toggle" data-pref="autoDest"></button></div>
+      <div id="autoDestOut" style="font-family:var(--mono);font-size:11px;color:var(--muted);padding:6px 0 2px"></div>
+      <div class="destgrid" id="prefDests" style="display:none"></div>
+    </div>
+    <div class="card">
+      <h3>Pay (optional)</h3>
+      <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:8px">From your payscale — stays on this device. Estimates variable pay only (credit × hourly + TAFB × allowance), not base salary.</div>
+      <div class="pref"><div><label>Hourly flying pay</label><div class="desc">£ per credit hour</div></div><input type="number" inputmode="decimal" min="0" step="0.01" class="payin" data-pay="payHourly" style="width:90px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono)"></div>
+      <div class="pref"><div><label>TAFB allowance</label><div class="desc">£ per hour away from base</div></div><input type="number" inputmode="decimal" min="0" step="0.01" class="payin" data-pay="payTafb" style="width:90px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono)"></div>
+      <div id="payFeedback" style="font-family:var(--mono);font-size:11px;color:var(--muted);padding-top:8px"></div>
+    </div>
+    <div class="card">
+      <h3>What matters to you</h3>
+      <div class="pref"><div><label>Max earnings</label><div class="desc">rank everything by best £ per day away</div></div><button class="toggle" data-pref="maxEarnings"></button></div>
+      <div class="pref"><div><label>Weekends off</label><div class="desc">soft-penalise weekend trips (keeps some)</div></div><button class="toggle" data-pref="weekendsOff"></button></div>
+      <div class="pref"><div><label>Prefer more credit</label><div class="desc">rank higher-credit trips up</div></div><input type="range" min="0" max="3" step="1" data-pref="creditWeight"></div>
+      <div class="pref"><div><label>Prefer shorter trips</label><div class="desc">favour fewer days away</div></div><input type="range" min="0" max="3" step="1" data-pref="shortWeight"></div>
+      <div class="pref"><div><label>Protect my bank</label><div class="desc">final group protects bank if JSS can’t reach CAP</div></div><button class="toggle" data-pref="protectBank"></button></div>
+    </div>
+  </section>
+
+  <!-- BID -->
+  <section class="view" id="v-bid">
+    <div class="card" style="padding:13px 14px;margin-bottom:10px">
+      <h3 style="margin-bottom:4px">Auto-build your bid</h3>
+      <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:10px">Uses your preferences to build a laddered bid — ideal first, safe fallbacks below. Everything stays editable.</div>
+      <button class="btn" id="autoBuild" style="width:100%">⚡ Build my 15-group bid</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn ghost" id="copyBid" style="flex:1;padding:10px;font-size:13px">⧉ Copy full bid</button>
+        <button class="btn ghost" id="shareBid" style="flex:1;padding:10px;font-size:13px">↑ Share / export</button>
+      </div>
+    </div>
+    <div class="controls" style="justify-content:space-between">
+      <div class="eyebrow">Bid groups (priority order)</div>
+      <button class="btn ghost" id="addBg" style="padding:8px 12px;font-size:12px">+ Group</button>
+    </div>
+    <div id="bidgroups"></div>
+  </section>
+
+  <!-- CHAT — tester feedback over Nostr -->
+  <section class="view" id="v-chat">
+    <div class="card" style="margin-bottom:10px">
+      <h3>Tester chat</h3>
+      <div style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:4px;line-height:1.6">Feedback goes straight to the dev. Messages are <b>public</b> on the Favilla relay — every tester can see them. Don't post rosters or personal details.</div>
+    </div>
+    <div class="card" style="padding:11px 12px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <input id="chatName" placeholder="Name / initials" style="flex:0 0 40%;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono);font-size:12.5px;background:var(--surface)">
+        <button class="btn ghost" id="chatRefresh" style="flex:1;padding:10px;font-size:12.5px">↻ Refresh</button>
+      </div>
+      <div style="display:flex;gap:8px">
+        <input id="chatMsg" placeholder="What's broken, confusing, or missing?" style="flex:1;padding:10px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--sans);font-size:14px;background:var(--surface)">
+        <button class="btn" id="chatSend" style="padding:10px 16px">Send</button>
+      </div>
+      <div id="chatStatus" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);padding-top:7px"></div>
+    </div>
+    <div id="chatList"></div>
+  </section>
+</div>
+
+<!-- TABS -->
+<nav class="tabs" id="tabs" style="display:none">
+  <button class="tab on" data-v="trips"><span class="ic">◳</span>Trips</button>
+  <button class="tab" data-v="prefs"><span class="ic">⚙</span>You</button>
+  <button class="tab" data-v="bid"><span class="ic">▤</span>Bid</button>
+  <button class="tab" data-v="chat"><span class="ic">◇</span>Chat</button>
+</nav>
+
+<script>/* nostr-tools (bundled, self-contained) */
+(()=>{function _t(e){return e instanceof Uint8Array||ArrayBuffer.isView(e)&&e.constructor.name==="Uint8Array"}function J(e,t=""){if(!Number.isSafeInteger(e)||e<0){let r=t&&`"${t}" `;throw new Error(`${r}expected integer >= 0, got ${e}`)}}function I(e,t,r=""){let n=_t(e),o=e?.length,s=t!==void 0;if(!n||s&&o!==t){let c=r&&`"${r}" `,i=s?` of length ${t}`:"",f=n?`length=${o}`:`type=${typeof e}`;throw new Error(c+"expected Uint8Array"+i+", got "+f)}return e}function Ht(e,t=!0){if(e.destroyed)throw new Error("Hash instance has been destroyed");if(t&&e.finished)throw new Error("Hash#digest() has already been called")}function ne(e,t){I(e,void 0,"digestInto() output");let r=t.outputLen;if(e.length<r)throw new Error('"digestInto() output" expected to be of length >='+r)}function ct(...e){for(let t=0;t<e.length;t++)e[t].fill(0)}function gt(e){return new DataView(e.buffer,e.byteOffset,e.byteLength)}function Z(e,t){return e<<32-t|e>>>t}var re=typeof Uint8Array.from([]).toHex=="function"&&typeof Uint8Array.fromHex=="function",Ke=Array.from({length:256},(e,t)=>t.toString(16).padStart(2,"0"));function k(e){if(I(e),re)return e.toHex();let t="";for(let r=0;r<e.length;r++)t+=Ke[e[r]];return t}var G={_0:48,_9:57,A:65,F:70,a:97,f:102};function ee(e){if(e>=G._0&&e<=G._9)return e-G._0;if(e>=G.A&&e<=G.F)return e-(G.A-10);if(e>=G.a&&e<=G.f)return e-(G.a-10)}function j(e){if(typeof e!="string")throw new Error("hex string expected, got "+typeof e);if(re)return Uint8Array.fromHex(e);let t=e.length,r=t/2;if(t%2)throw new Error("hex string expected, got unpadded hex of length "+t);let n=new Uint8Array(r);for(let o=0,s=0;o<r;o++,s+=2){let c=ee(e.charCodeAt(s)),i=ee(e.charCodeAt(s+1));if(c===void 0||i===void 0){let f=e[s]+e[s+1];throw new Error('hex string expected, got non-hex character "'+f+'" at index '+s)}n[o]=c*16+i}return n}function z(...e){let t=0;for(let n=0;n<e.length;n++){let o=e[n];I(o),t+=o.length}let r=new Uint8Array(t);for(let n=0,o=0;n<e.length;n++){let s=e[n];r.set(s,o),o+=s.length}return r}function oe(e,t={}){let r=(o,s)=>e(s).update(o).digest(),n=e(void 0);return r.outputLen=n.outputLen,r.blockLen=n.blockLen,r.create=o=>e(o),Object.assign(r,t),Object.freeze(r)}function ft(e=32){let t=typeof globalThis=="object"?globalThis.crypto:null;if(typeof t?.getRandomValues!="function")throw new Error("crypto.getRandomValues must be defined");return t.getRandomValues(new Uint8Array(e))}var se=e=>({oid:Uint8Array.from([6,9,96,134,72,1,101,3,4,2,e])});function ie(e,t,r){return e&t^~e&r}function ce(e,t,r){return e&t^e&r^t&r}var mt=class{blockLen;outputLen;padOffset;isLE;buffer;view;finished=!1;length=0;pos=0;destroyed=!1;constructor(t,r,n,o){this.blockLen=t,this.outputLen=r,this.padOffset=n,this.isLE=o,this.buffer=new Uint8Array(t),this.view=gt(this.buffer)}update(t){Ht(this),I(t);let{view:r,buffer:n,blockLen:o}=this,s=t.length;for(let c=0;c<s;){let i=Math.min(o-this.pos,s-c);if(i===o){let f=gt(t);for(;o<=s-c;c+=o)this.process(f,c);continue}n.set(t.subarray(c,c+i),this.pos),this.pos+=i,c+=i,this.pos===o&&(this.process(r,0),this.pos=0)}return this.length+=t.length,this.roundClean(),this}digestInto(t){Ht(this),ne(t,this),this.finished=!0;let{buffer:r,view:n,blockLen:o,isLE:s}=this,{pos:c}=this;r[c++]=128,ct(this.buffer.subarray(c)),this.padOffset>o-c&&(this.process(n,0),c=0);for(let d=c;d<o;d++)r[d]=0;n.setBigUint64(o-8,BigInt(this.length*8),s),this.process(n,0);let i=gt(t),f=this.outputLen;if(f%4)throw new Error("_sha2: outputLen must be aligned to 32bit");let u=f/4,h=this.get();if(u>h.length)throw new Error("_sha2: outputLen bigger than state");for(let d=0;d<u;d++)i.setUint32(4*d,h[d],s)}digest(){let{buffer:t,outputLen:r}=this;this.digestInto(t);let n=t.slice(0,r);return this.destroy(),n}_cloneInto(t){t||=new this.constructor,t.set(...this.get());let{blockLen:r,buffer:n,length:o,finished:s,destroyed:c,pos:i}=this;return t.destroyed=c,t.finished=s,t.length=o,t.pos=i,o%r&&t.buffer.set(n),t}clone(){return this._cloneInto()}},Y=Uint32Array.from([1779033703,3144134277,1013904242,2773480762,1359893119,2600822924,528734635,1541459225]);var Me=Uint32Array.from([1116352408,1899447441,3049323471,3921009573,961987163,1508970993,2453635748,2870763221,3624381080,310598401,607225278,1426881987,1925078388,2162078206,2614888103,3248222580,3835390401,4022224774,264347078,604807628,770255983,1249150122,1555081692,1996064986,2554220882,2821834349,2952996808,3210313671,3336571891,3584528711,113926993,338241895,666307205,773529912,1294757372,1396182291,1695183700,1986661051,2177026350,2456956037,2730485921,2820302411,3259730800,3345764771,3516065817,3600352804,4094571909,275423344,430227734,506948616,659060556,883997877,958139571,1322822218,1537002063,1747873779,1955562222,2024104815,2227730452,2361852424,2428436474,2756734187,3204031479,3329325298]),$=new Uint32Array(64),qt=class extends mt{constructor(t){super(64,t,8,!1)}get(){let{A:t,B:r,C:n,D:o,E:s,F:c,G:i,H:f}=this;return[t,r,n,o,s,c,i,f]}set(t,r,n,o,s,c,i,f){this.A=t|0,this.B=r|0,this.C=n|0,this.D=o|0,this.E=s|0,this.F=c|0,this.G=i|0,this.H=f|0}process(t,r){for(let d=0;d<16;d++,r+=4)$[d]=t.getUint32(r,!1);for(let d=16;d<64;d++){let p=$[d-15],g=$[d-2],O=Z(p,7)^Z(p,18)^p>>>3,_=Z(g,17)^Z(g,19)^g>>>10;$[d]=_+$[d-7]+O+$[d-16]|0}let{A:n,B:o,C:s,D:c,E:i,F:f,G:u,H:h}=this;for(let d=0;d<64;d++){let p=Z(i,6)^Z(i,11)^Z(i,25),g=h+p+ie(i,f,u)+Me[d]+$[d]|0,_=(Z(n,2)^Z(n,13)^Z(n,22))+ce(n,o,s)|0;h=u,u=f,f=i,i=c+g|0,c=s,s=o,o=n,n=g+_|0}n=n+this.A|0,o=o+this.B|0,s=s+this.C|0,c=c+this.D|0,i=i+this.E|0,f=f+this.F|0,u=u+this.G|0,h=h+this.H|0,this.set(n,o,s,c,i,f,u,h)}roundClean(){ct($)}destroy(){this.set(0,0,0,0,0,0,0,0),ct(this.buffer)}},Lt=class extends qt{A=Y[0]|0;B=Y[1]|0;C=Y[2]|0;D=Y[3]|0;E=Y[4]|0;F=Y[5]|0;G=Y[6]|0;H=Y[7]|0;constructor(){super(32)}};var at=oe(()=>new Lt,se(1));var Tt=BigInt(0),Nt=BigInt(1);function Ut(e,t=""){if(typeof e!="boolean"){let r=t&&`"${t}" `;throw new Error(r+"expected boolean, got type="+typeof e)}return e}function je(e){if(typeof e=="bigint"){if(!Ye(e))throw new Error("positive bigint expected, got "+e)}else J(e);return e}function fe(e){if(typeof e!="string")throw new Error("hex string expected, got "+typeof e);return e===""?Tt:BigInt("0x"+e)}function F(e){return fe(k(e))}function Dt(e){return fe(k(Ge(I(e)).reverse()))}function yt(e,t){J(t),e=je(e);let r=j(e.toString(16).padStart(t*2,"0"));if(r.length!==t)throw new Error("number too large");return r}function Vt(e,t){return yt(e,t).reverse()}function Ge(e){return Uint8Array.from(e)}function ae(e){return Uint8Array.from(e,(t,r)=>{let n=t.charCodeAt(0);if(t.length!==1||n>127)throw new Error(`string contains non-ASCII character "${e[r]}" with code ${n} at position ${r}`);return n})}var Ye=e=>typeof e=="bigint"&&Tt<=e;function Ct(e){let t;for(t=0;e>Tt;e>>=Nt,t+=1);return t}var wt=e=>(Nt<<BigInt(e))-Nt;function pt(e,t={},r={}){if(!e||typeof e!="object")throw new Error("expected valid options object");function n(s,c,i){let f=e[s];if(i&&f===void 0)return;let u=typeof f;if(u!==c||f===null)throw new Error(`param "${s}" is invalid: expected ${c}, got ${u}`)}let o=(s,c)=>Object.entries(s).forEach(([i,f])=>n(i,f,c));o(t,!1),o(r,!0)}function Zt(e){let t=new WeakMap;return(r,...n)=>{let o=t.get(r);if(o!==void 0)return o;let s=e(r,...n);return t.set(r,s),s}}var N=BigInt(0),q=BigInt(1),X=BigInt(2),le=BigInt(3),he=BigInt(4),be=BigInt(5),ze=BigInt(7),xe=BigInt(8),$e=BigInt(9),ge=BigInt(16);function K(e,t){let r=e%t;return r>=N?r:t+r}function T(e,t,r){let n=e;for(;t-- >N;)n*=n,n%=r;return n}function ue(e,t){if(e===N)throw new Error("invert: expected non-zero number");if(t<=N)throw new Error("invert: expected positive modulus, got "+t);let r=K(e,t),n=t,o=N,s=q,c=q,i=N;for(;r!==N;){let u=n/r,h=n%r,d=o-c*u,p=s-i*u;n=r,r=h,o=c,s=i,c=d,i=p}if(n!==q)throw new Error("invert: does not exist");return K(o,t)}function Kt(e,t,r){if(!e.eql(e.sqr(t),r))throw new Error("Cannot find square root")}function me(e,t){let r=(e.ORDER+q)/he,n=e.pow(t,r);return Kt(e,n,t),n}function Xe(e,t){let r=(e.ORDER-be)/xe,n=e.mul(t,X),o=e.pow(n,r),s=e.mul(t,o),c=e.mul(e.mul(s,X),o),i=e.mul(s,e.sub(c,e.ONE));return Kt(e,i,t),i}function We(e){let t=tt(e),r=ye(e),n=r(t,t.neg(t.ONE)),o=r(t,n),s=r(t,t.neg(n)),c=(e+ze)/ge;return(i,f)=>{let u=i.pow(f,c),h=i.mul(u,n),d=i.mul(u,o),p=i.mul(u,s),g=i.eql(i.sqr(h),f),O=i.eql(i.sqr(d),f);u=i.cmov(u,h,g),h=i.cmov(p,d,O);let _=i.eql(i.sqr(h),f),D=i.cmov(u,h,_);return Kt(i,D,f),D}}function ye(e){if(e<le)throw new Error("sqrt is not defined for small field");let t=e-q,r=0;for(;t%X===N;)t/=X,r++;let n=X,o=tt(e);for(;de(o,n)===1;)if(n++>1e3)throw new Error("Cannot find square root: probably non-prime P");if(r===1)return me;let s=o.pow(n,t),c=(t+q)/X;return function(f,u){if(f.is0(u))return u;if(de(f,u)!==1)throw new Error("Cannot find square root");let h=r,d=f.mul(f.ONE,s),p=f.pow(u,t),g=f.pow(u,c);for(;!f.eql(p,f.ONE);){if(f.is0(p))return f.ZERO;let O=1,_=f.sqr(p);for(;!f.eql(_,f.ONE);)if(O++,_=f.sqr(_),O===h)throw new Error("Cannot find square root");let D=q<<BigInt(h-O-1),P=f.pow(d,D);h=O,d=f.sqr(P),p=f.mul(p,d),g=f.mul(g,P)}return g}}function Pe(e){return e%he===le?me:e%xe===be?Xe:e%ge===$e?We(e):ye(e)}var Qe=["create","isValid","is0","neg","inv","sqrt","sqr","eql","add","sub","mul","pow","div","addN","subN","mulN","sqrN"];function we(e){let t={ORDER:"bigint",BYTES:"number",BITS:"number"},r=Qe.reduce((n,o)=>(n[o]="function",n),t);return pt(e,r),e}function Je(e,t,r){if(r<N)throw new Error("invalid exponent, negatives unsupported");if(r===N)return e.ONE;if(r===q)return t;let n=e.ONE,o=t;for(;r>N;)r&q&&(n=e.mul(n,o)),o=e.sqr(o),r>>=q;return n}function Mt(e,t,r=!1){let n=new Array(t.length).fill(r?e.ZERO:void 0),o=t.reduce((c,i,f)=>e.is0(i)?c:(n[f]=c,e.mul(c,i)),e.ONE),s=e.inv(o);return t.reduceRight((c,i,f)=>e.is0(i)?c:(n[f]=e.mul(c,n[f]),e.mul(c,i)),s),n}function de(e,t){let r=(e.ORDER-q)/X,n=e.pow(t,r),o=e.eql(n,e.ONE),s=e.eql(n,e.ZERO),c=e.eql(n,e.neg(e.ONE));if(!o&&!s&&!c)throw new Error("invalid Legendre symbol result");return o?1:s?0:-1}function Fe(e,t){t!==void 0&&J(t);let r=t!==void 0?t:e.toString(2).length,n=Math.ceil(r/8);return{nBitLength:r,nByteLength:n}}var kt=class{ORDER;BITS;BYTES;isLE;ZERO=N;ONE=q;_lengths;_sqrt;_mod;constructor(t,r={}){if(t<=N)throw new Error("invalid field: expected ORDER > 0, got "+t);let n;this.isLE=!1,r!=null&&typeof r=="object"&&(typeof r.BITS=="number"&&(n=r.BITS),typeof r.sqrt=="function"&&(this.sqrt=r.sqrt),typeof r.isLE=="boolean"&&(this.isLE=r.isLE),r.allowedLengths&&(this._lengths=r.allowedLengths?.slice()),typeof r.modFromBytes=="boolean"&&(this._mod=r.modFromBytes));let{nBitLength:o,nByteLength:s}=Fe(t,n);if(s>2048)throw new Error("invalid field: expected ORDER of <= 2048 bytes");this.ORDER=t,this.BITS=o,this.BYTES=s,this._sqrt=void 0,Object.preventExtensions(this)}create(t){return K(t,this.ORDER)}isValid(t){if(typeof t!="bigint")throw new Error("invalid field element: expected bigint, got "+typeof t);return N<=t&&t<this.ORDER}is0(t){return t===N}isValidNot0(t){return!this.is0(t)&&this.isValid(t)}isOdd(t){return(t&q)===q}neg(t){return K(-t,this.ORDER)}eql(t,r){return t===r}sqr(t){return K(t*t,this.ORDER)}add(t,r){return K(t+r,this.ORDER)}sub(t,r){return K(t-r,this.ORDER)}mul(t,r){return K(t*r,this.ORDER)}pow(t,r){return Je(this,t,r)}div(t,r){return K(t*ue(r,this.ORDER),this.ORDER)}sqrN(t){return t*t}addN(t,r){return t+r}subN(t,r){return t-r}mulN(t,r){return t*r}inv(t){return ue(t,this.ORDER)}sqrt(t){return this._sqrt||(this._sqrt=Pe(this.ORDER)),this._sqrt(this,t)}toBytes(t){return this.isLE?Vt(t,this.BYTES):yt(t,this.BYTES)}fromBytes(t,r=!1){I(t);let{_lengths:n,BYTES:o,isLE:s,ORDER:c,_mod:i}=this;if(n){if(!n.includes(t.length)||t.length>o)throw new Error("Field.fromBytes: expected "+n+" bytes, got "+t.length);let u=new Uint8Array(o);u.set(t,s?0:u.length-t.length),t=u}if(t.length!==o)throw new Error("Field.fromBytes: expected "+o+" bytes, got "+t.length);let f=s?Dt(t):F(t);if(i&&(f=K(f,c)),!r&&!this.isValid(f))throw new Error("invalid field element: outside of range 0..ORDER");return f}invertBatch(t){return Mt(this,t)}cmov(t,r,n){return n?r:t}};function tt(e,t={}){return new kt(e,t)}function pe(e){if(typeof e!="bigint")throw new Error("field order must be bigint");let t=e.toString(2).length;return Math.ceil(t/8)}function tn(e){let t=pe(e);return t+Math.ceil(t/2)}function Ee(e,t,r=!1){I(e);let n=e.length,o=pe(t),s=tn(t);if(n<16||n<s||n>1024)throw new Error("expected "+s+"-1024 bytes of input, got "+n);let c=r?Dt(e):F(e),i=K(c,t-q)+q;return r?Vt(i,o):yt(i,o)}var et=BigInt(0),W=BigInt(1);function ut(e,t){let r=t.negate();return e?r:t}function zt(e,t){let r=Mt(e.Fp,t.map(n=>n.Z));return t.map((n,o)=>e.fromAffine(n.toAffine(r[o])))}function Ae(e,t){if(!Number.isSafeInteger(e)||e<=0||e>t)throw new Error("invalid window size, expected [1.."+t+"], got W="+e)}function jt(e,t){Ae(e,t);let r=Math.ceil(t/e)+1,n=2**(e-1),o=2**e,s=wt(e),c=BigInt(e);return{windows:r,windowSize:n,mask:s,maxNumber:o,shiftBy:c}}function Be(e,t,r){let{windowSize:n,mask:o,maxNumber:s,shiftBy:c}=r,i=Number(e&o),f=e>>c;i>n&&(i-=s,f+=W);let u=t*n,h=u+Math.abs(i)-1,d=i===0,p=i<0,g=t%2!==0;return{nextN:f,offset:h,isZero:d,isNeg:p,isNegF:g,offsetF:u}}var Gt=new WeakMap,Re=new WeakMap;function Yt(e){return Re.get(e)||1}function ve(e){if(e!==et)throw new Error("invalid wNAF")}var Et=class{BASE;ZERO;Fn;bits;constructor(t,r){this.BASE=t.BASE,this.ZERO=t.ZERO,this.Fn=t.Fn,this.bits=r}_unsafeLadder(t,r,n=this.ZERO){let o=t;for(;r>et;)r&W&&(n=n.add(o)),o=o.double(),r>>=W;return n}precomputeWindow(t,r){let{windows:n,windowSize:o}=jt(r,this.bits),s=[],c=t,i=c;for(let f=0;f<n;f++){i=c,s.push(i);for(let u=1;u<o;u++)i=i.add(c),s.push(i);c=i.double()}return s}wNAF(t,r,n){if(!this.Fn.isValid(n))throw new Error("invalid scalar");let o=this.ZERO,s=this.BASE,c=jt(t,this.bits);for(let i=0;i<c.windows;i++){let{nextN:f,offset:u,isZero:h,isNeg:d,isNegF:p,offsetF:g}=Be(n,i,c);n=f,h?s=s.add(ut(p,r[g])):o=o.add(ut(d,r[u]))}return ve(n),{p:o,f:s}}wNAFUnsafe(t,r,n,o=this.ZERO){let s=jt(t,this.bits);for(let c=0;c<s.windows&&n!==et;c++){let{nextN:i,offset:f,isZero:u,isNeg:h}=Be(n,c,s);if(n=i,!u){let d=r[f];o=o.add(h?d.negate():d)}}return ve(n),o}getPrecomputes(t,r,n){let o=Gt.get(r);return o||(o=this.precomputeWindow(r,t),t!==1&&(typeof n=="function"&&(o=n(o)),Gt.set(r,o))),o}cached(t,r,n){let o=Yt(t);return this.wNAF(o,this.getPrecomputes(o,t,n),r)}unsafe(t,r,n,o){let s=Yt(t);return s===1?this._unsafeLadder(t,r,o):this.wNAFUnsafe(s,this.getPrecomputes(s,t,n),r,o)}createCache(t,r){Ae(r,this.bits),Re.set(t,r),Gt.delete(t)}hasCache(t){return Yt(t)!==1}};function Ie(e,t,r,n){let o=t,s=e.ZERO,c=e.ZERO;for(;r>et||n>et;)r&W&&(s=s.add(o)),n&W&&(c=c.add(o)),o=o.double(),r>>=W,n>>=W;return{p1:s,p2:c}}function Se(e,t,r){if(t){if(t.ORDER!==e)throw new Error("Field.ORDER must match order: Fp == p, Fn == n");return we(t),t}else return tt(e,{isLE:r})}function Oe(e,t,r={},n){if(n===void 0&&(n=e==="edwards"),!t||typeof t!="object")throw new Error(`expected valid ${e} CURVE object`);for(let f of["p","n","h"]){let u=t[f];if(!(typeof u=="bigint"&&u>et))throw new Error(`CURVE.${f} must be positive bigint`)}let o=Se(t.p,r.Fp,n),s=Se(t.n,r.Fn,n),i=["Gx","Gy","a",e==="weierstrass"?"b":"d"];for(let f of i)if(!o.isValid(t[f]))throw new Error(`CURVE.${f} must be valid field element of CURVE.Fp`);return t=Object.freeze(Object.assign({},t)),{CURVE:t,Fp:o,Fn:s}}function $t(e,t){return function(n){let o=e(n);return{secretKey:o,publicKey:t(o)}}}var _e=(e,t)=>(e+(e>=0?t:-t)/nn)/t;function en(e,t,r){let[[n,o],[s,c]]=t,i=_e(c*e,r),f=_e(-o*e,r),u=e-i*n-f*s,h=-i*o-f*c,d=u<dt,p=h<dt;d&&(u=-u),p&&(h=-h);let g=wt(Math.ceil(Ct(r)/2))+vt;if(u<dt||u>=g||h<dt||h>=g)throw new Error("splitScalar (endomorphism): failed, k="+e);return{k1neg:d,k1:u,k2neg:p,k2:h}}var dt=BigInt(0),vt=BigInt(1),nn=BigInt(2),Bt=BigInt(3),rn=BigInt(4);function He(e,t={}){let r=Oe("weierstrass",e,t),{Fp:n,Fn:o}=r,s=r.CURVE,{h:c,n:i}=s;pt(t,{},{allowInfinityPoint:"boolean",clearCofactor:"function",isTorsionFree:"function",fromBytes:"function",toBytes:"function",endo:"object"});let{endo:f}=t;if(f&&(!n.is0(s.a)||typeof f.beta!="bigint"||!Array.isArray(f.basises)))throw new Error('invalid endo: expected "beta": bigint and "basises": array');let u=sn(n,o);function h(){if(!n.isOdd)throw new Error("compression is not supported: Field does not have .isOdd()")}function d(v,a,l){let{x,y:m}=a.toAffine(),S=n.toBytes(x);if(Ut(l,"isCompressed"),l){h();let E=!n.isOdd(m);return z(on(E),S)}else return z(Uint8Array.of(4),S,n.toBytes(m))}function p(v){I(v,void 0,"Point");let{publicKey:a,publicKeyUncompressed:l}=u,x=v.length,m=v[0],S=v.subarray(1);if(x===a&&(m===2||m===3)){let E=n.fromBytes(S);if(!n.isValid(E))throw new Error("bad point: is not on curve, wrong x");let y=_(E),b;try{b=n.sqrt(y)}catch(U){let H=U instanceof Error?": "+U.message:"";throw new Error("bad point: is not on curve, sqrt error"+H)}h();let w=n.isOdd(b);return(m&1)===1!==w&&(b=n.neg(b)),{x:E,y:b}}else if(x===l&&m===4){let E=n.BYTES,y=n.fromBytes(S.subarray(0,E)),b=n.fromBytes(S.subarray(E,E*2));if(!D(y,b))throw new Error("bad point: is not on curve");return{x:y,y:b}}else throw new Error(`bad point: got length ${x}, expected compressed=${a} or uncompressed=${l}`)}let g=t.toBytes||d,O=t.fromBytes||p;function _(v){let a=n.sqr(v),l=n.mul(a,v);return n.add(n.add(l,n.mul(v,s.a)),s.b)}function D(v,a){let l=n.sqr(a),x=_(v);return n.eql(l,x)}if(!D(s.Gx,s.Gy))throw new Error("bad curve params: generator point");let P=n.mul(n.pow(s.a,Bt),rn),Ot=n.mul(n.sqr(s.b),BigInt(27));if(n.is0(n.add(P,Ot)))throw new Error("bad curve params: a or b");function st(v,a,l=!1){if(!n.isValid(a)||l&&n.is0(a))throw new Error(`bad point coordinate ${v}`);return a}function ht(v){if(!(v instanceof R))throw new Error("Weierstrass Point expected")}function bt(v){if(!f||!f.basises)throw new Error("no endo");return en(v,f.basises,o.ORDER)}let xt=Zt((v,a)=>{let{X:l,Y:x,Z:m}=v;if(n.eql(m,n.ONE))return{x:l,y:x};let S=v.is0();a==null&&(a=S?n.ONE:n.inv(m));let E=n.mul(l,a),y=n.mul(x,a),b=n.mul(m,a);if(S)return{x:n.ZERO,y:n.ZERO};if(!n.eql(b,n.ONE))throw new Error("invZ was invalid");return{x:E,y}}),ke=Zt(v=>{if(v.is0()){if(t.allowInfinityPoint&&!n.is0(v.Y))return;throw new Error("bad point: ZERO")}let{x:a,y:l}=v.toAffine();if(!n.isValid(a)||!n.isValid(l))throw new Error("bad point: x or y not field elements");if(!D(a,l))throw new Error("bad point: equation left != right");if(!v.isTorsionFree())throw new Error("bad point: not in prime-order subgroup");return!0});function Ft(v,a,l,x,m){return l=new R(n.mul(l.X,v),l.Y,l.Z),a=ut(x,a),l=ut(m,l),a.add(l)}class R{static BASE=new R(s.Gx,s.Gy,n.ONE);static ZERO=new R(n.ZERO,n.ONE,n.ZERO);static Fp=n;static Fn=o;X;Y;Z;constructor(a,l,x){this.X=st("x",a),this.Y=st("y",l,!0),this.Z=st("z",x),Object.freeze(this)}static CURVE(){return s}static fromAffine(a){let{x:l,y:x}=a||{};if(!a||!n.isValid(l)||!n.isValid(x))throw new Error("invalid affine point");if(a instanceof R)throw new Error("projective point not allowed");return n.is0(l)&&n.is0(x)?R.ZERO:new R(l,x,n.ONE)}static fromBytes(a){let l=R.fromAffine(O(I(a,void 0,"point")));return l.assertValidity(),l}static fromHex(a){return R.fromBytes(j(a))}get x(){return this.toAffine().x}get y(){return this.toAffine().y}precompute(a=8,l=!0){return it.createCache(this,a),l||this.multiply(Bt),this}assertValidity(){ke(this)}hasEvenY(){let{y:a}=this.toAffine();if(!n.isOdd)throw new Error("Field doesn't support isOdd");return!n.isOdd(a)}equals(a){ht(a);let{X:l,Y:x,Z:m}=this,{X:S,Y:E,Z:y}=a,b=n.eql(n.mul(l,y),n.mul(S,m)),w=n.eql(n.mul(x,y),n.mul(E,m));return b&&w}negate(){return new R(this.X,n.neg(this.Y),this.Z)}double(){let{a,b:l}=s,x=n.mul(l,Bt),{X:m,Y:S,Z:E}=this,y=n.ZERO,b=n.ZERO,w=n.ZERO,B=n.mul(m,m),U=n.mul(S,S),H=n.mul(E,E),A=n.mul(m,S);return A=n.add(A,A),w=n.mul(m,E),w=n.add(w,w),y=n.mul(a,w),b=n.mul(x,H),b=n.add(y,b),y=n.sub(U,b),b=n.add(U,b),b=n.mul(y,b),y=n.mul(A,y),w=n.mul(x,w),H=n.mul(a,H),A=n.sub(B,H),A=n.mul(a,A),A=n.add(A,w),w=n.add(B,B),B=n.add(w,B),B=n.add(B,H),B=n.mul(B,A),b=n.add(b,B),H=n.mul(S,E),H=n.add(H,H),B=n.mul(H,A),y=n.sub(y,B),w=n.mul(H,U),w=n.add(w,w),w=n.add(w,w),new R(y,b,w)}add(a){ht(a);let{X:l,Y:x,Z:m}=this,{X:S,Y:E,Z:y}=a,b=n.ZERO,w=n.ZERO,B=n.ZERO,U=s.a,H=n.mul(s.b,Bt),A=n.mul(l,S),V=n.mul(x,E),C=n.mul(m,y),Q=n.add(l,x),L=n.add(S,E);Q=n.mul(Q,L),L=n.add(A,V),Q=n.sub(Q,L),L=n.add(l,m);let M=n.add(S,y);return L=n.mul(L,M),M=n.add(A,C),L=n.sub(L,M),M=n.add(x,m),b=n.add(E,y),M=n.mul(M,b),b=n.add(V,C),M=n.sub(M,b),B=n.mul(U,L),b=n.mul(H,C),B=n.add(b,B),b=n.sub(V,B),B=n.add(V,B),w=n.mul(b,B),V=n.add(A,A),V=n.add(V,A),C=n.mul(U,C),L=n.mul(H,L),V=n.add(V,C),C=n.sub(A,C),C=n.mul(U,C),L=n.add(L,C),A=n.mul(V,L),w=n.add(w,A),A=n.mul(M,L),b=n.mul(Q,b),b=n.sub(b,A),A=n.mul(Q,V),B=n.mul(M,B),B=n.add(B,A),new R(b,w,B)}subtract(a){return this.add(a.negate())}is0(){return this.equals(R.ZERO)}multiply(a){let{endo:l}=t;if(!o.isValidNot0(a))throw new Error("invalid scalar: out of range");let x,m,S=E=>it.cached(this,E,y=>zt(R,y));if(l){let{k1neg:E,k1:y,k2neg:b,k2:w}=bt(a),{p:B,f:U}=S(y),{p:H,f:A}=S(w);m=U.add(A),x=Ft(l.beta,B,H,E,b)}else{let{p:E,f:y}=S(a);x=E,m=y}return zt(R,[x,m])[0]}multiplyUnsafe(a){let{endo:l}=t,x=this;if(!o.isValid(a))throw new Error("invalid scalar: out of range");if(a===dt||x.is0())return R.ZERO;if(a===vt)return x;if(it.hasCache(this))return this.multiply(a);if(l){let{k1neg:m,k1:S,k2neg:E,k2:y}=bt(a),{p1:b,p2:w}=Ie(R,x,S,y);return Ft(l.beta,b,w,m,E)}else return it.unsafe(x,a)}toAffine(a){return xt(this,a)}isTorsionFree(){let{isTorsionFree:a}=t;return c===vt?!0:a?a(R,this):it.unsafe(this,i).is0()}clearCofactor(){let{clearCofactor:a}=t;return c===vt?this:a?a(R,this):this.multiplyUnsafe(c)}isSmallOrder(){return this.multiplyUnsafe(c).is0()}toBytes(a=!0){return Ut(a,"isCompressed"),this.assertValidity(),g(R,this,a)}toHex(a=!0){return k(this.toBytes(a))}toString(){return`<Point ${this.is0()?"ZERO":this.toHex()}>`}}let te=o.BITS,it=new Et(R,t.endo?Math.ceil(te/2):te);return R.BASE.precompute(8),R}function on(e){return Uint8Array.of(e?2:3)}function sn(e,t){return{secretKey:t.BYTES,publicKey:1+e.BYTES,publicKeyUncompressed:1+2*e.BYTES,publicKeyHasPrefix:!0,signature:2*t.BYTES}}var Rt={p:BigInt("0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f"),n:BigInt("0xfffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141"),h:BigInt(1),a:BigInt(0),b:BigInt(7),Gx:BigInt("0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798"),Gy:BigInt("0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8")},cn={beta:BigInt("0x7ae96a2b657c07106e64479eac3434e99cf0497512f58995c1396c28719501ee"),basises:[[BigInt("0x3086d221a7d46bcde86c90e49284eb15"),-BigInt("0xe4437ed6010e88286f547fa90abfe4c3")],[BigInt("0x114ca50f7a8e2f3f657c1108d9d44cfd8"),BigInt("0x3086d221a7d46bcde86c90e49284eb15")]]},fn=BigInt(0),Xt=BigInt(2);function an(e){let t=Rt.p,r=BigInt(3),n=BigInt(6),o=BigInt(11),s=BigInt(22),c=BigInt(23),i=BigInt(44),f=BigInt(88),u=e*e*e%t,h=u*u*e%t,d=T(h,r,t)*h%t,p=T(d,r,t)*h%t,g=T(p,Xt,t)*u%t,O=T(g,o,t)*g%t,_=T(O,s,t)*O%t,D=T(_,i,t)*_%t,P=T(D,f,t)*D%t,Ot=T(P,i,t)*_%t,st=T(Ot,r,t)*h%t,ht=T(st,c,t)*O%t,bt=T(ht,n,t)*u%t,xt=T(bt,Xt,t);if(!St.eql(St.sqr(xt),e))throw new Error("Cannot find square root");return xt}var St=tt(Rt.p,{sqrt:an}),nt=He(Rt,{Fp:St,endo:cn});var qe={};function At(e,...t){let r=qe[e];if(r===void 0){let n=at(ae(e));r=z(n,n),qe[e]=r}return at(z(r,...t))}var Pt=e=>e.toBytes(!0).slice(1),Qt=e=>e%Xt===fn;function Wt(e){let{Fn:t,BASE:r}=nt,n=t.fromBytes(e),o=r.multiply(n);return{scalar:Qt(o.y)?n:t.neg(n),bytes:Pt(o)}}function Ne(e){let t=St;if(!t.isValidNot0(e))throw new Error("invalid x: Fail if x \u2265 p");let r=t.create(e*e),n=t.create(r*e+BigInt(7)),o=t.sqrt(n);Qt(o)||(o=t.neg(o));let s=nt.fromAffine({x:e,y:o});return s.assertValidity(),s}var lt=F;function Te(...e){return nt.Fn.create(lt(At("BIP0340/challenge",...e)))}function Le(e){return Wt(e).bytes}function un(e,t,r=ft(32)){let{Fn:n}=nt,o=I(e,void 0,"message"),{bytes:s,scalar:c}=Wt(t),i=I(r,32,"auxRand"),f=n.toBytes(c^lt(At("BIP0340/aux",i))),u=At("BIP0340/nonce",f,s,o),{bytes:h,scalar:d}=Wt(u),p=Te(h,s,o),g=new Uint8Array(64);if(g.set(h,0),g.set(n.toBytes(n.create(d+p*c)),32),!Ue(g,o,s))throw new Error("sign: Invalid signature produced");return g}function Ue(e,t,r){let{Fp:n,Fn:o,BASE:s}=nt,c=I(e,64,"signature"),i=I(t,void 0,"message"),f=I(r,32,"publicKey");try{let u=Ne(lt(f)),h=lt(c.subarray(0,32));if(!n.isValidNot0(h))return!1;let d=lt(c.subarray(32,64));if(!o.isValidNot0(d))return!1;let p=Te(o.toBytes(h),Pt(u),i),g=s.multiplyUnsafe(d).add(u.multiplyUnsafe(o.neg(p))),{x:O,y:_}=g.toAffine();return!(g.is0()||!Qt(_)||O!==h)}catch{return!1}}var rt=(()=>{let r=(n=ft(48))=>Ee(n,Rt.n);return{keygen:$t(r,Le),getPublicKey:Le,sign:un,verify:Ue,Point:nt,utils:{randomSecretKey:r,taggedHash:At,lift_x:Ne,pointToBytes:Pt},lengths:{secretKey:32,publicKey:32,publicKeyHasPrefix:!1,signature:64,seed:48}}})();var Qn=new TextDecoder("utf-8"),dn=new TextEncoder;function ln(e){for(let t=0;t<64;t++){let r=e.charCodeAt(t);if(isNaN(r)||r<48||r>102||r>57&&r<97)return!1}return!0}var ot=Symbol("verified"),hn=e=>e instanceof Object;function bn(e){if(!hn(e)||typeof e.kind!="number"||typeof e.content!="string"||typeof e.created_at!="number"||typeof e.pubkey!="string"||!ln(e.pubkey)||!Array.isArray(e.tags))return!1;for(let t=0;t<e.tags.length;t++){let r=e.tags[t];if(!Array.isArray(r))return!1;for(let n=0;n<r.length;n++)if(typeof r[n]!="string")return!1}return!0}var xn=class{generateSecretKey(){return rt.utils.randomSecretKey()}getPublicKey(e){return k(rt.getPublicKey(e))}finalizeEvent(e,t){let r=e;return r.pubkey=k(rt.getPublicKey(t)),r.id=Jt(r),r.sig=k(rt.sign(j(Jt(r)),t)),r[ot]=!0,r}verifyEvent(e){if(typeof e[ot]=="boolean")return e[ot];try{let t=Jt(e);if(t!==e.id)return e[ot]=!1,!1;let r=rt.verify(j(e.sig),j(t),j(e.pubkey));return e[ot]=r,r}catch{return e[ot]=!1,!1}}};function gn(e){if(!bn(e))throw new Error("can't serialize event with wrong or missing properties");return JSON.stringify([0,e.pubkey,e.created_at,e.kind,e.tags,e.content])}function Jt(e){let t=at(dn.encode(gn(e)));return k(t)}var It=new xn,De=It.generateSecretKey,Ve=It.getPublicKey,Ce=It.finalizeEvent,Ze=It.verifyEvent;window.NostrCore={generateSecretKey:De,getPublicKey:Ve,finalizeEvent:Ce,verifyEvent:Ze};})();
+/*! Bundled license information:
+
+@noble/hashes/utils.js:
+  (*! noble-hashes - MIT License (c) 2022 Paul Miller (paulmillr.com) *)
+
+@noble/curves/utils.js:
+@noble/curves/abstract/modular.js:
+@noble/curves/abstract/curve.js:
+@noble/curves/abstract/weierstrass.js:
+@noble/curves/secp256k1.js:
+  (*! noble-curves - MIT License (c) 2022 Paul Miller (paulmillr.com) *)
+*/
+
+</script>
+<script>
+'use strict';
+/* ================= PARSERS (validated in Node against real bid pack) ================= */
+const MONTHS={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
+function hhmmToMin(s){if(!s||!s.includes(':'))return null;const neg=s.trim().startsWith('-');const p=s.trim().replace('-','').split(':');return (neg?-1:1)*(parseInt(p[0],10)*60+parseInt(p[1],10));}
+function dur(s){const m=hhmmToMin(s);return m===null?null:{hhmm:s.trim(),minutes:m};}
+function minToHHMM(m){if(m==null)return'—';const n=Math.abs(m);return (m<0?'-':'')+String(Math.floor(n/60)).padStart(2,'0')+':'+String(n%60).padStart(2,'0');}
+function isoDate(s){const m=/(\d{2})([A-Z]{3})(\d{4})/.exec(s.trim());return m?`${m[3]}-${String(MONTHS[m[2]]).padStart(2,'0')}-${m[1]}`:null;}
+function creditInt(v){if(v==null||v==='')return null;const n=parseInt(v,10);if(isNaN(n))return null;const s=n<0?-1:1,a=Math.abs(n),h=Math.floor(a/100),mi=a%100;return{hhmm:(s<0?'-':'')+String(h).padStart(2,'0')+':'+String(mi).padStart(2,'0'),minutes:s*(h*60+mi)};}
+
+const SECTOR_RE=/(\d)\s+(?:(\d{1,2}:\d{2})\s+)?([X+])?\s*([A-Z]{2})\s+(\d{2,4})\s+([A-Z]{3})\s+(\d{4})-(\d{4})\s+([A-Z]{3})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2})\s+(\d{1,2}:\d{2}|-)/g;
+function parseJsstrips(text){
+  const lines=text.split(/\r?\n/),trips=[];let cur=null;
+  for(const ln of lines){
+    if(ln.includes('Printed')&&ln.includes('('))continue;
+    const tm=/Trip:\s*(\d+)/.exec(ln);
+    if(tm){if(cur)trips.push(cur);cur={trip_number:tm[1],sectors:[],base:null,crew:null,start_date:null,end_date:null,trip_credit:null,trip_days:null,flying_hours:null,duty_hours:null,tafb:null};const t=/TAFB\s+(\d{1,3}:\d{2})/.exec(ln);if(t)cur.tafb=dur(t[1]);continue;}
+    if(!cur)continue;
+    const b=/Base:\s*([A-Z]{3})/.exec(ln);if(b)cur.base=b[1];
+    const c=/Crew\s*:\s*([A-Z0-9]+)/.exec(ln);if(c)cur.crew=c[1];
+    [['Trip Credit','trip_credit'],['Flying Hours','flying_hours'],['Duty Hours','duty_hours']].forEach(([lbl,key])=>{const mm=new RegExp(lbl+'\\s+(\\d{1,3}:\\d{2})').exec(ln);if(mm)cur[key]=dur(mm[1]);});
+    const td=/Trip Days\s+(\d+)/.exec(ln);if(td)cur.trip_days=parseInt(td[1],10);
+    const dm=/^\s*(\d{2}[A-Z]{3}\d{4})-?\s*$/.exec(ln);
+    if(dm){const iso=isoDate(dm[1]);if(cur.start_date===null)cur.start_date=iso;else cur.end_date=iso;}
+    SECTOR_RE.lastIndex=0;let sm;
+    while((sm=SECTOR_RE.exec(ln))){cur.sectors.push({day_of_week:+sm[1],report:sm[2]||null,heavy:sm[3]==='X',positioning:sm[3]==='+',carrier:sm[4],flight:sm[5],dep:sm[6],dep_time:sm[7],arr_time:sm[8],arr:sm[9],clear:sm[10],duty:sm[11],rest:sm[12]==='-'?null:sm[12]});}
+  }
+  if(cur)trips.push(cur);
+  for(const t of trips){
+    const seen=new Set(),u=[];for(const s of t.sectors){const k=s.flight+s.dep+s.arr+s.dep_time;if(!seen.has(k)){seen.add(k);u.push(s);}}
+    t.sectors=u;if(t.end_date===null)t.end_date=t.start_date;
+    const st=t.sectors.filter(s=>!s.positioning).map(s=>[s.dep,s.arr]);
+    t.route=st.length?[st[0][0],...st.map(x=>x[1])].join(' → '):null;
+    t.destinations=[...new Set(st.map(x=>x[1]).filter(a=>a&&a!==t.base))].sort();
+    t.heavy=t.sectors.some(s=>s.heavy);
+  }
+  return trips;
+}
+function parseFrontPage(text){
+  const L=text.split(/\r?\n/),fp={credit_ranges:{},dest_pools:[]};
+  let m=/CAP FOR MONTH:\s*(\d{1,3}:\d{2})/.exec(text);if(m)fp.cap=dur(m[1]);
+  m=/Normal Cap:\s*(\d{1,3}:\d{2})/.exec(text);if(m)fp.normal_cap=dur(m[1]);
+  m=/Credit dense trigger \(average credit per day\):\s*(\d{1,2}:\d{2})/.exec(text);if(m)fp.dense_trigger=dur(m[1]);
+  m=/Planning Period:\s*(\S+)\s*-\s*(\S+)/.exec(text);if(m){fp.period_start=isoDate(m[1]);fp.period_end=isoDate(m[2]);}
+  for(const ln of L){const r=/^\s*(\d{1,3})%:\s*(\d{1,3}:\d{2})\s+(?:(\d{1,3}:\d{2})-(\d{1,3}:\d{2})\s+)?(\d{1,3}:\d{2})-(\d{1,3}:\d{2})(?:\s+(\d{1,3}:\d{2})-(\d{1,3}:\d{2}))?/.exec(ln);
+    if(r)fp.credit_ranges[r[1]]={cap:dur(r[2]),low:r[3]?{lo:dur(r[3]),hi:dur(r[4])}:null,neutral:{lo:dur(r[5]),hi:dur(r[6])},high:r[7]?{lo:dur(r[7]),hi:dur(r[8])}:null};}
+  const dl=/^\s*(\d+)\s+(\d+)\s+(\d+)\s+(True|False)\s*$/m.exec(text);
+  if(dl)fp.dense_limits={low:+dl[1],med:+dl[2],high:+dl[3],incl_weekends:dl[4]==='True'};
+  for(let i=0;i<L.length;i++){const r=/^\s*([A-Z]{3}(?:,\s*[A-Z]{3})*),?\s+(\d+)\s+(\d+)\s+(\d+)\s+(True|False)\s*$/.exec(L[i]);
+    if(r){let d=r[1],j=i-1;while(j>=0&&/^\s*[A-Z]{3}(?:,\s*[A-Z]{3})*,\s*$/.test(L[j])){d=L[j].trim()+' '+d;j--;}
+      fp.dest_pools.push({destinations:d.replace(/\s+/g,' ').replace(/,\s*$/,'').split(/,\s*/),min_days:+r[2],max_days:+r[3],limit:+r[4],incl_weekends:r[5]==='True'});}}
+  m=/Average reserve points:\s*(\d+)/.exec(text);if(m)fp.avg_reserve_points=+m[1];
+  return fp;
+}
+// Maestro roster XML (per-pilot) — from the earlier validated parser, PII never read
+function xkid(el,n){for(const c of el.children)if(c.localName===n)return c;return null;}
+function xtxt(el,n){const c=el&&xkid(el,n);const t=c?(c.textContent||'').trim():'';return t||null;}
+function xdeep(el,n){return[...el.getElementsByTagNameNS('*',n)];}
+function parseRosterXml(text){
+  const secs=[];const re=/^\[([A-Z]+)\]\s*$/gm;let mk,marks=[];while((mk=re.exec(text)))marks.push({e:re.lastIndex,s:mk.index});
+  const chunks=marks.length?marks.map((m,i)=>text.slice(m.e,i+1<marks.length?marks[i+1].s:text.length)):[text];
+  let pilot=null,period={};
+  for(const ch of chunks){const i=ch.indexOf('<?xml');if(i<0&&ch.indexOf('<')<0)continue;
+    const doc=new DOMParser().parseFromString(ch.slice(Math.max(i,ch.indexOf('<'))),'application/xml');
+    if(doc.querySelector('parsererror'))continue;const root=doc.documentElement;
+    const p=xdeep(root,'RosterPeriod')[0];if(p&&!period.start)period={month:xtxt(p,'MonthNumber'),start:xtxt(p,'StartDateOfFeedPeriod'),end:xtxt(p,'EndDateOfFeedPeriod')};
+    for(const rd of xdeep(root,'RosterDetail')){
+      const pd=xkid(rd,'PersonalDetails'),bl=xkid(rd,'BidLine');if(!pd)continue;
+      const duties=[];
+      for(const du of [...rd.children].filter(c=>c.localName==='RosterDuty')){
+        const gd=xkid(du,'GroundDuty'),td=xkid(du,'TripDuty');
+        if(gd)duties.push({kind:'ground',code:xtxt(gd,'CrewMovementCode'),start_date:xtxt(gd,'StartDate'),end_date:xtxt(gd,'EndDate')});
+        else if(td)duties.push({kind:'trip',trip_number:xtxt(td,'TripIdentifier'),start_date:xtxt(td,'StartDate'),award:xtxt(td,'Award')});
+      }
+      pilot={name_code:xtxt(pd,'NameCode'),seniority:parseInt(xtxt(pd,'SeniorityNumber')||'0',10),
+        cap:dur(xtxt(pd,'IndividualCAP')&&xtxt(pd,'IndividualCAP').replace(/PT(\d+)H(\d+)M/,'$1:$2')),
+        base:xtxt(xdeep(root,'FleetType')[0]||root,'CrewBase'),aircraft:xtxt(xdeep(root,'FleetType')[0]||root,'AircraftType'),
+        bank_in:bl?creditInt(xtxt(bl,'OpeningBankValue')):null,bank_out:bl?creditInt(xtxt(bl,'ClosingBank')):null,
+        credit:bl?creditInt(xtxt(bl,'TotalControlCredit')):null,duties};
+    }
+  }
+  return {pilot,period};
+}
+// Credit Range Allocation — seniority distribution for reach prediction
+function parseCRA(text){
+  const out=[];
+  for(const ln of text.split(/\r?\n/)){
+    const m=/^\s*(\d{6})\s+([A-Z]{5})\s+(\d{1,4})\s+/.exec(ln);
+    if(m)out.push({id:m[1],code:m[2],sen:+m[3]});
+  }
+  return out.filter(r=>r.sen<9000).sort((a,b)=>a.sen-b.sen);
+}
+
+/* ================= STATE ================= */
+const S={trips:null,fp:null,roster:null,cra:null,
+  prefs:{weekendsOff:false,creditWeight:1,shortWeight:0,avoidHeavy:false,protectBank:false,
+         avoidRegions:new Set(),avoid2Crew:false,hardAvoidWeekends:false,dests:new Set(),autoDest:true,
+         payHourly:0,payTafb:0,maxEarnings:false},
+  bidgroups:[{id:1,name:'Bidgroup 1',trips:new Set()}],filterDest:null};
+// station → region (covers this fleet's network; unknown codes → 'Other')
+const REGION={
+  JFK:'USA',EWR:'USA',ORD:'USA',IAD:'USA',IAH:'USA',LAS:'USA',MIA:'USA',MSY:'USA',PDX:'USA',PIT:'USA',SEA:'USA',DFW:'USA',BOS:'USA',TPA:'USA',AUS:'USA',STL:'USA',
+  YUL:'Canada',YYZ:'Canada',YVR:'Canada',
+  MEX:'Latin America',SJO:'Latin America',SCL:'Latin America',GIG:'Latin America',GRU:'Latin America',BGI:'Caribbean',
+  BLR:'India',BOM:'India',DEL:'India',MAA:'India',
+  SIN:'Far East',HND:'Far East',PVG:'Far East',KUL:'Far East',
+  NBO:'Africa',LOS:'Africa',CPT:'Africa',JNB:'Africa',
+  MLE:'Indian Ocean',SYD:'Australia',
+};
+function regionOf(code){return REGION[code]||'Other';}
+function allRegions(){return [...new Set(S.trips.flatMap(t=>t.destinations.map(regionOf)))].sort();}
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ================= IMPORT UI ================= */
+const SLOTS=[
+  {key:'trips',lab:'Trip catalogue',sub:'JSSTRIPS…BI2.pdf',need:true},
+  {key:'fp',lab:'Front page',sub:'front page…FO.pdf',need:true},
+  {key:'roster',lab:'Your roster (optional)',sub:'…Maestro.xml',need:false},
+  {key:'cra',lab:'Credit range list (optional)',sub:'enables reach prediction',need:false},
+];
+function renderSlots(){
+  $('slots').innerHTML=SLOTS.map(s=>{
+    const loaded=(s.key==='trips'&&S.trips)||(s.key==='fp'&&S.fp)||(s.key==='roster'&&S.roster)||(s.key==='cra'&&S.cra);
+    let sub=s.sub;
+    if(loaded){ if(s.key==='trips')sub=S.trips.length+' trip instances';
+      else if(s.key==='fp')sub='CAP '+(S.fp.cap?S.fp.cap.hhmm:'?')+' · '+S.fp.dest_pools.length+' pools';
+      else if(s.key==='roster'&&S.roster.pilot)sub=S.roster.pilot.name_code+' · bank '+(S.roster.pilot.bank_out?S.roster.pilot.bank_out.hhmm:'?');
+      else if(s.key==='cra')sub=S.cra.length+' pilots · reach on';}
+    return `<div class="slot ${loaded?'loaded':''}">
+      <div style="display:flex;gap:10px;align-items:flex-start"><span style="font-size:11px;margin-top:3px;color:${loaded?'var(--ok)':'var(--line)'}">${loaded?'●':'○'}</span><div><div class="lab">${s.lab}</div><div class="sub">${loaded?'✓ ':''}${esc(sub)}</div></div></div>
+      <button class="pick" data-slot="${s.key}">${loaded?'Replace':'Load'}</button>
+    </div>`;
+  }).join('');
+  document.querySelectorAll('.pick').forEach(b=>b.onclick=()=>pick(b.dataset.slot));
+}
+function pick(key){
+  const inp=document.createElement('input');inp.type='file';
+  inp.accept=key==='roster'?'.xml,text/xml':'.pdf,.txt,text/plain';
+  inp.onchange=async e=>{const f=e.target.files[0];if(!f)return;
+    try{
+      const isPdf = f.name.toLowerCase().endsWith('.pdf');
+      if(isPdf){ setSlotBusy(key,'reading PDF…'); const text=await extractPdfText(await f.arrayBuffer()); loadSlot(key,text,f.name); }
+      else { loadSlot(key,await f.text(),f.name); }
+    }catch(err){ showErr('Could not read "'+f.name+'". '+(err&&err.message||'')); renderSlots(); }
+  };
+  inp.click();
+}
+// ---- pdf.js on-device text extraction (line reconstruction validated to match pdftotext -layout) ----
+let PDFJS=null;
+async function ensurePdfjs(){
+  if(PDFJS)return PDFJS;
+  PDFJS=await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.min.mjs');
+  PDFJS.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.0.379/pdf.worker.min.mjs';
+  return PDFJS;
+}
+async function extractPdfText(buf){
+  const pdfjs=await ensurePdfjs();
+  const pdf=await pdfjs.getDocument({data:new Uint8Array(buf)}).promise;
+  const out=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const tc=await (await pdf.getPage(p)).getTextContent();
+    const rows={};
+    for(const it of tc.items){
+      if(!it.str)continue;
+      const y=Math.round(it.transform[5]);
+      let key=Object.keys(rows).find(k=>Math.abs(+k-y)<=2); if(key===undefined)key=y;
+      (rows[key]=rows[key]||[]).push({x:it.transform[4],s:it.str,w:it.width});
+    }
+    for(const y of Object.keys(rows).map(Number).sort((a,b)=>b-a)){
+      const items=rows[y].sort((a,b)=>a.x-b.x);
+      let line='',le=null;
+      for(const it of items){ if(le!==null){const g=it.x-le;line+=' '.repeat(Math.max(1,Math.round(g/4)));} line+=it.s; le=it.x+(it.w||it.s.length*4.5); }
+      out.push(line);
+    }
+  }
+  return out.join('\n');
+}
+function loadSlot(key,text,name){
+  try{
+    if(key==='roster'){ S.roster=parseRosterXml(text); if(!S.roster.pilot)throw 0; }
+    else if(key==='trips'){ S.trips=parseJsstrips(text); if(!S.trips.length)throw 0; }
+    else if(key==='fp'){ S.fp=parseFrontPage(text); if(!S.fp.cap)throw 0; }
+    else if(key==='cra'){ S.cra=parseCRA(text); if(!S.cra.length)throw 0; if(S.trips&&S.fp){renderStrips();renderBidgroups();} }
+    $('err').classList.remove('show');
+    renderSlots();
+    if(S.trips&&S.fp) boot();
+  }catch(_){
+    // auto-detect: maybe the pilot loaded the trips PDF into the front-page slot or vice versa
+    if(key!=='roster'){
+      const asTrips=(()=>{try{const t=parseJsstrips(text);return t.length?t:null;}catch(e){return null;}})();
+      const asFp=(()=>{try{const f=parseFrontPage(text);return f.cap?f:null;}catch(e){return null;}})();
+      if(asTrips&&key==='fp'){ S.trips=asTrips; showErr(`That looks like the trip catalogue — loaded it as Trips instead.`); renderSlots(); if(S.trips&&S.fp)boot(); return; }
+      if(asFp&&key==='trips'){ S.fp=asFp; showErr(`That looks like the front page — loaded it there instead.`); renderSlots(); if(S.trips&&S.fp)boot(); return; }
+    }
+    showErr(`Couldn't read "${name}" as the ${key==='trips'?'trip catalogue':key==='fp'?'front page':'roster'}. Check it's the right report from CrewBid.`);
+    renderSlots();
+  }
+}
+function setSlotBusy(key,msg){
+  const slot=[...document.querySelectorAll('.slot')].find(s=>s.querySelector(`[data-slot="${key}"]`));
+  if(slot){const sub=slot.querySelector('.sub');if(sub){sub.textContent=msg;sub.style.color='var(--amber-ink)';}}
+}
+function showErr(msg){$('err').textContent=msg;$('err').classList.add('show');}
+
+/* ================= BOOT DASHBOARD ================= */
+function boot(){
+  $('setup').style.display='none';$('dash').style.display='block';$('tabs').style.display='flex';
+  // seed pref dests from what's in the catalogue
+  renderReadouts();renderPilot();renderDestChips();renderPrefDests();renderPrefs();renderStrips();renderBidgroups();
+}
+function renderReadouts(){
+  const p=S.roster&&S.roster.pilot, fp=S.fp;
+  const ncr=fp.credit_ranges['100']?fp.credit_ranges['100'].neutral:null;
+  $('readouts').innerHTML=[
+    ro('CAP',fp.cap?fp.cap.hhmm:'—',fp.period_start?fp.period_start.slice(0,7):''),
+    ro('NCR',ncr?ncr.lo.hhmm:'—',ncr?'–'+ncr.hi.hhmm:''),
+    ro('Bank',p&&p.bank_out?p.bank_out.hhmm:'—',p&&p.bank_in?'in '+p.bank_in.hhmm:'load roster'),
+    ro('Trips',new Set(S.trips.map(t=>t.trip_number)).size,S.trips.length+' dated'),
+  ].join('');
+}
+const ro=(l,v,s)=>`<div class="readout"><div class="eyebrow">${l}</div><div class="val">${esc(v)}</div><div class="sub">${esc(s)}</div></div>`;
+function renderPilot(){
+  const p=S.roster&&S.roster.pilot;
+  $('pilotline').innerHTML=p?[
+    `<span><b>${esc(p.name_code)}</b></span>`,`<span>SEN <b>${p.seniority}</b></span>`,
+    `<span>${esc(p.aircraft||'')} ${esc(p.base||'')}</span>`,
+    `<span>skeleton: ${p.duties.filter(d=>d.kind==='ground').length} ground</span>`
+  ].join(''):`<span>Load your roster to see bank &amp; skeleton conflicts</span>`;
+}
+
+/* ================= TRIPS ================= */
+function assignedSet(){return new Set((S.roster&&S.roster.pilot?S.roster.pilot.duties:[]).filter(d=>d.kind==='trip').map(d=>d.trip_number));}
+function creditMin(t){return t.trip_credit?t.trip_credit.minutes:0;}
+function touchesWeekend(t){ // does any day of the trip fall on Sat/Sun
+  if(!t.start_date)return false;const s=new Date(t.start_date+'T00:00Z');
+  for(let k=0;k<(t.trip_days||1);k++){const d=new Date(s);d.setUTCDate(d.getUTCDate()+k);if([0,6].includes(d.getUTCDay()))return true;}
+  return false;
+}
+// hard avoids: a trip the pilot has ruled out entirely (region / 2-crew / weekend)
+function tripAllowed(t){
+  const p=S.prefs;
+  if(p.avoid2Crew && !t.heavy) return false;           // heavy=augmented; no heavy = 2-crew
+  if(p.hardAvoidWeekends && touchesWeekend(t)) return false;
+  if(p.avoidRegions.size && t.destinations.some(d=>p.avoidRegions.has(regionOf(d)))) return false;
+  return true;
+}
+// destinations that survive the rules — the app "auto-generates" the working set
+function autoDests(){
+  const set=new Set();
+  for(const t of S.trips){ if(tripAllowed(t)) t.destinations.forEach(d=>set.add(d)); }
+  return [...set].sort();
+}
+function activeDests(){ return S.prefs.autoDest ? new Set(autoDests()) : S.prefs.dests; }
+function score(t){
+  if(!tripAllowed(t)) return -1e6;           // ruled out → never selected
+  const p=S.prefs;
+  if(p.maxEarnings){
+    // money IS the objective. The binding constraint is the monthly credit band,
+    // so maximise £ per CREDIT HOUR (TAFB pay makes some trips earn far more per credit hour)
+    const crHrs=Math.max(0.5,creditMin(t)/60);
+    const perCr=(payOn()?(earnings(t)||0):crHrs*25)/crHrs;
+    let sc=perCr*0.8;
+    if(!p.autoDest&&p.dests.size&&t.destinations.some(d=>p.dests.has(d)))sc+=6; // hand-picked dests = mild tiebreak
+    return sc;
+  }
+  let sc=0;
+  const dests=activeDests();
+  if(dests.size){ if(t.destinations.some(d=>dests.has(d)))sc+=40; else sc-=8; }
+  sc+=p.creditWeight*(creditMin(t)/60);
+  if(p.shortWeight)sc-=p.shortWeight*(t.trip_days||0)*2;
+  if(p.weekendsOff&&touchesWeekend(t))sc-=25;
+  if(p.avoidHeavy&&t.heavy)sc-=10;
+  return sc;
+}
+// ---- reach prediction (needs CRA loaded for real seniority + roster for the pilot's number) ----
+function reachAvailable(){return S.cra&&S.roster&&S.roster.pilot&&S.roster.pilot.seniority;}
+function pctJunior(sen){ if(!S.cra||!S.cra.length)return null;
+  const below=S.cra.filter(r=>r.sen<sen).length; return below/S.cra.length; }
+let _supply=null;
+function supplyByDest(){ if(_supply)return _supply; _supply={};
+  for(const t of S.trips)for(const d of t.destinations)_supply[d]=(_supply[d]||0)+1; return _supply; }
+function reach(t){ if(!reachAvailable())return null;
+  const sen=S.roster.pilot.seniority, jr=pctJunior(sen); if(jr===null)return null;
+  const sup=supplyByDest(), s=Math.min(1,(sup[t.destinations[0]]||0)/60);
+  return Math.max(0,Math.min(1, s*0.5 + (1-jr)*0.5));
+}
+function reachLabel(r){return r==null?null:r>=0.66?'likely':r>=0.4?'contested':'long shot';}
+function reachClass(r){return r==null?'':r>=0.66?'ok':r>=0.4?'info':'warn';}
+// ---- earnings (variable pay estimate; rates supplied by the pilot) ----
+function payOn(){return S.prefs.payHourly>0||S.prefs.payTafb>0;}
+function earnings(t){ if(!payOn())return null;
+  const cr=(creditMin(t)/60)*S.prefs.payHourly;
+  const tafb=t.tafb?(t.tafb.minutes/60)*S.prefs.payTafb:0;
+  return cr+tafb; }
+function gbp(n){return n==null?'':'£'+Math.round(n).toLocaleString();}
+function rosterEarnings(rr){ if(!payOn())return null; return rr.trips.reduce((a,t)=>a+(earnings(t)||0),0); }
+function payFeedback(){
+  const el=$('payFeedback'); if(!el)return;
+  if(!payOn()){el.textContent='Enter your rates to see £ on every trip and roster.';el.style.color='var(--muted)';return;}
+  const best=uniqueTrips().slice().sort((a,b)=>(earnings(b)||0)-(earnings(a)||0))[0];
+  el.style.color='var(--ok)';
+  el.innerHTML=best?`✓ Rates set — e.g. trip ${best.trip_number} (${esc(best.destinations[0]||'')} ${best.trip_days}d) ≈ <b>${gbp(earnings(best))}</b>. £ now shows on Trips and Bid tabs.`:'✓ Rates set.';
+}
+
+// ---- laddered optimiser: preferences → N bid groups as broadening PERMITTED sets ----
+// A bid group permits a set of trips; JSS falls through to the next group when it can't
+// build a legal roster from this one. So each group down permits strictly more.
+function buildAutoPlan(N){
+  N=N||15;
+  const ncr=S.fp.credit_ranges['100']?S.fp.credit_ranges['100'].neutral:null;
+  const cap=S.fp.cap?S.fp.cap.minutes:6000;
+  const U=uniqueTrips().filter(tripAllowed).map(t=>({t,sc:score(t),rc:reach(t)}));
+  const rcOf=x=>x.rc==null?0.5:x.rc;
+  const ranked=U.slice().sort((a,b)=>(b.sc+rcOf(b)*8)-(a.sc+rcOf(a)*8));
+  const wanted=activeDests();
+  const isWanted=x=>wanted.size&&x.t.destinations.some(d=>wanted.has(d));
+  const W=ranked.filter(isWanted), O=ranked.filter(x=>!isWanted(x));
+  const groups=[];
+  for(let i=0;i<N-1;i++){
+    const frac=(N-2)?i/(N-2):0;                 // 0 dream … 1 broadest
+    let permitted;
+    if(W.length){                                // grow: all wanted + growing slice of the rest
+      const nO=Math.round(frac*O.length);
+      permitted=W.concat(O.slice(0,nO));
+    } else {                                      // no dest prefs → grow by score depth
+      const n=Math.max(3,Math.round((0.08+0.92*frac)*ranked.length));
+      permitted=ranked.slice(0,n);
+    }
+    const name=i===0?'Group 1 — dream roster':i===N-2?`Group ${i+1} — widest before bank protect`:`Group ${i+1}`;
+    const note=i===0?'permits only your most-wanted trips — JSS falls through if it can’t build a month from these'
+      :frac<0.5?'permits more of your preferred + next-best trips':'permits most trips so JSS can build a full roster';
+    groups.push({id:i+1,name,note,trips:new Set(permitted.map(x=>x.t.trip_number))});
+  }
+  // Bank Protection: permit everything (AWCW 1st–UFN, whole month)
+  groups.push({id:N,name:`Group ${N} — bank protection`,bankProtect:true,
+    note:'Award Work Contained Within 1st–UFN, all trips, whole month — if JSS still can’t reach CAP, your bank is protected',
+    trips:new Set(ranked.map(x=>x.t.trip_number))});
+  return groups;
+}
+function bankDelta(credit){const cap=S.fp.cap?S.fp.cap.minutes:null;return cap==null?null:credit-cap;}
+
+// ---- JSS command generator: prefs → real AWARD/AVOID property commands per group ----
+const POOLS=['H++','H+','H','M','L','L−','L−−']; // 7 ranked trip pools, high → low
+function stationsInRegion(r){ return [...new Set(S.trips.flatMap(t=>t.destinations))].filter(d=>regionOf(d)===r).sort(); }
+function rankedDests(){ // active destinations ranked by best trip score (desirability)
+  const best={};
+  for(const t of uniqueTrips()){ if(!tripAllowed(t))continue;
+    for(const d of t.destinations){ const sc=score(t); if(best[d]===undefined||sc>best[d])best[d]=sc; } }
+  const act=[...activeDests()].filter(d=>best[d]!==undefined);
+  return act.sort((a,b)=>best[b]-best[a]);
+}
+function commandsForGroup(gi,N){
+  const p=S.prefs, last=gi===N-1, frac=(N-2)?Math.min(1,gi/(N-2)):0;
+  const lines=[];
+  // Bank protection: exact syntax, FIRST command in LAST group
+  if(last&&p.protectBank){
+    lines.push({cmd:'AWARD',body:'Work contained within · 1st – month-end (or blank)',pool:'L−−',first:true});
+    lines.push({cmd:'AWARD',body:'Trip length 1–99 · entire period',pool:'L'});
+    return lines;
+  }
+  // AVOIDs — freeze what you never want (kept through most of the ladder, relaxed near the bottom)
+  const keepAvoids=frac<0.85;
+  if(keepAvoids){
+    for(const r of p.avoidRegions){ const st=stationsInRegion(r);
+      if(st.length)lines.push({cmd:'AVOID',body:'Stop = '+st.join(', ')+' · entire period'}); }
+    if(p.avoid2Crew)lines.push({cmd:'AVOID',body:'Flight crewing level = 2 · entire period'});
+    if(p.hardAvoidWeekends)lines.push({cmd:'AVOID',body:'Work touching · Sat–Sun (repeating)'});
+  }
+  // AWARDs — destinations into ranked pools; more dests + lower pools as the ladder descends
+  const dests=rankedDests();
+  const nD=Math.max(1,Math.round((0.25+0.75*frac)*dests.length));
+  const use=dests.slice(0,nD);
+  use.forEach((d,i)=>{
+    const poolIdx=Math.min(POOLS.length-2, Math.floor(i/Math.max(1,use.length)* (3+Math.round(frac*3))));
+    lines.push({cmd:'AWARD',body:'Stop = '+d+' · entire period',pool:POOLS[poolIdx]});
+  });
+  // soft prefs as property awards
+  if(p.shortWeight>0&&frac<0.6)lines.push({cmd:'AWARD',body:'Trip length 1–3 · entire period',pool:'H'});
+  if(p.weekendsOff&&frac<0.6)lines.push({cmd:'AWARD',body:'Work contained within · Mon–Fri (repeating)',pool:'H+'});
+  return lines.slice(0,40); // JSS limit: ≤40 Award/Avoid bids per group
+}
+function bidAsText(){
+  const N=S.bidgroups.length;
+  return S.bidgroups.map((g,gi)=>{
+    const lines=commandsForGroup(gi,N);
+    return g.name.toUpperCase()+'\n'+lines.map((l,i)=>`  ${i+1}. ${l.cmd} ${l.body}${l.pool?' → '+l.pool:''}${l.first?'   (enter FIRST)':''}`).join('\n');
+  }).join('\n\n');
+}
+function copyBid(){
+  const txt=bidAsText();
+  const ta=document.createElement('textarea');ta.value=txt;document.body.appendChild(ta);
+  ta.select();try{document.execCommand('copy');}catch(e){}
+  document.body.removeChild(ta);
+  const b=$('copyBid');if(b){const old=b.textContent;b.textContent='✓ Copied';setTimeout(()=>b.textContent=old,1500);}
+}
+// unique trips (collapse instances → best/first per number) for the browser
+function uniqueTrips(){
+  const by={};for(const t of S.trips){(by[t.trip_number]=by[t.trip_number]||[]).push(t);}
+  return Object.values(by).map(list=>({...list[0],instances:list.length,
+    dates:list.map(x=>x.start_date).sort()}));
+}
+function renderDestChips(){
+  const dests=[...new Set(S.trips.flatMap(t=>t.destinations))].sort();
+  $('destChips').innerHTML=`<button class="chip ${S.filterDest===null?'on':''}" data-d="">All</button>`+
+    dests.map(d=>`<button class="chip ${S.filterDest===d?'on':''}" data-d="${d}">${d}</button>`).join('');
+  [...$('destChips').children].forEach(c=>c.onclick=()=>{S.filterDest=c.dataset.d||null;renderDestChips();renderStrips();});
+}
+function renderStrips(){
+  const asn=assignedSet();
+  let list=uniqueTrips().filter(t=>!S.filterDest||t.destinations.includes(S.filterDest));
+  const mode=$('sort').value;
+  list.sort((a,b)=> mode==='credit'?creditMin(b)-creditMin(a)
+    :mode==='length'?(a.trip_days||0)-(b.trip_days||0)
+    :mode==='date'?(a.start_date||'').localeCompare(b.start_date||'')
+    :score(b)-score(a));
+  $('count').textContent=list.length+' trips'+(S.filterDest?' · '+S.filterDest:'');
+  const inBid=new Set();S.bidgroups.forEach(g=>g.trips.forEach(n=>inBid.add(n)));
+  $('strips').innerHTML=list.map(t=>{
+    const cr=t.trip_credit?t.trip_credit.hhmm:'—',a=asn.has(t.trip_number),sc=Math.round(score(t));
+    return `<div class="strip ${a?'assigned':''}" data-t="${t.trip_number}">
+      <div class="rail">${t.trip_number}${$('sort').value==='score'?`<span class="score">${sc>0?'+':''}${sc}</span>`:''}</div>
+      <div><div class="body">
+        <div class="row1"><div class="route">${esc(t.route||'—')}</div><div class="credit">${cr}<span style="font-size:9px;color:var(--muted);font-weight:500"> CR</span></div></div>
+        <div class="row2">
+          <span>${t.trip_days??'—'}d · ${t.instances}× this month</span>
+          <span>TAFB ${t.tafb?t.tafb.hhmm:'—'}</span>
+          ${payOn()?`<span class="sc money">${gbp(earnings(t))}</span>`:''}
+          ${t.heavy?'<span class="sc">aug crew</span>':'<span class="sc">2-crew</span>'}
+          ${(()=>{const rl=reachLabel(reach(t)),rc=reachClass(reach(t));return rl?`<span class="sc ${rc==='ok'?'ok':rc==='warn'?'warn':''}">${rl}</span>`:'';})()}
+          ${a?'<span class="sc amber">on roster</span>':''}
+        </div></div>
+        <div class="detail">${detailHtml(t)}
+          <button class="addbtn ${inBid.has(t.trip_number)?'in':''}" data-add="${t.trip_number}">${inBid.has(t.trip_number)?'✓ in a bid group':'+ add to bid group 1'}</button>
+        </div>
+      </div></div>`;
+  }).join('')||'<div class="empty">No trips match.</div>';
+  document.querySelectorAll('.strip .body').forEach(b=>b.onclick=e=>{if(e.target.dataset.add!==undefined)return;b.closest('.strip').classList.toggle('open');});
+  document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>{addToBid(b.dataset.add);});
+}
+function detailHtml(t){
+  return `<div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:6px">dates: ${t.dates.map(d=>d.slice(8,10)+'/'+d.slice(5,7)).join(' · ')}</div>`+
+    '<table class="sec">'+t.sectors.map(s=>`<tr>
+      <td style="font-weight:600">${esc((s.heavy?'✱':'')+s.carrier+s.flight)}</td>
+      <td>${esc(s.dep)}–${esc(s.arr)}</td>
+      <td>${esc(s.dep_time)}–${esc(s.arr_time)}z</td>
+      <td style="color:var(--muted)">duty ${esc(s.duty)}</td></tr>`).join('')+'</table>';
+}
+
+/* ================= PREFERENCES ================= */
+function renderPrefs(){
+  document.querySelectorAll('.payin').forEach(el=>{
+    const k=el.dataset.pay; if(S.prefs[k])el.value=S.prefs[k];
+    el.oninput=()=>{S.prefs[k]=parseFloat(el.value)||0;payFeedback();};           // cheap: just the sample line
+    el.onchange=()=>{renderStrips();renderBidgroups();};                          // heavy recompute on blur only
+  });
+  payFeedback();
+  document.querySelectorAll('[data-pref]').forEach(el=>{
+    const k=el.dataset.pref,v=S.prefs[k];
+    if(el.classList.contains('toggle')){el.classList.toggle('on',!!v);el.onclick=()=>{S.prefs[k]=!S.prefs[k];renderPrefs();renderPrefDests();renderStrips();};}
+    else{el.value=v;el.oninput=()=>{S.prefs[k]=+el.value;renderStrips();};}
+  });
+}
+function renderPrefDests(){
+  // region avoid chips
+  const rc=$('regionChips');
+  if(rc){ rc.innerHTML=allRegions().map(r=>`<button class="chip ${S.prefs.avoidRegions.has(r)?'on':''}" data-rg="${esc(r)}" style="${S.prefs.avoidRegions.has(r)?'background:var(--warn);border-color:var(--warn)':''}">${esc(r)}</button>`).join('');
+    rc.querySelectorAll('[data-rg]').forEach(b=>b.onclick=()=>{const r=b.dataset.rg;S.prefs.avoidRegions.has(r)?S.prefs.avoidRegions.delete(r):S.prefs.avoidRegions.add(r);renderPrefDests();renderStrips();});
+  }
+  // auto vs manual destinations
+  const auto=S.prefs.autoDest;
+  const out=$('autoDestOut'), grid=$('prefDests');
+  if(auto){
+    const d=autoDests();
+    out.style.display='block';
+    out.innerHTML=`Bidding <b style="color:var(--ink)">${d.length}</b> destinations after your rules:<br>${d.map(x=>esc(x)).join(' · ')||'— none (rules exclude everything)'}`;
+    grid.style.display='none';
+  } else {
+    out.style.display='none'; grid.style.display='flex';
+    const dests=[...new Set(S.trips.flatMap(t=>t.destinations))].sort();
+    grid.innerHTML=dests.map(dd=>`<button class="chip ${S.prefs.dests.has(dd)?'on':''}" data-pd="${dd}">${dd}</button>`).join('');
+    grid.querySelectorAll('[data-pd]').forEach(b=>b.onclick=()=>{const dd=b.dataset.pd;S.prefs.dests.has(dd)?S.prefs.dests.delete(dd):S.prefs.dests.add(dd);renderPrefDests();renderStrips();});
+  }
+}
+
+/* ================= BID BUILDER + LEGALITY ================= */
+let bgSeq=1;
+function addToBid(num,gi){ S.bidgroups[gi==null?0:gi].trips.add(num); renderBidgroups(); renderStrips(); }
+function tripByNum(n){return S.trips.find(t=>t.trip_number===n);}
+let openGroup=null; // index of expanded group (null = all collapsed)
+function renderBidgroups(){
+  $('bidgroups').innerHTML=S.bidgroups.map((g,gi)=>{
+    const trips=[...g.trips].map(tripByNum).filter(Boolean)
+      .sort((a,b)=>score(b)-score(a));
+    const {out:checks,rr}=legality(g,trips);
+    const rosterSet=new Set(rr.trips.map(t=>t.trip_number));
+    const open=openGroup===gi;
+    const rEarn=rosterEarnings(rr);
+    const summary=rr.trips.length?`~${minToHHMM(rr.credit)} roster${rEarn!=null?' · ~'+gbp(rEarn):''}`:'no roster — falls through';
+    // trips NOT yet in this group, to offer as adds
+    const inGroup=g.trips;
+    const addable=uniqueTrips().filter(t=>tripAllowed(t)&&!inGroup.has(t.trip_number))
+      .sort((a,b)=>score(b)-score(a));
+    return `<div class="bg ${open?'open':''} ${g.bankProtect?'bank':''}" style="${g.bankProtect?'border-color:var(--amber)':''}">
+      <button class="ghead" data-tog="${gi}">
+        <span class="gh-ix">${g.bankProtect?'🛡':String(gi+1).padStart(2,'0')}</span>
+        <div class="gh-l">
+          <div class="gh-name">${esc(g.name.replace(/^Group \d+\s*(—\s*)?/,'')||'Bid group')}</div>
+          <div class="gh-sub">permits ${trips.length} · ${esc(summary)}</div>
+        </div>
+        <span class="gh-caret">▸</span>
+      </button>
+      <div class="gbody">
+        ${g.note?`<div class="gnote">${esc(g.note)}</div>`:''}
+        <div class="meter">${creditBar(rr.credit)}</div>
+        <div class="checks">${checks.map(c=>`<div class="check ${c.type}"><span class="mk">${c.type==='ok'?'✓':c.type==='warn'?'!':'·'}</span><span>${esc(c.msg)}</span></div>`).join('')}</div>
+        <div class="gtriplist">
+          ${trips.length?trips.map(t=>{const rl=reachLabel(reach(t)),inR=rosterSet.has(t.trip_number),rc=reachClass(reach(t));const e=earnings(t);return `<div class="bgtrip" style="${inR?'background:var(--ok-soft)':''}"><span>${inR?'★ ':''}<b>${t.trip_number}</b> ${esc(t.route||'')} <span style="color:var(--muted)">cr ${t.trip_credit?t.trip_credit.hhmm:'—'}</span>${e!=null?' <span class="sc money">'+gbp(e)+'</span>':''}${rl?' <span class="sc '+(rc==='ok'?'ok':rc==='warn'?'warn':'')+'">'+rl+'</span>':''}</span><button class="rm" data-rm="${gi}:${t.trip_number}">✕</button></div>`;}).join(''):'<div class="empty">No trips yet — add some below.</div>'}
+        </div>
+        ${rr.trips.length?`<div style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 13px 8px">★ = likely on your awarded roster</div>`:''}
+        ${(()=>{const cl=commandsForGroup(gi,S.bidgroups.length);return cl.length?`<details class="addwrap"><summary>▤ CrewBid commands (${cl.length}) — enter these in order</summary>
+          <div style="padding:0 13px 10px">${cl.map((l,i)=>`<label class="cmdrow"><input type="checkbox"><span><b>${l.cmd}</b> ${esc(l.body)}${l.pool?` → <b>${l.pool}</b>`:''}${l.first?' <span class="sc amber">enter FIRST</span>':''}</span></label>`).join('')}</div>
+        </details>`:'';})()}
+        <details class="addwrap"><summary>+ Add a flight to this group</summary>
+          <input class="addsearch" data-search="${gi}" placeholder="filter by code or destination…">
+          <div class="addlist" id="addlist-${gi}">
+            ${addable.slice(0,40).map(t=>`<button class="addrow" data-addto="${gi}:${t.trip_number}">+ ${t.trip_number} · ${esc(t.route||'')} · ${t.trip_credit?t.trip_credit.hhmm:'—'}</button>`).join('')}
+          </div>
+        </details>
+      </div>
+    </div>`;
+  }).join('');
+  // wire toggles
+  document.querySelectorAll('[data-tog]').forEach(b=>b.onclick=()=>{const i=+b.dataset.tog;openGroup=openGroup===i?null:i;renderBidgroups();});
+  document.querySelectorAll('[data-rm]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[gi,n]=b.dataset.rm.split(':');S.bidgroups[+gi].trips.delete(n);renderBidgroups();renderStrips();});
+  document.querySelectorAll('[data-addto]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[gi,n]=b.dataset.addto.split(':');S.bidgroups[+gi].trips.add(n);renderBidgroups();renderStrips();});
+  document.querySelectorAll('[data-search]').forEach(inp=>inp.oninput=()=>{
+    const gi=+inp.dataset.search,q=inp.value.trim().toUpperCase();
+    const inGroup=S.bidgroups[gi].trips;
+    const addable=uniqueTrips().filter(t=>tripAllowed(t)&&!inGroup.has(t.trip_number)&&
+      (!q||t.trip_number.includes(q)||(t.route||'').toUpperCase().includes(q)||t.destinations.some(d=>d.includes(q))))
+      .sort((a,b)=>score(b)-score(a));
+    const list=document.getElementById('addlist-'+gi);
+    if(list)list.innerHTML=addable.slice(0,40).map(t=>`<button class="addrow" data-addto="${gi}:${t.trip_number}">+ ${t.trip_number} · ${esc(t.route||'')} · ${t.trip_credit?t.trip_credit.hhmm:'—'}</button>`).join('')||'<div class="empty" style="padding:10px">no matches</div>';
+    list.querySelectorAll('[data-addto]').forEach(b=>b.onclick=e=>{e.stopPropagation();const[g,n]=b.dataset.addto.split(':');S.bidgroups[+g].trips.add(n);renderBidgroups();renderStrips();});
+  });
+}
+function creditBar(credit){
+  const fp=S.fp,ncr=fp.credit_ranges['100']?fp.credit_ranges['100'].neutral:null;
+  const cap=fp.cap?fp.cap.minutes:6000;
+  const max=Math.max(cap*1.1, 1);
+  const pct=Math.min(100,credit/max*100);
+  let bands='';
+  if(ncr){bands+=`<div class="band" style="left:${ncr.lo.minutes/max*100}%"></div><div class="band" style="left:${ncr.hi.minutes/max*100}%"></div>`;}
+  bands+=`<div class="band" style="left:${cap/max*100}%;border-color:var(--amber)"></div>`;
+  const inband=ncr&&credit>=ncr.lo.minutes&&credit<=ncr.hi.minutes;
+  return `<div class="eyebrow">Likely awarded roster credit</div>
+    <div class="bar"><div class="fill" style="width:${pct}%;${inband?'':'opacity:.55'}"></div>${bands}<div class="lbl">${minToHHMM(credit)}</div></div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted)">NCR ${ncr?ncr.lo.hhmm+'–'+ncr.hi.hhmm:'?'} · CAP ${fp.cap?fp.cap.hhmm:'?'}</div>`;
+}
+// Build a plausible roster JSS could award from a permitted pool, for THIS pilot:
+// greedily take best-scoring trips up to the NCR midpoint, without day-overlaps,
+// respecting protected days and destination-pool limits.
+function protectedRanges(){
+  const p=S.roster&&S.roster.pilot; if(!p)return [];
+  return p.duties.filter(d=>d.kind==='ground'&&['FDO','GLD','DFW','NA'].includes(d.code)&&d.start_date)
+    .map(d=>[new Date(d.start_date+'T00:00Z'),new Date((d.end_date||d.start_date)+'T00:00Z')]);
+}
+function tripRange(t){ const s=t.start_date?new Date(t.start_date+'T00:00Z'):null; if(!s)return null;
+  const e=new Date(s); e.setUTCDate(e.getUTCDate()+(t.trip_days||1)-1); return [s,e]; }
+function overlaps(a,b){ return a&&b&&a[0]<=b[1]&&a[1]>=b[0]; }
+function representativeRoster(poolTrips){
+  const ncr=S.fp.credit_ranges['100']?S.fp.credit_ranges['100'].neutral:null;
+  const midpoint=ncr?(ncr.lo.minutes+ncr.hi.minutes)/2:(S.fp.cap?S.fp.cap.minutes:5400);
+  const ceilBand=ncr?ncr.hi.minutes:midpoint*1.15;
+  // max-earnings: pack credit to the top of the band; otherwise aim for the comfortable middle
+  const mid=S.prefs.maxEarnings?ceilBand-30:midpoint;
+  const ceil=ceilBand;
+  const prot=protectedRanges();
+  // expand permitted trip NUMBERS to every dated instance in the month
+  const permittedNums=new Set(poolTrips.map(t=>t.trip_number));
+  const base=S.trips.filter(t=>permittedNums.has(t.trip_number)&&t.start_date);
+  function pack(list){
+    const poolCount={};const chosen=[];let credit=0;
+    for(const t of list){
+      if(credit>=mid)break;
+      const cm=creditMin(t); if(credit+cm>ceil)continue;
+      const tr=tripRange(t);
+      if(tr&&(chosen.some(c=>overlaps(tr,tripRange(c)))||prot.some(pr=>overlaps(tr,pr))))continue;
+      let blocked=false;
+      S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d))){
+        if((poolCount[pi]||0)>=pool.limit)blocked=true; } });
+      if(blocked)continue;
+      chosen.push(t); credit+=cm;
+      S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d)))poolCount[pi]=(poolCount[pi]||0)+1; });
+    }
+    return {trips:chosen,credit};
+  }
+  if(!S.prefs.maxEarnings) return pack(base.slice().sort((a,b)=>score(b)-score(a)));
+  // max earnings: try several packing orders, keep the roster that actually earns most
+  const orders=[
+    base.slice().sort((a,b)=>score(b)-score(a)),                                   // £ per credit hour
+    base.slice().sort((a,b)=>(earnings(b)||creditMin(b))-(earnings(a)||creditMin(a))), // total £ per trip
+    base.slice().sort((a,b)=>creditMin(b)-creditMin(a)),                           // credit-dense first
+  ];
+  let best=null,bestE=-1;
+  for(const o of orders){ const r=pack(o); const e=rosterEarnings(r)??r.credit;
+    if(e>bestE){bestE=e;best=r;} }
+  return best;
+}
+function reachMix(trips){ const m={likely:0,contested:0,'long shot':0,unknown:0};
+  for(const t of trips){const l=reachLabel(reach(t));m[l||'unknown']++;} return m; }
+function legality(g,poolTrips){
+  const out=[],fp=S.fp,ncr=fp.credit_ranges['100']?fp.credit_ranges['100'].neutral:null;
+  const rr=representativeRoster(poolTrips);
+  const built = rr.trips.length && (!ncr || rr.credit>=ncr.lo.minutes);
+  const destSet=[...new Set(rr.trips.flatMap(t=>t.destinations))];
+  if(built){
+    const re=rosterEarnings(rr);
+    out.push({type:'ok',msg:`Likely builds a ~${minToHHMM(rr.credit)} roster${re!=null?' (~'+gbp(re)+' variable pay)':''}${destSet.length?' to '+destSet.slice(0,6).join(', ')+(destSet.length>6?'…':''):''}`});
+  } else if(rr.trips.length){
+    out.push({type:'info',msg:`Pool may be thin — best in-band roster ~${minToHHMM(rr.credit)}; JSS likely falls through to the next group`});
+  } else {
+    out.push({type:'info',msg:`No buildable roster from this group — it will fall through`});
+  }
+  // reach mix (only if reach available)
+  if(reachAvailable()&&poolTrips.length){ const m=reachMix(poolTrips);
+    out.push({type:'info',msg:`reach across permitted trips — ${m.likely} likely · ${m.contested} contested · ${m['long shot']} long shot`}); }
+  // protected-day note
+  if(!S.roster) out.push({type:'info',msg:'Load your roster to fit trips around your protected days'});
+  return {out,rr};
+}
+
+/* ================= TABS ================= */
+$('tabs').querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  $('tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));$('v-'+t.dataset.v).classList.add('on');
+});
+$('sort').onchange=renderStrips;
+$('addBg').onclick=()=>{bgSeq++;S.bidgroups.push({id:bgSeq,name:'Bidgroup '+S.bidgroups.length+1,trips:new Set()});renderBidgroups();};
+$('autoBuild').onclick=()=>{ S.bidgroups=buildAutoPlan(15); openGroup=0; renderBidgroups(); renderStrips();
+  // jump user to the bid view
+  $('tabs').querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));
+  const bt=[...$('tabs').querySelectorAll('.tab')].find(x=>x.dataset.v==='bid'); if(bt)bt.classList.add('on');
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('on'));$('v-bid').classList.add('on');
+};
+$('copyBid').onclick=copyBid;
+$('shareBid').onclick=async()=>{
+  const txt='BID DECK — JSS bid plan\n'+(S.fp&&S.fp.period_start?('Period '+S.fp.period_start.slice(0,7)+'\n'):'')+'\n'+bidAsText();
+  if(navigator.share){ try{ await navigator.share({title:'JSS bid plan',text:txt}); return; }catch(e){ if(e.name==='AbortError')return; } }
+  // fallback: download as .txt
+  const blob=new Blob([txt],{type:'text/plain'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='jss-bid.txt';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+};
+
+/* ================= TESTER CHAT (Nostr over the Favilla relay) ================= */
+const CHAT_RELAY='wss://relay.favillakey.io';    // change to any relay you run
+const CHAT_TAG='biddeck-feedback';
+let chatSK=null, chatWS=null, chatMsgs={}, chatLoaded=false;
+function chatKey(){ if(!chatSK&&window.NostrCore)chatSK=NostrCore.generateSecretKey(); return chatSK; }
+function chatStatus(msg,ok){ const el=$('chatStatus'); if(el){el.textContent=msg; el.style.color=ok?'var(--ok)':'var(--muted)';} }
+function chatConnect(cb){
+  if(chatWS&&chatWS.readyState===1){cb&&cb();return;}
+  try{ chatWS=new WebSocket(CHAT_RELAY); }
+  catch(e){ chatStatus('Could not reach the relay — check your connection.'); return; }
+  chatWS.onopen=()=>{ chatStatus('Connected to '+CHAT_RELAY.replace('wss://',''),true);
+    chatWS.send(JSON.stringify(['REQ','fb',{kinds:[1],'#t':[CHAT_TAG],limit:100}])); cb&&cb(); };
+  chatWS.onmessage=e=>{ try{ const m=JSON.parse(e.data);
+    if(m[0]==='EVENT'&&m[2]&&m[2].id){ chatMsgs[m[2].id]=m[2]; renderChat(); }
+    if(m[0]==='EOSE'){ chatLoaded=true; renderChat(); }
+    if(m[0]==='OK'&&m[2]===false) chatStatus('Relay rejected the message: '+(m[3]||'')); }catch(_){}}
+  chatWS.onerror=()=>chatStatus('Relay connection failed — feedback needs the relay reachable.');
+  chatWS.onclose=()=>{ if(!chatLoaded)chatStatus('Relay closed the connection.'); };
+}
+function renderChat(){
+  const list=$('chatList'); if(!list)return;
+  const evs=Object.values(chatMsgs).sort((a,b)=>b.created_at-a.created_at);
+  if(!evs.length){ list.innerHTML='<div class="empty">'+(chatLoaded?'No feedback yet — be the first.':'Loading…')+'</div>'; return; }
+  list.innerHTML=evs.map(ev=>{
+    let name='tester'; try{ const j=JSON.parse(ev.content); if(j.n)name=j.n; if(j.m)ev._m=j.m; }catch(_){ ev._m=ev.content; }
+    const d=new Date(ev.created_at*1000);const p2=n=>String(n).padStart(2,'0');
+    return `<div class="card" style="padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline">
+        <b style="font-size:13px">${esc(name)}</b>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--muted)">${p2(d.getDate())}/${p2(d.getMonth()+1)} ${p2(d.getHours())}:${p2(d.getMinutes())}</span>
+      </div>
+      <div style="font-size:14px;margin-top:3px">${esc(ev._m||ev.content)}</div>
+    </div>`;
+  }).join('');
+}
+function chatSend(){
+  const name=($('chatName').value||'').trim()||'tester';
+  const msg=($('chatMsg').value||'').trim(); if(!msg)return;
+  if(!window.NostrCore){ chatStatus('Signing unavailable in this build.'); return; }
+  const ev=NostrCore.finalizeEvent({kind:1,created_at:Math.floor(Date.now()/1000),
+    tags:[['t',CHAT_TAG],['client','bid-deck']],content:JSON.stringify({n:name,m:msg})},chatKey());
+  chatConnect(()=>{ chatWS.send(JSON.stringify(['EVENT',ev]));
+    chatMsgs[ev.id]=ev; $('chatMsg').value=''; renderChat(); chatStatus('Sent.',true); });
+}
+$('chatSend').onclick=chatSend;
+$('chatMsg').addEventListener('keydown',e=>{if(e.key==='Enter')chatSend();});
+$('chatRefresh').onclick=()=>{ chatMsgs={}; chatLoaded=false; if(chatWS){try{chatWS.close();}catch(_){}} chatWS=null; chatConnect(); renderChat(); };
+// connect when the tab is opened
+document.querySelectorAll('.tab').forEach(t=>{ if(t.dataset.v==='chat') t.addEventListener('click',()=>chatConnect()); });
+
+/* ================= DEMO ================= */
+$('demoBtn').onclick=()=>{
+  S.trips=parseJsstrips(DEMO_TRIPS);S.fp=parseFrontPage(DEMO_FP);S.roster=parseRosterXml(DEMO_ROSTER);
+  S.prefs.dests=new Set(['JFK','YUL']);
+  renderSlots();boot();
+};
+const DEMO_FP=`Bid Info Front Sheet
+Planning Period: 01Sep2026 - 30Sep2026
+CAP FOR MONTH: 87:47
+Normal Cap: 85:16
+ CAP                Low            Neutral        High
+ 100%: 87:47        71:47-81:46    78:27-97:07    93:48-103:47
+Credit dense trigger (average credit per day): 6:20
+6                   9              12             True
+ Trip Destination Pools
+ EWR, IAD, JFK, LOS, ORD, PIT, YUL, YYZ   2   5   4   True
+ BLR, BOM, DEL, SIN                        0   99  2   False
+Average reserve points: 360`;
+const DEMO_TRIPS=`Trip Descriptions
+ Trip: 8271        Day      Report * Flight details          Clear Duty Rest      TAFB         30:00
+ Base: LHR           2      13:40 BA 117 LHR 1500-2220 JFK 22:50 9:10 8:00        Trip Credit 14:50
+ Crew : FO            4     21:10 BA 112 JFK 2255-0545 LHR 06:45 8:55       -     Trip Days      3
+ 02SEP2026-
+                                                                                  Flying Hours 14:10
+  04SEP2026
+                                                                                  Duty Hours 18:05
+ Trip: 8271        Day      Report * Flight details          Clear Duty Rest      TAFB         30:00
+ Base: LHR           7      13:40 BA 117 LHR 1500-2220 JFK 22:50 9:10 8:00        Trip Credit 14:50
+ Crew : FO            2     21:10 BA 112 JFK 2255-0545 LHR 06:45 8:55       -     Trip Days      3
+ 21SEP2026-
+                                                                                  Flying Hours 14:10
+  23SEP2026
+                                                                                  Duty Hours 18:05
+ Trip: 8365        Day      Report * Flight details          Clear Duty Rest      TAFB         26:00
+ Base: LHR           1      10:45 BA 093 LHR 1500-0545 YUL 05:45 15:00 8:00       Trip Credit 13:50
+ Crew : FO            3     11:00 BA 092 YUL 1300-0110 LHR 01:40 12:00      -     Trip Days      3
+ 01SEP2026-
+                                                                                  Flying Hours 13:00
+  03SEP2026
+                                                                                  Duty Hours 16:30
+ Trip: 8047        Day      Report * Flight details          Clear Duty Rest      TAFB         97:30
+ Base: LHR           2      10:10 X BA 035 LHR 1140-2200 MAA 22:30 12:20 72:20    Trip Credit 24:23
+ Crew : FO            5     22:50 BA 036 MAA 0005-1110 LHR 11:40 12:50      -     Trip Days      5
+ 06SEP2026-
+                                                                                  Flying Hours 21:25
+  10SEP2026
+                                                                                  Duty Hours 25:10
+ Trip: 8082        Day      Report * Flight details          Clear Duty Rest      TAFB         60:00
+ Base: LHR           4      20:15 X BA 011 LHR 2145-1030 SIN 10:30 12:45 40:00    Trip Credit 27:35
+ Crew : FO            1     08:30 BA 012 SIN 1005-2325 LHR 23:45 13:20      -     Trip Days      4
+ 12SEP2026-
+                                                                                  Flying Hours 26:05
+  15SEP2026
+                                                                                  Duty Hours 28:50`;
+const DEMO_ROSTER=`[ROSTER]
+<?xml version="1.0"?><rfs:RosterFileSpecification xmlns:rfs="http://www.ba.com/schema/mRosterFileSpecificationV1">
+<RosterPeriod><MonthNumber>2026-09</MonthNumber><StartDateOfFeedPeriod>2026-09-01</StartDateOfFeedPeriod><EndDateOfFeedPeriod>2026-09-30</EndDateOfFeedPeriod></RosterPeriod>
+<RosterBlock><FleetType><AircraftType>787</AircraftType><CrewFunction>12</CrewFunction><CrewBase>LHR</CrewBase></FleetType>
+<RosterDetail><PersonalDetails><NameCode>DEMOP</NameCode><SeniorityNumber>4200</SeniorityNumber><IndividualCAP>PT85H00M</IndividualCAP></PersonalDetails>
+<BidLine><TotalControlCredit>8815</TotalControlCredit><OpeningBankValue>1210</OpeningBankValue><ClosingBank>1210</ClosingBank></BidLine>
+<RosterDuty><GroundDuty><CrewMovementCode>GLD</CrewMovementCode><StartDate>2026-09-13</StartDate><EndDate>2026-09-13</EndDate></GroundDuty></RosterDuty>
+<RosterDuty><GroundDuty><CrewMovementCode>FDO</CrewMovementCode><StartDate>2026-09-20</StartDate><EndDate>2026-09-21</EndDate></GroundDuty></RosterDuty>
+</RosterDetail></RosterBlock></rfs:RosterFileSpecification>`;
+
+renderSlots();
+</script>
+</body>
+</html>
