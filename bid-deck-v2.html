@@ -222,6 +222,13 @@
       <div class="destgrid" id="prefDests" style="display:none"></div>
     </div>
     <div class="card">
+      <h3>Waives — trade protection for access</h3>
+      <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:8px">Willing to work over these normally-protected days? Waiving widens what JSS can give you in fallback (BLR 14.16.2). Off by default.</div>
+      <div class="pref"><div><label>Waive FDO</label><div class="desc">allow trips over free days off</div></div><button class="toggle" data-waive="FDO"></button></div>
+      <div class="pref"><div><label>Waive wraparound (WR)</label><div class="desc">allow trips over wraparound days</div></div><button class="toggle" data-waive="WR"></button></div>
+      <div class="pref"><div><label>Waive NA days</label><div class="desc">allow trips over non-assignable days</div></div><button class="toggle" data-waive="NA"></button></div>
+    </div>
+    <div class="card">
       <h3>Pay (optional)</h3>
       <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:8px">From your payscale — stays on this device. Estimates variable pay only (credit × hourly + TAFB × allowance), not base salary.</div>
       <div class="pref"><div><label>Hourly flying pay</label><div class="desc">£ per credit hour</div></div><input type="number" inputmode="decimal" min="0" step="0.01" class="payin" data-pay="payHourly" style="width:90px;padding:8px;border:1.5px solid var(--line);border-radius:8px;font-family:var(--mono)"></div>
@@ -240,6 +247,7 @@
 
   <!-- BID -->
   <section class="view" id="v-bid">
+    <div class="card" id="crAdvisor" style="display:none;padding:12px 14px;margin-bottom:10px;border-left:3px solid var(--amber)"></div>
     <div class="card" style="padding:13px 14px;margin-bottom:10px">
       <h3 style="margin-bottom:4px">Auto-build your bid</h3>
       <div class="desc" style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-bottom:10px">Uses your preferences to build a laddered bid — ideal first, safe fallbacks below. Everything stays editable.</div>
@@ -398,7 +406,7 @@ function parseCRA(text){
 const S={trips:null,fp:null,roster:null,cra:null,
   prefs:{weekendsOff:false,creditWeight:1,shortWeight:0,avoidHeavy:false,protectBank:false,
          avoidRegions:new Set(),avoid2Crew:false,hardAvoidWeekends:false,dests:new Set(),autoDest:true,
-         payHourly:0,payTafb:0,maxEarnings:false},
+         payHourly:0,payTafb:0,maxEarnings:false,waived:{}},
   bidgroups:[{id:1,name:'Bidgroup 1',trips:new Set()}],filterDest:null};
 // station → region (covers this fleet's network; unknown codes → 'Other')
 const REGION={
@@ -681,7 +689,15 @@ function commandsForGroup(gi,N){
   // soft prefs as property awards
   if(p.shortWeight>0&&frac<0.6)lines.push({cmd:'AWARD',body:'Trip length 1–3 · entire period',pool:'H'});
   if(p.weekendsOff&&frac<0.6)lines.push({cmd:'AWARD',body:'Work contained within · Mon–Fri (repeating)',pool:'H+'});
-  return lines.slice(0,40); // JSS limit: ≤40 Award/Avoid bids per group
+  // Waive bids in the LAST non-bank group widen fallback access (14.16.2)
+  if(gi===N-2 && p.waived){
+    for(const code of Object.keys(p.waived)){ if(p.waived[code])
+      lines.push({cmd:'WAIVE',body:'Willing to work '+code,waive:true}); }
+  }
+  // 14.16.1: an AVOID only affects AWARDs placed after it → guarantee all AVOIDs precede AWARDs.
+  // Stable partition: AVOID/WAIVE first (waives are rule-relaxations, grouped with avoids), then AWARD.
+  const ordered=[...lines.filter(l=>l.cmd==='AVOID'), ...lines.filter(l=>l.cmd==='WAIVE'), ...lines.filter(l=>l.cmd==='AWARD')];
+  return ordered.slice(0,40); // JSS limit: ≤40 Award/Avoid bids per group
 }
 function bidAsText(){
   const N=S.bidgroups.length;
@@ -758,6 +774,10 @@ function renderPrefs(){
     el.onchange=()=>{renderStrips();renderBidgroups();};                          // heavy recompute on blur only
   });
   payFeedback();
+  document.querySelectorAll('[data-waive]').forEach(el=>{
+    const code=el.dataset.waive; el.classList.toggle('on',!!(S.prefs.waived&&S.prefs.waived[code]));
+    el.onclick=()=>{S.prefs.waived=S.prefs.waived||{};S.prefs.waived[code]=!S.prefs.waived[code];renderPrefs();renderStrips();renderBidgroups();};
+  });
   document.querySelectorAll('[data-pref]').forEach(el=>{
     const k=el.dataset.pref,v=S.prefs[k];
     if(el.classList.contains('toggle')){el.classList.toggle('on',!!v);el.onclick=()=>{S.prefs[k]=!S.prefs[k];renderPrefs();renderPrefDests();renderStrips();};}
@@ -792,6 +812,10 @@ function addToBid(num,gi){ S.bidgroups[gi==null?0:gi].trips.add(num); renderBidg
 function tripByNum(n){return S.trips.find(t=>t.trip_number===n);}
 let openGroup=null; // index of expanded group (null = all collapsed)
 function renderBidgroups(){
+  const adv=creditRangeAdvice(), ael=$('crAdvisor');
+  if(ael){ if(adv){ael.style.display='block';
+    ael.innerHTML=`<div class="eyebrow" style="margin-bottom:4px">Credit-range tip · month ${adv.month}</div><div style="font-size:13px">${esc(adv.note)}</div><div style="font-family:var(--mono);font-size:10.5px;color:var(--muted);margin-top:4px">points this month — Low ${adv.lowPts>0?'+':''}${adv.lowPts} · High ${adv.highPts>0?'+':''}${adv.highPts} (negative = points-cheap to win) · BLR 3.4.6.3</div>`;
+  } else ael.style.display='none'; }
   $('bidgroups').innerHTML=S.bidgroups.map((g,gi)=>{
     const trips=[...g.trips].map(tripByNum).filter(Boolean)
       .sort((a,b)=>score(b)-score(a));
@@ -864,14 +888,79 @@ function creditBar(credit){
 // Build a plausible roster JSS could award from a permitted pool, for THIS pilot:
 // greedily take best-scoring trips up to the NCR midpoint, without day-overlaps,
 // respecting protected days and destination-pool limits.
+// ================= BLR AGREEMENT-GRADE RULESET =================
+// All values sourced from the Bidline Rules (section numbers cited in messages).
+const BLR={
+  bankLimit:{LH:45*60, SH:30*60},                 // 5.2 — credited-hour bank ceiling
+  restBetweenTripsMin:{LH:24*60, SH:12*60+30},    // 14.1.1 — LH 1 local night(≈MBTR), SH 12½h (approx as minutes)
+  maxAnnualFlying:898*60,                          // 3.5.6.1 — 12-month projected flying cap
+  notionalReservePerDay:3*60+30,                   // 3.4.5.1 — 3:30 per unused reserve day
+  // 3.5.6.1 protected day-types a trip may not overlap (unless waived where noted)
+  protectedCodes:['FDO','GLD','DFW','NA','WR','PTDO','CF','UN','SG','JP','LV','LEAVE','ANL','WRAP'],
+  waivable:{WR:'WR', NA:'NA', DFW:'DFW', FDO:'FDO', PD1:'PD1', PD2:'PD2', DD:'DD'}, // 14.16.2
+  creditRangePoints:{ // 3.4.6.3 — [Low, High] per month index 1..12; Neutral always 0
+    1:[-1,1],2:[-1,1],3:[-1,1],4:[-1,1],5:[2,-2],6:[-1,1],
+    7:[-3,3],8:[-6,6],9:[2,-2],10:[-1,1],11:[4,-4],12:[-3,3]
+  },
+  denseTopFraction:0.20,                           // Credit Dense = top ~20% by credit/day
+};
+// Fleet type from aircraft (787/777/747/380/350 = LH; 320-family = SH). Default LH for this build.
+function fleetType(){
+  const ac=(S.roster&&S.roster.pilot&&S.roster.pilot.aircraft||'').toString();
+  if(/32[013]|319|318|SH/i.test(ac))return 'SH';
+  return 'LH';
+}
+function bankLimitMin(){ return BLR.bankLimit[fleetType()]; }
+function restGapMin(){ return BLR.restBetweenTripsMin[fleetType()]; }
+
+// Credit-dense classification: a trip is CD if its credit-per-day is in the top ~20% of the catalogue.
+let _denseThreshold=null;
+function denseThresholdPerDay(){
+  if(_denseThreshold!=null)return _denseThreshold;
+  const perDay=uniqueTrips().map(t=>creditMin(t)/(t.trip_days||1)).sort((a,b)=>a-b);
+  if(!perDay.length){_denseThreshold=Infinity;return _denseThreshold;}
+  const idx=Math.floor(perDay.length*(1-BLR.denseTopFraction));
+  _denseThreshold=perDay[Math.min(idx,perDay.length-1)];
+  return _denseThreshold;
+}
+function isCreditDense(t){ return creditMin(t)/(t.trip_days||1) >= denseThresholdPerDay(); }
+
+// Credit-range advisor: given the planning month, is bidding High or Low points-cheap or points-expensive?
+function creditRangeAdvice(){
+  const m = S.fp&&S.fp.period_start ? parseInt(S.fp.period_start.slice(5,7),10) : null;
+  if(!m||!BLR.creditRangePoints[m])return null;
+  const [low,high]=BLR.creditRangePoints[m];
+  // negative points = cheap to win (you PAY points, so easier to be awarded); positive = contested (you EARN points)
+  return {month:m, lowPts:low, highPts:high,
+    highCheap: high<0, lowCheap: low<0,
+    note: high<0 ? `High range is points-cheap this month (${high}) — easier to win if you want more credit`
+        : high>0 ? `High range is contested this month (+${high} points) — you'd earn points but it's harder to win`
+        : 'Neutral month for credit-range points' };
+}
+
 function protectedRanges(){
   const p=S.roster&&S.roster.pilot; if(!p)return [];
-  return p.duties.filter(d=>d.kind==='ground'&&['FDO','GLD','DFW','NA'].includes(d.code)&&d.start_date)
-    .map(d=>[new Date(d.start_date+'T00:00Z'),new Date((d.end_date||d.start_date)+'T00:00Z')]);
+  const waived=S.prefs.waived||{};
+  return p.duties.filter(d=>{
+    if(d.kind!=='ground'||!d.start_date)return false;
+    const code=(d.code||'').toUpperCase();
+    if(!BLR.protectedCodes.includes(code))return false;
+    if(BLR.waivable[code]&&waived[code])return false;  // pilot waived this day-type
+    return true;
+  }).map(d=>({code:(d.code||'').toUpperCase(),
+    range:[new Date(d.start_date+'T00:00Z'),new Date((d.end_date||d.start_date)+'T00:00Z')]}));
 }
 function tripRange(t){ const s=t.start_date?new Date(t.start_date+'T00:00Z'):null; if(!s)return null;
   const e=new Date(s); e.setUTCDate(e.getUTCDate()+(t.trip_days||1)-1); return [s,e]; }
 function overlaps(a,b){ return a&&b&&a[0]<=b[1]&&a[1]>=b[0]; }
+// rest-gap check: two trips need the required rest between them (14.1.1), not merely non-overlapping days
+function tooClose(a,b){
+  const ra=tripRange(a), rb=tripRange(b); if(!ra||!rb)return false;
+  if(overlaps(ra,rb))return true;
+  const gapDays=(ra[0]>rb[1]) ? (ra[0]-rb[1])/86400000 : (rb[0]-ra[1])/86400000;
+  const gapMin=(gapDays-1)*24*60;              // whole clear days between them, in minutes
+  return gapMin < restGapMin() - 24*60;        // need ≥ rest gap beyond the shared boundary day
+}
 function representativeRoster(poolTrips){
   const ncr=S.fp.credit_ranges['100']?S.fp.credit_ranges['100'].neutral:null;
   const midpoint=ncr?(ncr.lo.minutes+ncr.hi.minutes)/2:(S.fp.cap?S.fp.cap.minutes:5400);
@@ -889,7 +978,8 @@ function representativeRoster(poolTrips){
       if(credit>=mid)break;
       const cm=creditMin(t); if(credit+cm>ceil)continue;
       const tr=tripRange(t);
-      if(tr&&(chosen.some(c=>overlaps(tr,tripRange(c)))||prot.some(pr=>overlaps(tr,pr))))continue;
+      // rest-gap against already-chosen trips (14.1.1) + overlap against protected days (3.5.6.1)
+      if(tr&&(chosen.some(c=>tooClose(t,c))||prot.some(pr=>overlaps(tr,pr.range))))continue;
       let blocked=false;
       S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d))){
         if((poolCount[pi]||0)>=pool.limit)blocked=true; } });
@@ -897,7 +987,8 @@ function representativeRoster(poolTrips){
       chosen.push(t); credit+=cm;
       S.fp.dest_pools.forEach((pool,pi)=>{ if(t.destinations.some(d=>pool.destinations.includes(d)))poolCount[pi]=(poolCount[pi]||0)+1; });
     }
-    return {trips:chosen,credit};
+    const denseDays=chosen.filter(isCreditDense).reduce((a,t)=>a+(t.trip_days||1),0);
+    return {trips:chosen,credit,denseDays};
   }
   if(!S.prefs.maxEarnings) return pack(base.slice().sort((a,b)=>score(b)-score(a)));
   // max earnings: try several packing orders, keep the roster that actually earns most
@@ -915,9 +1006,11 @@ function reachMix(trips){ const m={likely:0,contested:0,'long shot':0,unknown:0}
   for(const t of trips){const l=reachLabel(reach(t));m[l||'unknown']++;} return m; }
 function legality(g,poolTrips){
   const out=[],fp=S.fp,ncr=fp.credit_ranges['100']?fp.credit_ranges['100'].neutral:null;
+  const p=S.roster&&S.roster.pilot;
   const rr=representativeRoster(poolTrips);
   const built = rr.trips.length && (!ncr || rr.credit>=ncr.lo.minutes);
   const destSet=[...new Set(rr.trips.flatMap(t=>t.destinations))];
+  // headline: likely roster
   if(built){
     const re=rosterEarnings(rr);
     out.push({type:'ok',msg:`Likely builds a ~${minToHHMM(rr.credit)} roster${re!=null?' (~'+gbp(re)+' variable pay)':''}${destSet.length?' to '+destSet.slice(0,6).join(', ')+(destSet.length>6?'…':''):''}`});
@@ -926,11 +1019,37 @@ function legality(g,poolTrips){
   } else {
     out.push({type:'info',msg:`No buildable roster from this group — it will fall through`});
   }
-  // reach mix (only if reach available)
+  // --- HARD LEGALITY CHECKS (cite BLR) ---
+  // Bank limit (BLR 5.2) — projected bank = current bank + (roster credit − CAP)
+  if(p&&p.bank_in&&fp.cap){
+    const proj=p.bank_in.minutes + (rr.credit - fp.cap.minutes);
+    const lim=bankLimitMin(), ft=fleetType();
+    if(proj>lim) out.push({type:'warn',msg:`Projected bank ~${minToHHMM(proj)} would exceed your ${minToHHMM(lim)} ${ft} bank limit — JSS denies this (BLR 5.2)`});
+    else if(proj>lim-3*60) out.push({type:'info',msg:`Projected bank ~${minToHHMM(proj)} is close to your ${minToHHMM(lim)} ${ft} limit (BLR 5.2)`});
+  }
+  // Credit-dense-day limit (Front Page 6/9/12; skeleton excluded) — BLR Credit Dense Days Inhibitor
+  if(fp.dense_limits){
+    const avail=p?30-(p.duties.filter(d=>d.kind==='ground').length):30;
+    const lim = avail<=19?fp.dense_limits.low : avail<=27?fp.dense_limits.med : fp.dense_limits.high;
+    if(rr.denseDays>lim) out.push({type:'warn',msg:`~${rr.denseDays} credit-dense days in the likely roster, over the ~${lim} limit for your available days`});
+    else if(rr.denseDays) out.push({type:'ok',msg:`~${rr.denseDays} credit-dense days (limit ~${lim})`});
+  }
+  // Protected-day clashes in the PERMITTED pool the roster couldn't avoid — surface which day-types (BLR 3.5.6.1)
+  if(p){
+    const prot=protectedRanges();
+    const clashCodes=new Set();
+    for(const t of rr.trips){ const tr=tripRange(t);
+      for(const pr of prot){ if(overlaps(tr,pr.range))clashCodes.add(pr.code); } }
+    if(clashCodes.size) out.push({type:'warn',msg:`Likely roster overlaps protected ${[...clashCodes].join(', ')} — JSS would reject (BLR 3.5.6.1)`});
+    else out.push({type:'ok',msg:`No clash with your protected days (BLR 3.5.6.1)`});
+  } else {
+    out.push({type:'info',msg:'Load your roster + credit-range list for bank, 898 and protected-day checks'});
+  }
+  // 898 12-month projected flying (BLR 3.5.6.1) — best-effort: only flag if roster credit alone is implausibly high
+  // (true 898 needs 11 prior months' data we don't have; we note it rather than assert)
+  // reach mix
   if(reachAvailable()&&poolTrips.length){ const m=reachMix(poolTrips);
     out.push({type:'info',msg:`reach across permitted trips — ${m.likely} likely · ${m.contested} contested · ${m['long shot']} long shot`}); }
-  // protected-day note
-  if(!S.roster) out.push({type:'info',msg:'Load your roster to fit trips around your protected days'});
   return {out,rr};
 }
 
