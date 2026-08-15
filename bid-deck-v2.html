@@ -176,7 +176,10 @@
     <div class="wordmark">BID<span class="slash">/</span>DECK</div>
     <div class="eyebrow">JSS bid planner</div>
   </div>
-  <div class="device-note">ON-DEVICE<br>NOTHING UPLOADED</div>
+  <div style="text-align:right">
+    <div class="device-note">ON-DEVICE<br>NOTHING UPLOADED</div>
+    <button id="reloadBtn" title="Check for the latest version" style="margin-top:6px;font-family:var(--mono);font-size:10px;color:var(--muted);background:none;border:1px solid var(--line-soft);border-radius:6px;padding:3px 7px;cursor:pointer">↻ <span id="verLbl"></span></button>
+  </div>
 </header>
 
 <!-- IMPORT -->
@@ -184,6 +187,7 @@
   <div class="err" id="err"></div>
   <div class="slots" id="slots"></div>
   <p class="hint">In CrewBid &rsaquo; Reports, open a report and Share &rarr; Bid Deck, or download it and load it here. PDFs are read on this device — nothing is uploaded. Trips + Front Page are enough to start; your roster adds bank &amp; skeleton.</p>
+  <button class="btn" id="continueBtn" style="width:100%;display:none;margin-bottom:8px;background:var(--ok);border-color:var(--ok)">Continue →</button>
   <button class="btn ghost" id="demoBtn">Load demo pack</button>
 </section>
 
@@ -311,6 +315,9 @@
 </script>
 <script>
 'use strict';
+// ===== app version — bump REV on every change so pilots can confirm they have the latest =====
+const APP_REV = 23;
+const APP_VER = '2.'+APP_REV;
 /* ================= PARSERS (validated in Node against real bid pack) ================= */
 const MONTHS={JAN:1,FEB:2,MAR:3,APR:4,MAY:5,JUN:6,JUL:7,AUG:8,SEP:9,OCT:10,NOV:11,DEC:12};
 function hhmmToMin(s){if(!s||!s.includes(':'))return null;const neg=s.trim().startsWith('-');const p=s.trim().replace('-','').split(':');return (neg?-1:1)*(parseInt(p[0],10)*60+parseInt(p[1],10));}
@@ -495,18 +502,27 @@ function loadSlot(key,text,name){
     else if(key==='cra'){ S.cra=parseCRA(text); if(!S.cra.length)throw 0; if(S.trips&&S.fp){renderStrips();renderBidgroups();} }
     $('err').classList.remove('show');
     renderSlots();
-    if(S.trips&&S.fp) boot();
+    readyCheck();
   }catch(_){
     // auto-detect: maybe the pilot loaded the trips PDF into the front-page slot or vice versa
     if(key!=='roster'){
       const asTrips=(()=>{try{const t=parseJsstrips(text);return t.length?t:null;}catch(e){return null;}})();
       const asFp=(()=>{try{const f=parseFrontPage(text);return f.cap?f:null;}catch(e){return null;}})();
-      if(asTrips&&key==='fp'){ S.trips=asTrips; showErr(`That looks like the trip catalogue — loaded it as Trips instead.`); renderSlots(); if(S.trips&&S.fp)boot(); return; }
-      if(asFp&&key==='trips'){ S.fp=asFp; showErr(`That looks like the front page — loaded it there instead.`); renderSlots(); if(S.trips&&S.fp)boot(); return; }
+      if(asTrips&&key==='fp'){ S.trips=asTrips; showErr(`That looks like the trip catalogue — loaded it as Trips instead.`); renderSlots(); readyCheck(); return; }
+      if(asFp&&key==='trips'){ S.fp=asFp; showErr(`That looks like the front page — loaded it there instead.`); renderSlots(); readyCheck(); return; }
     }
     showErr(`Couldn't read "${name}" as the ${key==='trips'?'trip catalogue':key==='fp'?'front page':'roster'}. Check it's the right report from CrewBid.`);
     renderSlots();
   }
+}
+// reveal the green Continue button once the minimum (Trips + Front Page) is loaded
+function readyCheck(){
+  const btn=$('continueBtn'); if(!btn)return;
+  if(S.trips&&S.fp){
+    btn.style.display='block';
+    const extras=[S.roster?'roster':null,S.cra?'credit-range':null].filter(Boolean);
+    btn.textContent = 'Continue →  ('+ (2+extras.length) +' of 4 loaded)';
+  } else btn.style.display='none';
 }
 function setSlotBusy(key,msg){
   const slot=[...document.querySelectorAll('.slot')].find(s=>s.querySelector(`[data-slot="${key}"]`));
@@ -1189,6 +1205,15 @@ const DEMO_ROSTER=`[ROSTER]
 <RosterDuty><GroundDuty><CrewMovementCode>GLD</CrewMovementCode><StartDate>2026-09-13</StartDate><EndDate>2026-09-13</EndDate></GroundDuty></RosterDuty>
 <RosterDuty><GroundDuty><CrewMovementCode>FDO</CrewMovementCode><StartDate>2026-09-20</StartDate><EndDate>2026-09-21</EndDate></GroundDuty></RosterDuty>
 </RosterDetail></RosterBlock></rfs:RosterFileSpecification>`;
+
+// version label + manual proceed + reload-to-update
+$('verLbl').textContent = 'v'+APP_VER;
+$('continueBtn').onclick = ()=>{ if(S.trips&&S.fp) boot(); };
+$('reloadBtn').onclick = async ()=>{
+  try{ if('serviceWorker' in navigator){ const rs=await navigator.serviceWorker.getRegistrations(); for(const r of rs)await r.unregister(); } }catch(_){}
+  try{ if(window.caches){ const ks=await caches.keys(); for(const k of ks)await caches.delete(k); } }catch(_){}
+  const u=new URL(location.href); u.searchParams.set('v', Date.now()); location.replace(u.toString());
+};
 
 renderSlots();
 </script>
